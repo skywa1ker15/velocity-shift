@@ -19,7 +19,7 @@ export class CameraRig {
   readonly eye = new THREE.Vector3();
   /** Interpolated feet position. */
   readonly feet = new THREE.Vector3();
-  fov = 95;
+  fov = 74;
   roll = 0;
   /** Run-cycle phase shared with the character animation so bob and footfalls line up. */
   bobPhase = 0;
@@ -143,9 +143,11 @@ export class CameraRig {
     cam.rotation.set(pitch + shy * 0.5, yaw + shx * 0.5, this.roll + shr);
 
     // FOV: widens with speed, punches on dash
+    // the setting is a horizontal FOV at 16:9 (the usual convention); three.js wants vertical
+    const vertical = (2 * Math.atan(Math.tan((baseFov * DEG) / 2) * (9 / 16))) / DEG;
     const k = clamp((speed - cfg.runSpeed) / (25 - cfg.runSpeed), 0, 1);
-    const punch = clamp(this.fovPunch.update(0, dt), -4, 14);
-    const target = baseFov + k * 15 * m.speedFov + punch * (m.screenFx ? 1 : 0.3);
+    const punch = clamp(this.fovPunch.update(0, dt), -4, 12);
+    const target = vertical + k * 12 * m.speedFov + punch * (m.screenFx ? 1 : 0.3);
     this.fov = damp(this.fov, target, 10, dt);
     if (Math.abs(cam.fov - this.fov) > 0.01) {
       cam.fov = this.fov;

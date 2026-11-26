@@ -14,7 +14,7 @@ export interface Settings {
   fpsCap: number; // 0 = unlimited
   showFps: boolean;
   // display
-  fov: number;
+  fov: number; // horizontal field of view in degrees, measured at 16:9
   speedFov: number; // 0 .. 1
   brightness: number; // 0.6 .. 1.4
   // controls
@@ -56,7 +56,7 @@ export const defaultSettings: Settings = {
   particles: 1,
   fpsCap: 0,
   showFps: false,
-  fov: 95,
+  fov: 105,
   speedFov: 1,
   brightness: 1,
   sensitivity: 1,

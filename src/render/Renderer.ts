@@ -32,7 +32,7 @@ export class Renderer {
   readonly gl: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly viewScene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(95, 1, 0.08, 2000);
+  readonly camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2000);
   readonly viewCamera = new THREE.PerspectiveCamera(68, 1, 0.01, 10);
   readonly sky = new Sky();
   readonly sun = new THREE.DirectionalLight(0xffffff, 2);

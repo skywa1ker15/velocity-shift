@@ -148,7 +148,9 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
         )}
         {tab === 'Display' && (
           <>
-            <Row label="Field of view">{slider('fov', 80, 120, 1, (v) => v.toFixed(0) + '°')}</Row>
+            <Row label="Field of view" hint="Horizontal, measured at 16:9">
+              {slider('fov', 80, 120, 1, (v) => v.toFixed(0) + '°')}
+            </Row>
             <Row label="Speed FOV" hint="How much the view widens as you go faster">
               {slider('speedFov', 0, 1, 0.05, pct)}
             </Row>

@@ -11,7 +11,7 @@ import type { Action, Bindings } from './bindings';
 import { usesCtrl } from './bindings';
 import type { Settings } from '../settings/settings';
 
-const BASE_SENS = 0.0022; // radians per pixel at sensitivity 1
+const BASE_SENS = 0.0011; // radians per pixel at sensitivity 1 (≈ 18 cm per full turn at 800 DPI)
 const PITCH_LIMIT = (89 * Math.PI) / 180;
 
 export class InputManager {
