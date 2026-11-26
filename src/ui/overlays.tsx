@@ -49,7 +49,11 @@ export function Pause() {
             </div>
           )}
         </nav>
-        {lockHint && <p className="fine warn">The browser needs a moment before it can capture the mouse again — click Resume once more.</p>}
+        {lockHint && (
+          <p className="fine warn">
+            The browser needs a moment before it can capture the mouse again — click Resume once more.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -111,7 +115,11 @@ export function Results() {
           <span className="kicker">{entry.meta.name} · complete</span>
           <div className="time-row">
             <div className="big-time mono-num">{formatTime(r.time)}</div>
-            {r.isRecord ? <div className="record">{r.previousBest === null ? 'FIRST CLEAR' : 'NEW RECORD'}</div> : <div className="vs">{delta(r.time, r.previousBest)} vs best</div>}
+            {r.isRecord ? (
+              <div className="record">{r.previousBest === null ? 'FIRST CLEAR' : 'NEW RECORD'}</div>
+            ) : (
+              <div className="vs">{delta(r.time, r.previousBest)} vs best</div>
+            )}
           </div>
           <div className={'medal-reveal m' + r.medal + (stage >= 1 ? ' show' : '')}>
             <i aria-hidden />
@@ -119,7 +127,9 @@ export function Results() {
               <strong>{r.medal ? MEDAL_LABELS[r.medal] + ' MEDAL' : 'NO MEDAL YET'}</strong>
               <span>
                 Best {formatTime(best)}
-                {target && (target.tier < 4 || Math.max(r.medal, r.previousMedal) >= 3) ? ` · next: ${MEDAL_LABELS[target.tier]} at ${formatTime(target.time)}` : ''}
+                {target && (target.tier < 4 || Math.max(r.medal, r.previousMedal) >= 3)
+                  ? ` · next: ${MEDAL_LABELS[target.tier]} at ${formatTime(target.time)}`
+                  : ''}
               </span>
             </div>
           </div>

@@ -105,8 +105,17 @@ export class Simulation {
     this.player = new MovementController(this.physics);
     for (const s of data.solids) {
       if (s.collide === false) continue;
-      const q = s.q ? { x: s.q[0], y: s.q[1], z: s.q[2], w: s.q[3] } : s.r ? quatFromEuler(s.r[0], s.r[1], s.r[2]) : undefined;
-      this.physics.addBox({ x: s.p[0], y: s.p[1], z: s.p[2] }, { x: s.s[0] / 2, y: s.s[1] / 2, z: s.s[2] / 2 }, q, s.wallrun ?? false);
+      const q = s.q
+        ? { x: s.q[0], y: s.q[1], z: s.q[2], w: s.q[3] }
+        : s.r
+          ? quatFromEuler(s.r[0], s.r[1], s.r[2])
+          : undefined;
+      this.physics.addBox(
+        { x: s.p[0], y: s.p[1], z: s.p[2] },
+        { x: s.s[0] / 2, y: s.s[1] / 2, z: s.s[2] / 2 },
+        q,
+        s.wallrun ?? false,
+      );
     }
     data.entities.forEach((def, i) => {
       const e = createEntity(def);
@@ -150,6 +159,7 @@ export class Simulation {
       if (this.wallChain > this.stats.longestWallChain) this.stats.longestWallChain = this.wallChain;
     });
     ev.on('land', () => (this.wallChain = 0));
+    ev.on('crushed', () => this.kill('crushed'));
   }
 
   /** Full level restart: new run, everything back to its initial state. */
@@ -167,8 +177,14 @@ export class Simulation {
   restartFromCheckpoint() {
     if (this.stats.finished) return;
     this.stats.restarts++;
-    for (const e of this.entities) e.reset(this.physics, false);
+    this.rearm();
     this.placeAtCheckpoint();
+  }
+
+  /** Respawn: put triggered terrain back and re-arm triggers, so set-pieces replay fairly. */
+  private rearm() {
+    for (const e of this.entities) e.reset(this.physics, false);
+    this.fired.clear();
   }
 
   private placeAtCheckpoint() {
@@ -205,7 +221,7 @@ export class Simulation {
       this.time += SIM_DT;
       this.updateEntities();
       if (--this.deadTicks <= 0) {
-        for (const e of this.entities) e.reset(this.physics, false);
+        this.rearm();
         this.placeAtCheckpoint();
       }
       return;

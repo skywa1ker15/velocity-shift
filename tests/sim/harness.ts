@@ -32,7 +32,9 @@ export async function makeSim(build: (b: LevelBuilder) => void, spawn: [number, 
   return new Driver(sim);
 }
 
-export type Keys = Partial<Pick<InputFrame, 'moveX' | 'moveZ' | 'sprint' | 'jumpHeld' | 'slideHeld' | 'yaw' | 'pitch'>> & {
+export type Keys = Partial<
+  Pick<InputFrame, 'moveX' | 'moveZ' | 'sprint' | 'jumpHeld' | 'slideHeld' | 'yaw' | 'pitch'>
+> & {
   jump?: boolean; // press this tick
   dash?: boolean;
   slide?: boolean; // press + hold
@@ -50,7 +52,8 @@ export class Driver {
   /** Advance `seconds` with the given keys; one-shot presses fire on the first tick only. */
   run(seconds: number, keys: Keys = {}) {
     const n = Math.max(1, Math.round(seconds * 120));
-    for (let i = 0; i < n; i++) this.tick(i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined });
+    for (let i = 0; i < n; i++)
+      this.tick(i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined });
     return this;
   }
   tick(keys: Keys = {}) {

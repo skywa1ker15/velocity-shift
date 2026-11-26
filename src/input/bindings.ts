@@ -1,16 +1,7 @@
 /** Rebindable actions and their defaults. Codes are KeyboardEvent.code values or Mouse0..Mouse4. */
 
 export type Action =
-  | 'forward'
-  | 'back'
-  | 'left'
-  | 'right'
-  | 'jump'
-  | 'sprint'
-  | 'slide'
-  | 'dash'
-  | 'restart'
-  | 'pause';
+  'forward' | 'back' | 'left' | 'right' | 'jump' | 'sprint' | 'slide' | 'dash' | 'restart' | 'pause';
 
 export type Bindings = Record<Action, string[]>;
 
@@ -27,7 +18,18 @@ export const actionLabels: Record<Action, string> = {
   pause: 'Pause',
 };
 
-export const actionOrder: Action[] = ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'slide', 'dash', 'restart', 'pause'];
+export const actionOrder: Action[] = [
+  'forward',
+  'back',
+  'left',
+  'right',
+  'jump',
+  'sprint',
+  'slide',
+  'dash',
+  'restart',
+  'pause',
+];
 
 // Slide defaults to C: Ctrl+W closes the browser tab, which would happen constantly while sliding forward.
 export const defaultBindings: Bindings = {
@@ -47,7 +49,8 @@ export function sanitizeBindings(raw: unknown): Bindings {
   const out: any = {};
   for (const a of actionOrder) {
     const v = raw && typeof raw === 'object' ? (raw as any)[a] : undefined;
-    out[a] = Array.isArray(v) && v.every((x) => typeof x === 'string') ? v.slice(0, 2) : [...defaultBindings[a]];
+    out[a] =
+      Array.isArray(v) && v.every((x) => typeof x === 'string') ? v.slice(0, 2) : [...defaultBindings[a]];
   }
   return out;
 }

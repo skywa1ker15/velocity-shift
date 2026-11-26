@@ -64,7 +64,13 @@ export class Renderer {
   private sunDir = new THREE.Vector3(0, 1, 0);
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, depth: true });
+    this.gl = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      powerPreference: 'high-performance',
+      stencil: false,
+      depth: true,
+    });
     this.gl.outputColorSpace = THREE.SRGBColorSpace;
     this.gl.toneMapping = THREE.NoToneMapping; // tone mapping happens in the post pass
     this.gl.shadowMap.type = THREE.PCFShadowMap;
@@ -111,8 +117,19 @@ export class Renderer {
     viewPass.clear = false;
     this.composer.addPass(viewPass);
 
-    this.bloom = new BloomEffect({ mipmapBlur: true, luminanceThreshold: 0.8, luminanceSmoothing: 0.25, intensity: 0.6, radius: 0.72, levels: t.bloomLevels });
-    this.chroma = new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: true, modulationOffset: 0.2 });
+    this.bloom = new BloomEffect({
+      mipmapBlur: true,
+      luminanceThreshold: 0.8,
+      luminanceSmoothing: 0.25,
+      intensity: 0.6,
+      radius: 0.72,
+      levels: t.bloomLevels,
+    });
+    this.chroma = new ChromaticAberrationEffect({
+      offset: new THREE.Vector2(0, 0),
+      radialModulation: true,
+      modulationOffset: 0.2,
+    });
     this.vignette = new VignetteEffect({ darkness: 0.35, offset: 0.3 });
     this.tone = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
     this.grade = new HueSaturationEffect({ saturation: 0 });
@@ -125,13 +142,22 @@ export class Renderer {
     this.composer.addPass(new EffectPass(this.camera, ...effects));
     // convolution effects need their own pass
     if (this.postEnabled && t.chroma) this.composer.addPass(new EffectPass(this.camera, this.chroma));
-    if (t.smaa) this.composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: t.smaa === 2 ? SMAAPreset.HIGH : SMAAPreset.MEDIUM })));
+    if (t.smaa)
+      this.composer.addPass(
+        new EffectPass(
+          this.camera,
+          new SMAAEffect({ preset: t.smaa === 2 ? SMAAPreset.HIGH : SMAAPreset.MEDIUM }),
+        ),
+      );
     this.applySize();
     if (this.env) this.applyEnvPost();
   }
 
   // ----- configuration ------------------------------------------------------------------
-  configure(tierName: TierName, opts: { resolutionScale: number; shadows: boolean; postFx: boolean; brightness: number }) {
+  configure(
+    tierName: TierName,
+    opts: { resolutionScale: number; shadows: boolean; postFx: boolean; brightness: number },
+  ) {
     const changed = tierName !== this.tierName || opts.postFx !== this.postEnabled;
     this.tierName = tierName;
     this.tier = tiers[tierName];
@@ -199,10 +225,10 @@ export class Renderer {
     this.hemi.groundColor.set(l.groundAmbient);
     this.hemi.intensity = l.ambient;
     this.viewSun.color.set(l.sun);
-    this.viewSun.intensity = l.sunIntensity * 0.8;
+    this.viewSun.intensity = l.sunIntensity * 1.1;
     this.viewHemi.color.set(l.skyAmbient);
     this.viewHemi.groundColor.set(l.groundAmbient);
-    this.viewHemi.intensity = l.ambient * 1.1;
+    this.viewHemi.intensity = l.ambient * 1.6;
 
     const u = worldUniforms;
     u.uAccent.value.set(env.palette.accent);
@@ -233,13 +259,28 @@ export class Renderer {
     worldUniforms.uHazardAlt.value = on ? 1 : 0;
   }
 
-  /** Pre-compile every material so the first frames of a level do not hitch. */
+  /**
+   * Pre-compile every material so nothing hitches mid-run. Pooled effects are invisible until
+   * used, so they are switched on for the compile and switched back afterwards.
+   */
   async warm() {
+    const hidden: THREE.Object3D[] = [];
+    for (const scene of [this.scene, this.viewScene]) {
+      scene.traverse((o) => {
+        if (!o.visible) {
+          hidden.push(o);
+          o.visible = true;
+        }
+      });
+    }
     try {
       await this.gl.compileAsync(this.scene, this.camera);
       await this.gl.compileAsync(this.viewScene, this.viewCamera);
     } catch {
       this.gl.compile(this.scene, this.camera);
+      this.gl.compile(this.viewScene, this.viewCamera);
+    } finally {
+      for (const o of hidden) o.visible = false;
     }
   }
 
@@ -256,7 +297,11 @@ export class Renderer {
         fy = Math.round(focus.y / texel) * texel,
         fz = Math.round(focus.z / texel) * texel;
       this.sun.target.position.set(fx, fy, fz);
-      this.sun.position.set(fx + this.sunDir.x * 120, fy + Math.max(0.35, this.sunDir.y) * 120, fz + this.sunDir.z * 120);
+      this.sun.position.set(
+        fx + this.sunDir.x * 120,
+        fy + Math.max(0.35, this.sunDir.y) * 120,
+        fz + this.sunDir.z * 120,
+      );
       this.sun.target.updateMatrixWorld();
     } else {
       this.sun.position.copy(this.sunDir).multiplyScalar(100);

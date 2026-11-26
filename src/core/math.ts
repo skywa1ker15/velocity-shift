@@ -49,7 +49,12 @@ export const wrapAngle = (a: number) => {
 export const angleDelta = (from: number, to: number) => wrapAngle(to - from);
 
 /** Quaternion from XYZ euler angles (radians), matching three.js 'XYZ' order. */
-export function quatFromEuler(rx: number, ry: number, rz: number, out: Quat = { x: 0, y: 0, z: 0, w: 1 }): Quat {
+export function quatFromEuler(
+  rx: number,
+  ry: number,
+  rz: number,
+  out: Quat = { x: 0, y: 0, z: 0, w: 1 },
+): Quat {
   const c1 = Math.cos(rx / 2),
     c2 = Math.cos(ry / 2),
     c3 = Math.cos(rz / 2);
@@ -63,7 +68,13 @@ export function quatFromEuler(rx: number, ry: number, rz: number, out: Quat = { 
   return out;
 }
 
-export function quatFromAxisAngle(ax: number, ay: number, az: number, angle: number, out: Quat = { x: 0, y: 0, z: 0, w: 1 }): Quat {
+export function quatFromAxisAngle(
+  ax: number,
+  ay: number,
+  az: number,
+  angle: number,
+  out: Quat = { x: 0, y: 0, z: 0, w: 1 },
+): Quat {
   const l = Math.hypot(ax, ay, az) || 1;
   const s = Math.sin(angle / 2) / l;
   out.x = ax * s;

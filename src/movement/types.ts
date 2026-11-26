@@ -39,7 +39,17 @@ export const enum MoveState {
   Dead,
 }
 
-export const moveStateNames = ['Idle', 'Run', 'Sprint', 'Slide', 'Air', 'Dash', 'WallRun', 'Vault', 'Dead'] as const;
+export const moveStateNames = [
+  'Idle',
+  'Run',
+  'Sprint',
+  'Slide',
+  'Air',
+  'Dash',
+  'WallRun',
+  'Vault',
+  'Dead',
+] as const;
 
 export interface MoveResult {
   x: number;
@@ -76,11 +86,25 @@ export interface RayHit {
 export interface CollisionWorld {
   /** Collide-and-slide the capsule whose feet are at `feet` by `delta`. */
   move(feet: V3, height: number, dx: number, dy: number, dz: number, snap: boolean, out: MoveResult): void;
-  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max: number, out: RayHit): boolean;
+  raycast(
+    ox: number,
+    oy: number,
+    oz: number,
+    dx: number,
+    dy: number,
+    dz: number,
+    max: number,
+    out: RayHit,
+  ): boolean;
   /** Can a capsule of this height stand with its feet at this position without overlapping anything? */
   canFit(x: number, y: number, z: number, height: number): boolean;
   /** How far the surface `id` moved this tick at world point p (moving platforms). */
   surfaceDelta(id: number, p: V3, out: V3): void;
+  /**
+   * Is a solid overlapping the capsule? 0 = no, 1 = yes, 2 = yes and it is moving into the player:
+   * `out` then holds the shove for this tick. Staying overlapped means being crushed.
+   */
+  overlapPush(feet: V3, height: number, out: V3): number;
 }
 
 export interface MoveEvents {
@@ -97,4 +121,5 @@ export interface MoveEvents {
   vault: { height: number };
   footstep: { wall: boolean; speed: number };
   bump: { speed: number };
+  crushed: Record<string, never>;
 }

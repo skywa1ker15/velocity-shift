@@ -10,12 +10,36 @@ const _q = new THREE.Quaternion();
 
 // face table: normal, u axis, v axis (side faces keep v vertical so wall rails stay horizontal)
 const FACES: [number[], number[], number[]][] = [
-  [[1, 0, 0], [0, 0, -1], [0, 1, 0]],
-  [[-1, 0, 0], [0, 0, 1], [0, 1, 0]],
-  [[0, 1, 0], [1, 0, 0], [0, 0, -1]],
-  [[0, -1, 0], [1, 0, 0], [0, 0, 1]],
-  [[0, 0, 1], [1, 0, 0], [0, 1, 0]],
-  [[0, 0, -1], [-1, 0, 0], [0, 1, 0]],
+  [
+    [1, 0, 0],
+    [0, 0, -1],
+    [0, 1, 0],
+  ],
+  [
+    [-1, 0, 0],
+    [0, 0, 1],
+    [0, 1, 0],
+  ],
+  [
+    [0, 1, 0],
+    [1, 0, 0],
+    [0, 0, -1],
+  ],
+  [
+    [0, -1, 0],
+    [1, 0, 0],
+    [0, 0, 1],
+  ],
+  [
+    [0, 0, 1],
+    [1, 0, 0],
+    [0, 1, 0],
+  ],
+  [
+    [0, 0, -1],
+    [-1, 0, 0],
+    [0, 1, 0],
+  ],
 ];
 
 export type Fx = [wallrun: number, glow: number, hazard: number];
@@ -33,7 +57,17 @@ export class GeoBuilder {
     return this.count;
   }
 
-  addBox(cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, quat: THREE.Quaternion | null, color: THREE.Color, fx: Fx) {
+  addBox(
+    cx: number,
+    cy: number,
+    cz: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    quat: THREE.Quaternion | null,
+    color: THREE.Color,
+    fx: Fx,
+  ) {
     const half = [sx / 2, sy / 2, sz / 2];
     for (const [n, u, v] of FACES) {
       const fw = Math.abs(u[0]) * sx + Math.abs(u[1]) * sy + Math.abs(u[2]) * sz;
@@ -92,7 +126,11 @@ export class GeoBuilder {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('aFace', new THREE.Float32BufferAttribute(this.face, 4));
     g.setAttribute('aFx', new THREE.Float32BufferAttribute(this.fx, 3));
-    g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
+    g.setIndex(
+      this.count > 65535
+        ? new THREE.Uint32BufferAttribute(this.idx, 1)
+        : new THREE.Uint16BufferAttribute(this.idx, 1),
+    );
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;
@@ -100,7 +138,13 @@ export class GeoBuilder {
 }
 
 /** One-off box geometry with world-material attributes (dynamic entities). */
-export function boxGeometry(sx: number, sy: number, sz: number, color: THREE.Color, fx: Fx): THREE.BufferGeometry {
+export function boxGeometry(
+  sx: number,
+  sy: number,
+  sz: number,
+  color: THREE.Color,
+  fx: Fx,
+): THREE.BufferGeometry {
   const b = new GeoBuilder();
   b.addBox(0, 0, 0, sx, sy, sz, null, color, fx);
   return b.build();

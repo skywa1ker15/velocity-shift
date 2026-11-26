@@ -82,7 +82,8 @@ export class InputManager {
       }
     }
     // Ctrl+W would close the tab mid-slide: lock the keyboard when possible (Chromium, fullscreen)
-    if (usesCtrl(this.bindings)) (navigator as any).keyboard?.lock?.(['KeyW', 'KeyR', 'KeyT', 'KeyN']).catch(() => {});
+    if (usesCtrl(this.bindings))
+      (navigator as any).keyboard?.lock?.(['KeyW', 'KeyR', 'KeyT', 'KeyN']).catch(() => {});
   }
 
   exitLock() {
@@ -122,7 +123,8 @@ export class InputManager {
       else if (a === 'slide') {
         this.pressed.slide = true;
         if (this.settings.slideMode === 'toggle') this.slideLatch = !this.slideLatch;
-      } else if (a === 'sprint' && this.settings.sprintMode === 'toggle') this.sprintLatch = !this.sprintLatch;
+      } else if (a === 'sprint' && this.settings.sprintMode === 'toggle')
+        this.sprintLatch = !this.sprintLatch;
     }
     this.onAction(a, true);
     return true;
@@ -145,7 +147,8 @@ export class InputManager {
   private onKeyUp = (e: KeyboardEvent) => this.release(e.code);
   private onMouseDown = (e: MouseEvent) => {
     // left click is reserved for UI while rebinding; in play it only counts once the pointer is locked
-    if (this.capture ? e.button !== 0 : this.enabled && this.locked) this.press('Mouse' + ([0, 2, 1, 3, 4][e.button] ?? e.button));
+    if (this.capture ? e.button !== 0 : this.enabled && this.locked)
+      this.press('Mouse' + ([0, 2, 1, 3, 4][e.button] ?? e.button));
   };
   private onMouseUp = (e: MouseEvent) => this.release('Mouse' + ([0, 2, 1, 3, 4][e.button] ?? e.button));
 

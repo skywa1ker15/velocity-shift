@@ -72,7 +72,15 @@ export class CameraRig {
     this.trauma = Math.min(1, this.trauma + amount);
   }
 
-  update(pl: MovementController, alpha: number, dt: number, yaw: number, pitch: number, baseFov: number, m: MotionProfile) {
+  update(
+    pl: MovementController,
+    alpha: number,
+    dt: number,
+    yaw: number,
+    pitch: number,
+    baseFov: number,
+    m: MotionProfile,
+  ) {
     this.t += dt;
     const p = pl.pos,
       q = pl.prevPos;

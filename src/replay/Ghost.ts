@@ -37,7 +37,14 @@ export class GhostPlayer {
   private geos: THREE.BufferGeometry[] = [];
 
   constructor(color: number) {
-    this.mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    this.mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+    });
     // stylised runner silhouette: torso, head, a trailing fin
     const body = new THREE.Mesh(this.track(new THREE.CapsuleGeometry(0.22, 0.75, 3, 8)), this.mat);
     body.position.y = 0.95;

@@ -21,7 +21,7 @@ export const levels: LevelEntry[] = [
       music: 'training',
       spawn: { p: [0, 0, -3], yaw: Math.PI },
       killY: -40,
-      medals: { bronze: 75, silver: 55, gold: 44, platinum: 39 },
+      medals: { bronze: 70, silver: 48, gold: 36.5, platinum: 31 },
       objectives: [
         { id: 'tr-clean', kind: 'noDeath', label: 'Finish without falling' },
         { id: 'tr-gems', kind: 'allCollectibles', label: 'Collect all three shards' },
@@ -42,7 +42,7 @@ export const levels: LevelEntry[] = [
       music: 'awakening',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
       killY: -45,
-      medals: { bronze: 110, silver: 80, gold: 62, platinum: 54 },
+      medals: { bronze: 78, silver: 54, gold: 41, platinum: 34.5 },
       objectives: [
         { id: 'aw-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'aw-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -63,7 +63,7 @@ export const levels: LevelEntry[] = [
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
       killY: -50,
-      medals: { bronze: 130, silver: 95, gold: 74, platinum: 65 },
+      medals: { bronze: 85, silver: 59, gold: 44.5, platinum: 37.5 },
       objectives: [
         { id: 've-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 've-wall', kind: 'wallTime', value: 12, label: 'Spend 12 seconds wall-running in one run' },
@@ -84,7 +84,7 @@ export const levels: LevelEntry[] = [
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
       killY: -90,
-      medals: { bronze: 120, silver: 88, gold: 68, platinum: 59 },
+      medals: { bronze: 90, silver: 63, gold: 47.5, platinum: 40 },
       objectives: [
         { id: 'mo-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'mo-dash', kind: 'maxDashes', value: 6, label: 'Finish using 6 dashes or fewer' },

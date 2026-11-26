@@ -11,7 +11,10 @@ function FlashLayer() {
   useEffect(() => {
     if (!flash) return;
     setShown(flash);
-    const t = setTimeout(() => setShown((cur) => (cur?.id === flash.id ? null : cur)), flash.kind === 'checkpoint' ? 1700 : 420);
+    const t = setTimeout(
+      () => setShown((cur) => (cur?.id === flash.id ? null : cur)),
+      flash.kind === 'checkpoint' ? 1700 : 420,
+    );
     return () => clearTimeout(t);
   }, [flash]);
   if (!shown) return null;
@@ -65,7 +68,10 @@ export function Hud({ frozen }: { frozen?: boolean }) {
   const charges = [0, 1].map((i) => Math.min(1, Math.max(0, hud.dash - i)));
   const fast = speed > 18;
   return (
-    <div className={'hud' + (frozen ? ' frozen' : '')} style={{ ['--hud-scale' as any]: s.hudScale, opacity: s.hudOpacity }}>
+    <div
+      className={'hud' + (frozen ? ' frozen' : '')}
+      style={{ ['--hud-scale' as any]: s.hudScale, opacity: s.hudOpacity }}
+    >
       <div className="hud-top">
         <div className={'timer mono-num' + (hud.started ? '' : ' idle')}>{formatTime(hud.time)}</div>
         {hud.checkpoints > 0 && (

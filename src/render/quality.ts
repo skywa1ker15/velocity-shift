@@ -16,10 +16,54 @@ export interface Tier {
 }
 
 export const tiers: Record<TierName, Tier> = {
-  low: { maxPixelRatio: 0.85, shadowSize: 0, shadowRange: 40, bloom: false, bloomLevels: 4, bloomScale: 0, chroma: false, smaa: 0, particles: 0.35, speedLines: 40 },
-  medium: { maxPixelRatio: 1, shadowSize: 1024, shadowRange: 46, bloom: true, bloomLevels: 5, bloomScale: 0.9, chroma: false, smaa: 0, particles: 0.6, speedLines: 70 },
-  high: { maxPixelRatio: 1.25, shadowSize: 2048, shadowRange: 56, bloom: true, bloomLevels: 6, bloomScale: 1, chroma: true, smaa: 1, particles: 1, speedLines: 110 },
-  ultra: { maxPixelRatio: 2, shadowSize: 4096, shadowRange: 70, bloom: true, bloomLevels: 7, bloomScale: 1.05, chroma: true, smaa: 2, particles: 1.5, speedLines: 150 },
+  low: {
+    maxPixelRatio: 0.85,
+    shadowSize: 0,
+    shadowRange: 40,
+    bloom: false,
+    bloomLevels: 4,
+    bloomScale: 0,
+    chroma: false,
+    smaa: 0,
+    particles: 0.35,
+    speedLines: 40,
+  },
+  medium: {
+    maxPixelRatio: 1,
+    shadowSize: 1024,
+    shadowRange: 46,
+    bloom: true,
+    bloomLevels: 5,
+    bloomScale: 0.9,
+    chroma: false,
+    smaa: 0,
+    particles: 0.6,
+    speedLines: 70,
+  },
+  high: {
+    maxPixelRatio: 1.25,
+    shadowSize: 2048,
+    shadowRange: 56,
+    bloom: true,
+    bloomLevels: 6,
+    bloomScale: 1,
+    chroma: true,
+    smaa: 1,
+    particles: 1,
+    speedLines: 110,
+  },
+  ultra: {
+    maxPixelRatio: 2,
+    shadowSize: 4096,
+    shadowRange: 70,
+    bloom: true,
+    bloomLevels: 7,
+    bloomScale: 1.05,
+    chroma: true,
+    smaa: 2,
+    particles: 1.5,
+    speedLines: 150,
+  },
 };
 
 const order: TierName[] = ['low', 'medium', 'high', 'ultra'];

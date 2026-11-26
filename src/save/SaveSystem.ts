@@ -51,7 +51,14 @@ export interface SaveData {
   seenPrompts: string[];
 }
 
-export const emptyRecord = (): LevelRecord => ({ best: null, splits: [], medal: 0, collectibles: [], objectives: [], completions: 0 });
+export const emptyRecord = (): LevelRecord => ({
+  best: null,
+  splits: [],
+  medal: 0,
+  collectibles: [],
+  objectives: [],
+  completions: 0,
+});
 
 export const defaultSave = (): SaveData => ({
   version: SAVE_VERSION,
@@ -60,7 +67,17 @@ export const defaultSave = (): SaveData => ({
   levels: {},
   achievements: {},
   equipped: { suit: 'ion', trail: 'pulse', lines: 'classic', hud: 'ion' },
-  totals: { runs: 0, deaths: 0, distance: 0, dashes: 0, wallTime: 0, slideDistance: 0, playTime: 0, topSpeed: 0, longestWallChain: 0 },
+  totals: {
+    runs: 0,
+    deaths: 0,
+    distance: 0,
+    dashes: 0,
+    wallTime: 0,
+    slideDistance: 0,
+    playTime: 0,
+    topSpeed: 0,
+    longestWallChain: 0,
+  },
   seenPrompts: [],
 });
 
@@ -106,7 +123,8 @@ export function sanitizeSave(raw: unknown): SaveData {
   for (const k of Object.keys(base.equipped) as (keyof Equipped)[]) {
     if (typeof d.equipped?.[k] === 'string') base.equipped[k] = d.equipped[k];
   }
-  for (const k of Object.keys(base.totals) as (keyof Totals)[]) base.totals[k] = Math.max(0, numOr(d.totals?.[k], 0));
+  for (const k of Object.keys(base.totals) as (keyof Totals)[])
+    base.totals[k] = Math.max(0, numOr(d.totals?.[k], 0));
   base.seenPrompts = strArr(d.seenPrompts);
   return base;
 }

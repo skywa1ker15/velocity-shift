@@ -5,7 +5,17 @@
  */
 import * as THREE from 'three';
 import type { EnvPreset } from '../environment/presets';
-import { Blink, Boost, Collapse, GravityZone, Hazard, JumpPad, Mover, Rotator, type Entity } from '../entities/Entities';
+import {
+  Blink,
+  Boost,
+  Collapse,
+  GravityZone,
+  Hazard,
+  JumpPad,
+  Mover,
+  Rotator,
+  type Entity,
+} from '../entities/Entities';
 import type { Simulation } from '../gameplay/Simulation';
 import type { DecorDef, LevelData, MatId } from '../levels/types';
 import { GeoBuilder, type Fx } from './geometry';
@@ -56,10 +66,21 @@ export class LevelView {
       glass: new THREE.Color(p.glass),
       hazard: new THREE.Color(p.hazard),
     };
-    this.material = createWorldMaterial({ roughness: env.surface.roughness, metalness: env.surface.metalness });
+    this.material = createWorldMaterial({
+      roughness: env.surface.roughness,
+      metalness: env.surface.metalness,
+    });
     this.disposables.push(this.material, this.shardGeo);
-    this.gemMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.accent).multiplyScalar(3.2), fog: false });
-    this.gemMatDim = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.accent).multiplyScalar(0.5), transparent: true, opacity: 0.35, fog: false });
+    this.gemMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(p.accent).multiplyScalar(3.2),
+      fog: false,
+    });
+    this.gemMatDim = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(p.accent).multiplyScalar(0.5),
+      transparent: true,
+      opacity: 0.35,
+      fog: false,
+    });
     this.disposables.push(this.gemMat, this.gemMatDim);
 
     this.buildStatic();
@@ -69,7 +90,11 @@ export class LevelView {
   }
 
   private fxOf(mat: MatId, wallrun?: boolean, glow?: number): Fx {
-    return [wallrun ? 1 : 0, glow ?? (mat === 'accent' ? 0.8 : mat === 'glass' ? 0.22 : 0), mat === 'hazard' ? 1 : 0];
+    return [
+      wallrun ? 1 : 0,
+      glow ?? (mat === 'accent' ? 0.8 : mat === 'glass' ? 0.22 : 0),
+      mat === 'hazard' ? 1 : 0,
+    ];
   }
 
   private buildStatic() {
@@ -78,7 +103,17 @@ export class LevelView {
       let q: THREE.Quaternion | null = null;
       if (s.q) q = _q.set(s.q[0], s.q[1], s.q[2], s.q[3]).clone();
       else if (s.r) q = new THREE.Quaternion().setFromEuler(_e.set(s.r[0], s.r[1], s.r[2], 'XYZ'));
-      b.addBox(s.p[0], s.p[1], s.p[2], s.s[0], s.s[1], s.s[2], q, this.palette[s.mat], this.fxOf(s.mat, s.wallrun, s.glow));
+      b.addBox(
+        s.p[0],
+        s.p[1],
+        s.p[2],
+        s.s[0],
+        s.s[1],
+        s.s[2],
+        q,
+        this.palette[s.mat],
+        this.fxOf(s.mat, s.wallrun, s.glow),
+      );
     }
     if (!b.vertexCount) return;
     const geo = b.build();
@@ -155,7 +190,11 @@ export class LevelView {
 
   private entityMaterial(): { mat: THREE.MeshStandardMaterial; warn: { value: number } } {
     const warn = { value: 0 };
-    const mat = createWorldMaterial({ roughness: this.material.roughness, metalness: this.material.metalness, warn });
+    const mat = createWorldMaterial({
+      roughness: this.material.roughness,
+      metalness: this.material.metalness,
+      warn,
+    });
     this.disposables.push(mat);
     return { mat, warn };
   }
@@ -170,16 +209,46 @@ export class LevelView {
         b.addBox(0, 0, 0, d.s[0], d.s[1], d.s[2], null, this.palette[m], this.fxOf(m, d.wallrun));
         // glowing underside strip so moving terrain reads as "alive"
         if (!d.lethal && d.s[0] > 1 && d.s[2] > 1)
-          b.addBox(0, -d.s[1] / 2 - 0.04, 0, d.s[0] * 0.6, 0.06, d.s[2] * 0.6, null, this.palette.accent, [0, 1, 0]);
+          b.addBox(
+            0,
+            -d.s[1] / 2 - 0.04,
+            0,
+            d.s[0] * 0.6,
+            0.06,
+            d.s[2] * 0.6,
+            null,
+            this.palette.accent,
+            [0, 1, 0],
+          );
       } else if (e instanceof Rotator) {
         for (const part of e.def.parts) {
           const m: MatId = part.lethal ? 'hazard' : (part.mat ?? 'alt');
-          b.addBox(part.p[0], part.p[1], part.p[2], part.s[0], part.s[1], part.s[2], null, this.palette[m], this.fxOf(m, part.wallrun));
+          b.addBox(
+            part.p[0],
+            part.p[1],
+            part.p[2],
+            part.s[0],
+            part.s[1],
+            part.s[2],
+            null,
+            this.palette[m],
+            this.fxOf(m, part.wallrun),
+          );
         }
       } else if (e instanceof Collapse || e instanceof Blink) {
         const d = e.def;
         const m: MatId = d.mat ?? (e instanceof Blink ? 'glass' : 'base');
-        b.addBox(0, 0, 0, d.s[0], d.s[1], d.s[2], null, this.palette[m], this.fxOf(m, false, e instanceof Blink ? 0.35 : undefined));
+        b.addBox(
+          0,
+          0,
+          0,
+          d.s[0],
+          d.s[1],
+          d.s[2],
+          null,
+          this.palette[m],
+          this.fxOf(m, false, e instanceof Blink ? 0.35 : undefined),
+        );
       } else if (e instanceof Hazard) {
         if (e.def.visible === false) continue;
         const d = e.def;
@@ -195,7 +264,17 @@ export class LevelView {
           const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ang);
           for (let i = -1; i <= 1; i++) {
             _p.set(0, 0, i * d.s[2] * 0.25).applyQuaternion(q);
-            b.addBox(_p.x, -d.s[1] / 2 + 0.1, _p.z, d.s[0] * 0.7, 0.05, 0.25, q, new THREE.Color(1, 1, 1), [0, 2, 0]);
+            b.addBox(
+              _p.x,
+              -d.s[1] / 2 + 0.1,
+              _p.z,
+              d.s[0] * 0.7,
+              0.05,
+              0.25,
+              q,
+              new THREE.Color(1, 1, 1),
+              [0, 2, 0],
+            );
           }
         }
       } else if (e instanceof GravityZone) {
@@ -203,7 +282,9 @@ export class LevelView {
         const hx = d.s[0] / 2,
           hy = d.s[1] / 2,
           hz = d.s[2] / 2;
-        for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.addBox(sx * hx, 0, sz * hz, 0.12, d.s[1], 0.12, null, this.palette.glass, [0, 1.2, 0]);
+        for (const sx of [-1, 1])
+          for (const sz of [-1, 1])
+            b.addBox(sx * hx, 0, sz * hz, 0.12, d.s[1], 0.12, null, this.palette.glass, [0, 1.2, 0]);
         for (const sy of [-1, 1]) {
           b.addBox(0, sy * hy, -hz, d.s[0], 0.1, 0.1, null, this.palette.glass, [0, 1.2, 0]);
           b.addBox(0, sy * hy, hz, d.s[0], 0.1, 0.1, null, this.palette.glass, [0, 1.2, 0]);

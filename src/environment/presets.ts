@@ -23,7 +23,14 @@ export interface EnvPreset {
   palette: { base: number; alt: number; dark: number; accent: number; glass: number; hazard: number };
   /** Material response. */
   surface: { roughness: number; metalness: number; seam: number; rim: number };
-  post: { exposure: number; bloom: number; bloomThreshold: number; vignette: number; saturation: number; contrast: number };
+  post: {
+    exposure: number;
+    bloom: number;
+    bloomThreshold: number;
+    vignette: number;
+    saturation: number;
+    contrast: number;
+  };
   motes: { color: number; count: number; rise: number; size: number };
   /** Colour of speed lines / dash streaks. */
   streak: number;
@@ -48,9 +55,23 @@ export const envPresets: Record<string, EnvPreset> = {
     },
     fog: { color: 0x5f97aa, density: 0.0042, base: -8, falloff: 0.035 },
     light: { sun: 0xffe9c8, sunIntensity: 2.4, skyAmbient: 0x9fd4ff, groundAmbient: 0x24384a, ambient: 1.15 },
-    palette: { base: 0xc9d6dc, alt: 0x8fb3c2, dark: 0x3d5566, accent: 0xff9a3c, glass: 0xa8f0ff, hazard: 0xff2d55 },
+    palette: {
+      base: 0xc9d6dc,
+      alt: 0x8fb3c2,
+      dark: 0x3d5566,
+      accent: 0xff9a3c,
+      glass: 0xa8f0ff,
+      hazard: 0xff2d55,
+    },
     surface: { roughness: 0.82, metalness: 0.05, seam: 0.1, rim: 0.2 },
-    post: { exposure: 1.0, bloom: 0.55, bloomThreshold: 0.82, vignette: 0.32, saturation: 0.08, contrast: 0.06 },
+    post: {
+      exposure: 1.0,
+      bloom: 0.55,
+      bloomThreshold: 0.82,
+      vignette: 0.32,
+      saturation: 0.08,
+      contrast: 0.06,
+    },
     motes: { color: 0xbff4ff, count: 220, rise: 0.25, size: 0.07 },
     streak: 0xdff8ff,
   },
@@ -73,9 +94,23 @@ export const envPresets: Record<string, EnvPreset> = {
     },
     fog: { color: 0xf6c3a3, density: 0.0036, base: -14, falloff: 0.05 },
     light: { sun: 0xffe2b8, sunIntensity: 3.1, skyAmbient: 0xb8d4ff, groundAmbient: 0xe8a58a, ambient: 1.25 },
-    palette: { base: 0xf1e9dc, alt: 0xd9c7b0, dark: 0x7c6f80, accent: 0xff8a3d, glass: 0xc8ecff, hazard: 0xe8204f },
+    palette: {
+      base: 0xf1e9dc,
+      alt: 0xd9c7b0,
+      dark: 0x7c6f80,
+      accent: 0xff8a3d,
+      glass: 0xc8ecff,
+      hazard: 0xe8204f,
+    },
     surface: { roughness: 0.78, metalness: 0.0, seam: 0.09, rim: 0.22 },
-    post: { exposure: 1.02, bloom: 0.5, bloomThreshold: 0.88, vignette: 0.26, saturation: 0.1, contrast: 0.04 },
+    post: {
+      exposure: 1.02,
+      bloom: 0.5,
+      bloomThreshold: 0.88,
+      vignette: 0.26,
+      saturation: 0.1,
+      contrast: 0.04,
+    },
     motes: { color: 0xfff3d6, count: 260, rise: 0.35, size: 0.06 },
     streak: 0xfff6e6,
   },
@@ -98,9 +133,23 @@ export const envPresets: Record<string, EnvPreset> = {
     },
     fog: { color: 0x4a2260, density: 0.0046, base: -20, falloff: 0.03 },
     light: { sun: 0xffa8d8, sunIntensity: 2.1, skyAmbient: 0x8a7cff, groundAmbient: 0x3a1746, ambient: 1.3 },
-    palette: { base: 0x5b548f, alt: 0x7a6bc0, dark: 0x1e1a38, accent: 0xff3fa8, glass: 0x4fe6d8, hazard: 0xff6a1a },
+    palette: {
+      base: 0x756f9e,
+      alt: 0x8f84c4,
+      dark: 0x231f3e,
+      accent: 0xff3fa8,
+      glass: 0x4fe6d8,
+      hazard: 0xff6a1a,
+    },
     surface: { roughness: 0.7, metalness: 0.12, seam: 0.14, rim: 0.32 },
-    post: { exposure: 1.08, bloom: 0.9, bloomThreshold: 0.7, vignette: 0.4, saturation: 0.16, contrast: 0.08 },
+    post: {
+      exposure: 1.1,
+      bloom: 0.85,
+      bloomThreshold: 0.72,
+      vignette: 0.4,
+      saturation: 0.04,
+      contrast: 0.06,
+    },
     motes: { color: 0xff9be0, count: 300, rise: 0.6, size: 0.06 },
     streak: 0xffd0f2,
   },
@@ -123,9 +172,23 @@ export const envPresets: Record<string, EnvPreset> = {
     },
     fog: { color: 0x08294a, density: 0.0038, base: -25, falloff: 0.028 },
     light: { sun: 0xcfeaff, sunIntensity: 1.9, skyAmbient: 0x4fb6ff, groundAmbient: 0x08182c, ambient: 1.35 },
-    palette: { base: 0x33455c, alt: 0x4d6a8c, dark: 0x0e1622, accent: 0x21e4ff, glass: 0xdff8ff, hazard: 0xff7a14 },
+    palette: {
+      base: 0x33455c,
+      alt: 0x4d6a8c,
+      dark: 0x0e1622,
+      accent: 0x21e4ff,
+      glass: 0xdff8ff,
+      hazard: 0xff7a14,
+    },
     surface: { roughness: 0.42, metalness: 0.55, seam: 0.16, rim: 0.4 },
-    post: { exposure: 1.12, bloom: 1.0, bloomThreshold: 0.66, vignette: 0.42, saturation: 0.14, contrast: 0.1 },
+    post: {
+      exposure: 1.12,
+      bloom: 1.0,
+      bloomThreshold: 0.66,
+      vignette: 0.42,
+      saturation: 0.14,
+      contrast: 0.1,
+    },
     motes: { color: 0x7fe9ff, count: 340, rise: -0.4, size: 0.05 },
     streak: 0xc9f6ff,
   },

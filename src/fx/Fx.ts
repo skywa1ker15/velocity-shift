@@ -17,7 +17,10 @@ export class SpeedLines {
 
   constructor(count: number) {
     const geo = new THREE.InstancedBufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
+    geo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3),
+    );
     geo.setIndex([0, 1, 2, 0, 2, 3]);
     const seed = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
@@ -38,7 +41,12 @@ export class SpeedLines {
       depthTest: false,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uIntensity: { value: 0 }, uColor: { value: new THREE.Color(1, 1, 1) }, uBurst: { value: 0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uIntensity: { value: 0 },
+        uColor: { value: new THREE.Color(1, 1, 1) },
+        uBurst: { value: 0 },
+      },
       vertexShader: /* glsl */ `
         attribute vec4 aSeed;
         uniform float uTime, uIntensity, uBurst;
@@ -219,7 +227,10 @@ export class Sparks {
     this.max = new Float32Array(n).fill(1);
     this.grav = new Float32Array(n);
     this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute(
+      'position',
+      new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage),
+    );
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setAttribute('aData', new THREE.BufferAttribute(this.data, 2).setUsage(THREE.DynamicDrawUsage));
     this.mat = new THREE.ShaderMaterial({
@@ -261,7 +272,13 @@ export class Sparks {
     this.mat.uniforms.uScale.value = h * 0.9;
   }
 
-  emit(p: THREE.Vector3, dir: THREE.Vector3, count: number, color: THREE.Color, o: { speed?: number; spread?: number; life?: number; size?: number; gravity?: number } = {}) {
+  emit(
+    p: THREE.Vector3,
+    dir: THREE.Vector3,
+    count: number,
+    color: THREE.Color,
+    o: { speed?: number; spread?: number; life?: number; size?: number; gravity?: number } = {},
+  ) {
     const speed = o.speed ?? 3,
       spread = o.spread ?? 1,
       life = o.life ?? 0.5,

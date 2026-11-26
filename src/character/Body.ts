@@ -26,7 +26,14 @@ const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 
 /** Solve a two-bone chain: returns the elbow/knee position in `out`. */
-function solveTwoBone(root: THREE.Vector3, target: THREE.Vector3, l1: number, l2: number, pole: THREE.Vector3, out: THREE.Vector3) {
+function solveTwoBone(
+  root: THREE.Vector3,
+  target: THREE.Vector3,
+  l1: number,
+  l2: number,
+  pole: THREE.Vector3,
+  out: THREE.Vector3,
+) {
   const dir = _s1.subVectors(target, root);
   let d = dir.length();
   if (d < 1e-5) {
@@ -134,9 +141,14 @@ export class Body {
   readonly contact = new THREE.Vector3();
 
   constructor(viewScene: THREE.Scene, worldScene: THREE.Scene) {
-    this.suit = new THREE.MeshStandardMaterial({ color: 0x171a22, roughness: 0.5, metalness: 0.35 });
-    this.plate = new THREE.MeshStandardMaterial({ color: 0x2c313d, roughness: 0.35, metalness: 0.6 });
-    this.glow = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff9a3c, emissiveIntensity: 2.6, roughness: 0.4 });
+    this.suit = new THREE.MeshStandardMaterial({ color: 0x4a5266, roughness: 0.62, metalness: 0.1 });
+    this.plate = new THREE.MeshStandardMaterial({ color: 0x8b95ab, roughness: 0.4, metalness: 0.25 });
+    this.glow = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      emissive: 0xff9a3c,
+      emissiveIntensity: 2.6,
+      roughness: 0.4,
+    });
     this.buildArms();
     this.buildLegs();
     viewScene.add(this.armRoot);
@@ -320,7 +332,15 @@ export class Body {
   }
 
   // ----- per-frame ----------------------------------------------------------------------
-  update(pl: MovementController, feet: THREE.Vector3, bobPhase: number, dt: number, yaw: number, pitch: number, camRoll: number) {
+  update(
+    pl: MovementController,
+    feet: THREE.Vector3,
+    bobPhase: number,
+    dt: number,
+    yaw: number,
+    pitch: number,
+    camRoll: number,
+  ) {
     this.t += dt;
     this.dashT += dt;
     this.djT += dt;
@@ -362,7 +382,11 @@ export class Body {
         case MoveState.Run:
         case MoveState.Sprint: {
           const amp = 0.05 + sp * 0.085;
-          t.set(s * (0.2 - Math.abs(swing) * 0.02), -0.235 + swing * amp * 0.75 + sp * 0.02, -0.42 - swing * amp);
+          t.set(
+            s * (0.2 - Math.abs(swing) * 0.02),
+            -0.235 + swing * amp * 0.75 + sp * 0.02,
+            -0.42 - swing * amp,
+          );
           a.curlTarget = sp > 1 ? 0.25 : 0.9; // open "blade" hands at full sprint
           break;
         }
@@ -482,7 +506,11 @@ export class Body {
         if (speed < 0.5) t.set(s * 0.13, 0.045, -0.08);
         else t.set(s * 0.115, 0.045 + Math.max(0, Math.cos(ph)) * lift, -0.08 - Math.sin(ph) * stride);
       } else if (wall) {
-        t.set(s * 0.12 + pl.wallSide * 0.16, 0.12 + Math.max(0, Math.cos(ph * 1.4)) * 0.22, -0.1 - Math.sin(ph * 1.4) * 0.34);
+        t.set(
+          s * 0.12 + pl.wallSide * 0.16,
+          0.12 + Math.max(0, Math.cos(ph * 1.4)) * 0.22,
+          -0.1 - Math.sin(ph * 1.4) * 0.34,
+        );
       } else if (st === MoveState.Dash) {
         t.set(s * 0.13, 0.2, 0.38 + (s > 0 ? 0.1 : 0)); // trailing behind the burst
       } else {
@@ -516,7 +544,8 @@ export class Body {
     // effect anchor: trailing hand in a slide, feet otherwise
     const sy = Math.sin(yaw),
       cy = Math.cos(yaw);
-    if (sliding) this.contact.set(feet.x + cy * 0.42 + sy * 0.1, feet.y + 0.03, feet.z - sy * 0.42 + cy * 0.1);
+    if (sliding)
+      this.contact.set(feet.x + cy * 0.42 + sy * 0.1, feet.y + 0.03, feet.z - sy * 0.42 + cy * 0.1);
     else this.contact.set(feet.x, feet.y + 0.03, feet.z);
   }
 

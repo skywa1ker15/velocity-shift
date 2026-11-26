@@ -20,7 +20,14 @@ import { levelById, levels } from '../levels/registry';
 import type { LevelData, LevelMeta } from '../levels/types';
 import { MoveState } from '../movement/types';
 import { initPhysics } from '../physics/PhysicsWorld';
-import { addTotals, checkAchievements, cosmeticFor, finishRun, isUnlocked, type CosmeticCategory } from '../progression/Progression';
+import {
+  addTotals,
+  checkAchievements,
+  cosmeticFor,
+  finishRun,
+  isUnlocked,
+  type CosmeticCategory,
+} from '../progression/Progression';
 import { LevelView } from '../render/LevelView';
 import { AutoQuality, guessTier, type TierName } from '../render/quality';
 import { Renderer } from '../render/Renderer';
@@ -148,7 +155,12 @@ export class Game {
       this.auto = null;
       tier = s.preset;
     }
-    this.renderer.configure(tier, { resolutionScale: scale, shadows: s.shadows, postFx: s.postFx, brightness: s.brightness });
+    this.renderer.configure(tier, {
+      resolutionScale: scale,
+      shadows: s.shadows,
+      postFx: s.postFx,
+      brightness: s.brightness,
+    });
     this.renderer.setHazardAlt(s.colorblind);
     if (this.loop) this.loop.fpsCap = s.fpsCap;
     this.audio.applySettings(s);
@@ -281,7 +293,15 @@ export class Game {
     this.abandonRun();
     this.mode = 'loading';
     this.input.enabled = false;
-    set({ screen: 'loading', overlay: null, loadProgress: 0.05, loadLabel: 'Loading ' + entry.meta.name, levelId: id, results: null, prompt: null });
+    set({
+      screen: 'loading',
+      overlay: null,
+      loadProgress: 0.05,
+      loadLabel: 'Loading ' + entry.meta.name,
+      levelId: id,
+      results: null,
+      prompt: null,
+    });
     try {
       await initPhysics();
       set({ loadProgress: 0.25 });
@@ -436,7 +456,13 @@ export class Game {
       this.rig.onDoubleJump();
       this.body.onDoubleJump();
       this.bursts.spawn(feet(), UP, this.accent, 2.6, 0.45, Math.max(1, this.trailStyle));
-      this.sparks.emit(_v, UP, this.count(14), this.accent, { speed: 3.5, spread: 1.6, life: 0.45, size: 0.05, gravity: 6 });
+      this.sparks.emit(_v, UP, this.count(14), this.accent, {
+        speed: 3.5,
+        spread: 1.6,
+        life: 0.45,
+        size: 0.05,
+        gravity: 6,
+      });
     });
     ev.on('dash', () => {
       audio.dash();
@@ -455,7 +481,13 @@ export class Game {
       this.body.onLand(speed);
       if (speed > 7) {
         this.bursts.spawn(feet(), UP, this.streak, 1.6 + Math.min(3, speed * 0.1), 0.4, 0);
-        this.sparks.emit(_v, UP, this.count(6 + Math.min(16, speed * 0.6)), this.streak, { speed: 2.2, spread: 2.4, life: 0.5, size: 0.06, gravity: 5 });
+        this.sparks.emit(_v, UP, this.count(6 + Math.min(16, speed * 0.6)), this.streak, {
+          speed: 2.2,
+          spread: 2.4,
+          life: 0.5,
+          size: 0.06,
+          gravity: 5,
+        });
       }
       if (speed > 24) ui.getState().fire('impact');
     });
@@ -479,14 +511,23 @@ export class Game {
       if (wall) {
         _v.set(pl.pos.x - pl.wallNormal.x * 0.35, pl.pos.y + 0.2, pl.pos.z - pl.wallNormal.z * 0.35);
         _n.set(pl.wallNormal.x, 0.4, pl.wallNormal.z);
-        this.sparks.emit(_v, _n, this.count(5), this.accent, { speed: 2.5, spread: 1.2, life: 0.3, size: 0.04 });
+        this.sparks.emit(_v, _n, this.count(5), this.accent, {
+          speed: 2.5,
+          spread: 1.2,
+          life: 0.3,
+          size: 0.04,
+        });
       }
     });
 
     sim.events.on('checkpoint', ({ index, time }) => {
       audio.checkpoint();
       const best = this.save.record(sim.meta.id).splits[index];
-      ui.getState().fire('checkpoint', `CHECKPOINT ${index}/${sim.data.checkpoints.length - 1}`, best ? time - best : null);
+      ui.getState().fire(
+        'checkpoint',
+        `CHECKPOINT ${index}/${sim.data.checkpoints.length - 1}`,
+        best ? time - best : null,
+      );
       _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
       this.bursts.spawn(_v, UP, this.accent, 7, 0.7, 1);
     });
@@ -507,9 +548,19 @@ export class Game {
         rec.collectibles.push(id);
         this.save.save();
       }
-      ui.getState().toast('collect', isNew ? 'Shard found' : 'Shard', `${rec.collectibles.length} / ${sim.data.collectibles.length} in this level`);
+      ui.getState().toast(
+        'collect',
+        isNew ? 'Shard found' : 'Shard',
+        `${rec.collectibles.length} / ${sim.data.collectibles.length} in this level`,
+      );
       _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
-      this.sparks.emit(_v, UP, this.count(24), this.accent, { speed: 4, spread: 2, life: 0.7, size: 0.07, gravity: 3 });
+      this.sparks.emit(_v, UP, this.count(24), this.accent, {
+        speed: 4,
+        spread: 2,
+        life: 0.7,
+        size: 0.07,
+        gravity: 3,
+      });
     });
     sim.events.on('shortcut', ({ hidden }) => {
       if (hidden) ui.getState().toast('info', 'Hidden route', 'You found another way through.');
@@ -543,7 +594,12 @@ export class Game {
   private showResults() {
     const sim = this.sim!;
     const res = finishRun(this.save, sim.meta, sim.data, sim.stats);
-    if (res.isRecord) void saveGhost(sim.meta.id, this.recorder.toArray());
+    if (res.isRecord) {
+      // the new best becomes the ghost straight away, and is stored for next time
+      const run = this.recorder.toArray();
+      this.ghost.load(run);
+      void saveGhost(sim.meta.id, run);
+    }
     this.mode = 'results';
     this.input.enabled = false;
     this.input.exitLock();
@@ -625,7 +681,11 @@ export class Game {
     const speed = pl.speed;
     this.dashFx = Math.max(0, this.dashFx - dt * 3.2);
     this.lines.update(this.time, dt, speed, this.dashFx, this.motion.speedLines);
-    this.ghost.update(sim.runTime, this.settings.ghost && sim.stats.started && !sim.stats.finished, this.rig.eye);
+    this.ghost.update(
+      sim.runTime,
+      this.settings.ghost && sim.stats.started && !sim.stats.finished,
+      this.rig.eye,
+    );
 
     // continuous contact effects
     if (dt > 0) {
@@ -635,11 +695,22 @@ export class Game {
         if (this.slideSparkT <= 0) {
           this.slideSparkT = 0.03;
           _n.set(-pl.vel.x / speed, 0.5, -pl.vel.z / speed);
-          this.sparks.emit(this.body.contact, _n, this.count(2), this.accent, { speed: 3 + speed * 0.15, spread: 0.7, life: 0.35, size: 0.035 });
+          this.sparks.emit(this.body.contact, _n, this.count(2), this.accent, {
+            speed: 3 + speed * 0.15,
+            spread: 0.7,
+            life: 0.35,
+            size: 0.035,
+          });
         }
       }
       const moving = this.mode === 'playing';
-      this.audio.update(moving ? speed : 0, st === MoveState.Slide, st === MoveState.WallRun, !pl.grounded, Math.min(1, speed / 22));
+      this.audio.update(
+        moving ? speed : 0,
+        st === MoveState.Slide,
+        st === MoveState.WallRun,
+        !pl.grounded,
+        Math.min(1, speed / 22),
+      );
     }
   }
 
@@ -682,7 +753,14 @@ export class Game {
     const prev = ui.getState().hud;
     const wall = pl.state === MoveState.WallRun ? Math.max(0, 1 - pl.wallTime / pl.wallMax) : 0;
     const time = sim.runTime;
-    if (!force && prev.time === time && prev.speed === pl.speed && prev.dash === pl.dashEnergy && prev.fps === this.fps) return;
+    if (
+      !force &&
+      prev.time === time &&
+      prev.speed === pl.speed &&
+      prev.dash === pl.dashEnergy &&
+      prev.fps === this.fps
+    )
+      return;
     ui.getState().set({
       hud: {
         time,
@@ -716,7 +794,10 @@ export class Game {
   }
 
   /** Simulated time step for automated tests (no pointer lock available in headless browsers). */
-  debugAdvance(seconds: number, keys: Partial<{ moveZ: number; moveX: number; jump: boolean; dash: boolean; slide: boolean }> = {}) {
+  debugAdvance(
+    seconds: number,
+    keys: Partial<{ moveZ: number; moveX: number; jump: boolean; dash: boolean; slide: boolean }> = {},
+  ) {
     if (!this.sim) return;
     const n = Math.round(seconds / SIM_DT);
     for (let i = 0; i < n; i++) {

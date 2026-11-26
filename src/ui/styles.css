@@ -1172,7 +1172,12 @@ input:focus-visible,
   animation: wipe 0.42s cubic-bezier(0.6, 0, 0.3, 1) both;
 }
 .flash.respawn {
-  background: linear-gradient(115deg, transparent 0 40%, color-mix(in srgb, var(--accent) 45%, transparent) 40% 46%, transparent 46%);
+  background: linear-gradient(
+    115deg,
+    transparent 0 40%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 40% 46%,
+    transparent 46%
+  );
   background-size: 340% 100%;
   animation: wipe 0.32s ease-out both;
 }
@@ -1200,7 +1205,12 @@ input:focus-visible,
   bottom: 0;
   width: 26vw;
   left: -30vw;
-  background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--accent) 38%, transparent), transparent);
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 38%, transparent),
+    transparent
+  );
   transform: skewX(-18deg);
   animation: sweep 0.55s ease-out both;
 }

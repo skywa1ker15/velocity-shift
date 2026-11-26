@@ -59,7 +59,13 @@ export class LevelBuilder {
   /** Walkable slab whose top surface is at height `y`, centred on (x, z). */
   plat(x: number, y: number, z: number, w: number, d: number, o: PlatOpts = {}) {
     const h = o.h ?? 1;
-    this.solid({ p: [x, y - h / 2, z], s: [w, h, d], mat: o.mat ?? 'base', wallrun: o.wallrun ?? false, glow: o.glow });
+    this.solid({
+      p: [x, y - h / 2, z],
+      s: [w, h, d],
+      mat: o.mat ?? 'base',
+      wallrun: o.wallrun ?? false,
+      glow: o.glow,
+    });
     if (o.dress !== false) this.dressPlat(x, y, z, w, d, h);
   }
 
@@ -79,7 +85,15 @@ export class LevelBuilder {
   }
 
   /** Vertical wall-runnable slab. (x, z) is the centre, `y` the bottom edge. */
-  wall(x: number, y: number, z: number, w: number, h: number, d: number, o: { mat?: MatId; wallrun?: boolean } = {}) {
+  wall(
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    o: { mat?: MatId; wallrun?: boolean } = {},
+  ) {
     this.solid({ p: [x, y + h / 2, z], s: [w, h, d], mat: o.mat ?? 'alt', wallrun: o.wallrun ?? true });
   }
 
@@ -96,7 +110,11 @@ export class LevelBuilder {
     const q = quatMul(quatFromAxisAngle(0, 1, 0, yaw), quatFromAxisAngle(1, 0, 0, pitch));
     const up = quatRotate(q, { x: 0, y: 1, z: 0 });
     this.solid({
-      p: [(a[0] + b[0]) / 2 - (up.x * h) / 2, (a[1] + b[1]) / 2 - (up.y * h) / 2, (a[2] + b[2]) / 2 - (up.z * h) / 2],
+      p: [
+        (a[0] + b[0]) / 2 - (up.x * h) / 2,
+        (a[1] + b[1]) / 2 - (up.y * h) / 2,
+        (a[2] + b[2]) / 2 - (up.z * h) / 2,
+      ],
       s: [width, h, len],
       q: [q.x, q.y, q.z, q.w],
       mat: o.mat ?? 'base',
@@ -120,11 +138,30 @@ export class LevelBuilder {
   }
 
   /** Distant megastructure block (no collision). */
-  monolith(x: number, y: number, z: number, w: number, h: number, d: number, mat: MatId = 'dark', r?: Vec3Tuple) {
+  monolith(
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    mat: MatId = 'dark',
+    r?: Vec3Tuple,
+  ) {
     this.decor('box', [x, y + h / 2, z], [w, h, d], mat, { r });
   }
 
-  ring(x: number, y: number, z: number, radius: number, tube: number, r: Vec3Tuple, spin: Vec3Tuple, mat: MatId = 'alt', glow = 0) {
+  ring(
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    tube: number,
+    r: Vec3Tuple,
+    spin: Vec3Tuple,
+    mat: MatId = 'alt',
+    glow = 0,
+  ) {
     this.decor('ring', [x, y, z], [radius, tube, radius], mat, { r, spin, glow });
   }
 
@@ -148,7 +185,11 @@ export class LevelBuilder {
     // beacon: two slim posts and a floating glyph bar, readable from distance
     this.decor('box', [x - size[0] / 2 + 0.3, y + 1.6, z], [0.18, 3.2, 0.18], 'accent', { glow: 1 });
     this.decor('box', [x + size[0] / 2 - 0.3, y + 1.6, z], [0.18, 3.2, 0.18], 'accent', { glow: 1 });
-    this.decor('shard', [x, y + 4.2, z], [0.35, 0.9, 0.35], 'accent', { glow: 1, bob: 0.25, spin: [0, 1.2, 0] });
+    this.decor('shard', [x, y + 4.2, z], [0.35, 0.9, 0.35], 'accent', {
+      glow: 1,
+      bob: 0.25,
+      spin: [0, 1.2, 0],
+    });
     return c;
   }
 

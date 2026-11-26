@@ -27,11 +27,14 @@ describe('movement chains', () => {
   });
 
   test('2. sprint → wall run → wall jump → dash', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 0, 0, 12, 20, { dress: false });
-      b.wall(-3.2, -2, 25, 0.6, 8, 30);
-      b.plat(4, 0, 60, 30, 60, { dress: false });
-    }, [-2.2, 0, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 0, 0, 12, 20, { dress: false });
+        b.wall(-3.2, -2, 25, 0.6, 8, 30);
+        b.plat(4, 0, 60, 30, 60, { dress: false });
+      },
+      [-2.2, 0, 0],
+    );
     d.settle().run(0.9, RUN);
     d.until(() => d.pl.pos.z > 9.3);
     d.tick({ jump: true, yaw: FWD - 0.25 });
@@ -47,12 +50,15 @@ describe('movement chains', () => {
   });
 
   test('3. slide downhill → jump → air dash → slide-landing', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 10, 0, 12, 30, { dress: false });
-      b.ramp([0, 10, 15], [0, 2, 39], 12);
-      b.plat(0, 2, 49, 12, 20, { dress: false });
-      b.plat(0, 0, 110, 14, 100, { dress: false });
-    }, [0, 10, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 10, 0, 12, 30, { dress: false });
+        b.ramp([0, 10, 15], [0, 2, 39], 12);
+        b.plat(0, 2, 49, 12, 20, { dress: false });
+        b.plat(0, 0, 110, 14, 100, { dress: false });
+      },
+      [0, 10, 0],
+    );
     d.settle().run(1.2, RUN);
     d.until(() => d.pl.pos.z > 16);
     d.tick({ slide: true });
@@ -72,12 +78,15 @@ describe('movement chains', () => {
   });
 
   test('4. wall run → double jump → vault → sprint', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 0, 0, 12, 20, { dress: false });
-      b.wall(-3.2, -2, 22, 0.6, 8, 24);
-      // landing deck whose lip is slightly higher than the jump reaches cleanly → vault
-      b.plat(1, 4.2, 50, 14, 40, { h: 6, dress: false });
-    }, [-2.2, 0, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 0, 0, 12, 20, { dress: false });
+        b.wall(-3.2, -2, 22, 0.6, 8, 24);
+        // landing deck whose lip is slightly higher than the jump reaches cleanly → vault
+        b.plat(1, 4.2, 50, 14, 40, { h: 6, dress: false });
+      },
+      [-2.2, 0, 0],
+    );
     d.settle().run(0.9, RUN);
     d.until(() => d.pl.pos.z > 9.3);
     d.tick({ jump: true, yaw: FWD - 0.25 });
@@ -94,12 +103,15 @@ describe('movement chains', () => {
   });
 
   test('5. wall run → wall jump → opposite wall run → wall jump (corridor zig-zag)', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 0, 0, 12, 20, { dress: false });
-      b.wall(-3.2, -2, 22, 0.6, 9, 24); // right wall
-      b.wall(3.2, -2, 34, 0.6, 9, 28); // left wall, further along
-      b.plat(0, 0, 80, 20, 50, { dress: false });
-    }, [-2.2, 0, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 0, 0, 12, 20, { dress: false });
+        b.wall(-3.2, -2, 22, 0.6, 9, 24); // right wall
+        b.wall(3.2, -2, 34, 0.6, 9, 28); // left wall, further along
+        b.plat(0, 0, 80, 20, 50, { dress: false });
+      },
+      [-2.2, 0, 0],
+    );
     d.settle().run(0.9, RUN);
     d.until(() => d.pl.pos.z > 9.3);
     d.tick({ jump: true, yaw: FWD - 0.25 });

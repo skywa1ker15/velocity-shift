@@ -63,7 +63,11 @@ vec3 applyWorldFog(vec3 color, vec3 wpos, vec3 camPos) {
 }
 `;
 
-export function createWorldMaterial(opts: { roughness: number; metalness: number; warn?: { value: number } }): THREE.MeshStandardMaterial {
+export function createWorldMaterial(opts: {
+  roughness: number;
+  metalness: number;
+  warn?: { value: number };
+}): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: opts.roughness,
@@ -150,13 +154,16 @@ vec3 vsEmissive = vec3(0.0);`,
   // ---- wall-runnable: two light rails and drifting chevrons on vertical faces ----
   if (vFx.x > 0.5 && abs(up) < 0.5) {
     float rail = (1.0 - smoothstep(0.035, 0.06, abs(v - 0.45))) + (1.0 - smoothstep(0.035, 0.06, abs(v - (fh - 0.45))));
-    float band = smoothstep(0.55, 0.75, v) * smoothstep(fh - 0.55, fh - 0.75, v);
-    float cu = u * 0.5 - uTime * 0.35;
-    float chev = abs(fract(cu - abs(fract(v * 0.5) - 0.5) * 0.9) - 0.5);
-    float chevron = (1.0 - smoothstep(0.06, 0.1, chev)) * band;
-    float shimmer = 0.75 + 0.25 * sin(uTime * 2.2 + u * 0.8);
-    vsEmissive += uAccent * (rail * 2.2 + chevron * 0.42) * shimmer;
-    c = mix(c, c * 0.72 + uAccent * 0.08, band * 0.6);
+    float inside = smoothstep(0.55, 0.75, v) * smoothstep(fh - 0.55, fh - 0.75, v);
+    // a strip of small chevrons every 3.2 m of height, drifting along the wall
+    float vv = mod(v - 0.45, 3.2) - 1.6;
+    float strip = (1.0 - smoothstep(0.26, 0.3, abs(vv))) * inside;
+    float chev = abs(fract(u * 0.9 - uTime * 0.45 - abs(vv) * 1.1) - 0.5);
+    float chevron = (1.0 - smoothstep(0.07, 0.11, chev)) * strip;
+    float guide = (1.0 - smoothstep(0.012, 0.03, abs(abs(vv) - 0.3))) * inside;
+    float shimmer = 0.78 + 0.22 * sin(uTime * 2.2 + u * 0.8);
+    vsEmissive += uAccent * (rail * 2.2 + chevron * 0.9 + guide * 0.5) * shimmer;
+    c = mix(c, c * 0.8 + uAccent * 0.05, inside * 0.5);
   }
   // ---- glow strips / accent pieces ----
   if (vFx.y > 0.0) {
@@ -181,8 +188,14 @@ vec3 vsEmissive = vec3(0.0);`,
   diffuseColor.rgb = c;
 }`,
       )
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vsEmissive;`)
-      .replace('#include <fog_fragment>', `gl_FragColor.rgb = applyWorldFog(gl_FragColor.rgb, vWPos, cameraPosition);`);
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vsEmissive;`,
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `gl_FragColor.rgb = applyWorldFog(gl_FragColor.rgb, vWPos, cameraPosition);`,
+      );
   };
   mat.customProgramCacheKey = () => 'vs-world';
   return mat;

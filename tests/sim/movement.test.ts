@@ -245,11 +245,14 @@ describe('slide', () => {
   });
 
   test('sliding downhill gains speed', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 10, 0, 12, 30, { dress: false });
-      b.ramp([0, 10, 15], [0, 0, 45], 12);
-      b.plat(0, 0, 75, 12, 60, { dress: false });
-    }, [0, 10, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 10, 0, 12, 30, { dress: false });
+        b.ramp([0, 10, 15], [0, 0, 45], 12);
+        b.plat(0, 0, 75, 12, 60, { dress: false });
+      },
+      [0, 10, 0],
+    );
     d.settle().run(1.2, RUN);
     d.until(() => d.pl.pos.z > 16);
     d.tick({ slide: true });
@@ -316,10 +319,13 @@ describe('dash', () => {
 
   test('never tunnels through a 0.2 m wall, from any start distance', async () => {
     for (const start of [0.5, 1.5, 2.5, 3.3, 3.9, 5]) {
-      const d = await makeSim((b) => {
-        floor(b);
-        b.wall(0, 0, 10, 12, 5, 0.2);
-      }, [0, 0, 10 - 0.1 - start]);
+      const d = await makeSim(
+        (b) => {
+          floor(b);
+          b.wall(0, 0, 10, 12, 5, 0.2);
+        },
+        [0, 0, 10 - 0.1 - start],
+      );
       d.settle();
       d.tick({ dash: true });
       d.run(0.5, RUN);
@@ -406,10 +412,13 @@ describe('wall-run', () => {
   });
 
   test('non-runnable walls are ignored', async () => {
-    const d = await makeSim((b) => {
-      b.plat(0, 0, 0, 12, 20, { dress: false });
-      b.wall(-3.2, -2, 25, 0.6, 8, 30, { wallrun: false });
-    }, [-2.2, 0, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.plat(0, 0, 0, 12, 20, { dress: false });
+        b.wall(-3.2, -2, 25, 0.6, 8, 30, { wallrun: false });
+      },
+      [-2.2, 0, 0],
+    );
     d.settle().run(0.9, RUN);
     d.until(() => d.pl.pos.z > 9.3);
     d.tick({ jump: true, yaw: FWD - 0.25 });
@@ -448,9 +457,21 @@ describe('vault', () => {
 
 describe('moving platforms', () => {
   test('carries the player and passes its velocity into a jump', async () => {
-    const d = await makeSim((b) => {
-      b.entity({ type: 'mover', s: [6, 1, 6], path: [[0, -0.5, 0], [30, -0.5, 0]], speed: 5, mode: 'pingpong' });
-    }, [0, 0.2, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.entity({
+          type: 'mover',
+          s: [6, 1, 6],
+          path: [
+            [0, -0.5, 0],
+            [30, -0.5, 0],
+          ],
+          speed: 5,
+          mode: 'pingpong',
+        });
+      },
+      [0, 0.2, 0],
+    );
     d.settle();
     d.run(2.0);
     expect(d.pl.grounded).toBe(true);
@@ -462,9 +483,21 @@ describe('moving platforms', () => {
   });
 
   test('rides a rising platform without sinking in', async () => {
-    const d = await makeSim((b) => {
-      b.entity({ type: 'mover', s: [6, 1, 6], path: [[0, -0.5, 0], [0, 9.5, 0]], speed: 4, mode: 'pingpong' });
-    }, [0, 0.2, 0]);
+    const d = await makeSim(
+      (b) => {
+        b.entity({
+          type: 'mover',
+          s: [6, 1, 6],
+          path: [
+            [0, -0.5, 0],
+            [0, 9.5, 0],
+          ],
+          speed: 4,
+          mode: 'pingpong',
+        });
+      },
+      [0, 0.2, 0],
+    );
     d.settle();
     for (let i = 0; i < 600; i++) {
       d.tick();
@@ -478,11 +511,14 @@ describe('moving platforms', () => {
 describe('determinism', () => {
   test('the same input stream reproduces the same run exactly', async () => {
     const run = async () => {
-      const d = await makeSim((b) => {
-        floor(b);
-        b.wall(-3.2, 0, 30, 0.6, 8, 20);
-        b.plat(0, 1.0, 55, 10, 1.2, { h: 1.0, dress: false });
-      }, [-2.2, 0, 0]);
+      const d = await makeSim(
+        (b) => {
+          floor(b);
+          b.wall(-3.2, 0, 30, 0.6, 8, 20);
+          b.plat(0, 1.0, 55, 10, 1.2, { h: 1.0, dress: false });
+        },
+        [-2.2, 0, 0],
+      );
       d.settle().run(1.0, RUN);
       d.tick({ slide: true });
       d.run(0.3);
@@ -497,5 +533,54 @@ describe('determinism', () => {
     const a = await run();
     const b = await run();
     expect(b).toEqual(a);
+  });
+});
+
+describe('moving solids', () => {
+  test('a sliding wall shoves the player instead of passing through, and never pushes them through the floor', async () => {
+    const d = await makeSim((b) => {
+      floor(b);
+      b.entity({
+        type: 'mover',
+        s: [1, 4, 6],
+        path: [
+          [-6, 2, 0],
+          [6, 2, 0],
+        ],
+        speed: 3,
+        mode: 'pingpong',
+      });
+    });
+    d.settle();
+    let minY = 1,
+      maxX = 0;
+    for (let i = 0; i < 480; i++) {
+      d.tick();
+      minY = Math.min(minY, d.pl.pos.y);
+      maxX = Math.max(maxX, d.pl.pos.x);
+    }
+    expect(minY).toBeGreaterThan(-0.05);
+    expect(maxX).toBeGreaterThan(3); // carried along in front of the wall
+    expect(d.sim.stats.deaths).toBe(0);
+  });
+
+  test('being pinned between a moving wall and a static wall is lethal (crush)', async () => {
+    const d = await makeSim((b) => {
+      floor(b);
+      b.wall(3, 0, 0, 1, 4, 8, { wallrun: false });
+      b.entity({
+        type: 'mover',
+        s: [1, 4, 6],
+        path: [
+          [-6, 2, 0],
+          [2, 2, 0],
+        ],
+        speed: 3,
+        mode: 'pingpong',
+      });
+    });
+    d.settle();
+    d.until(() => d.sim.stats.deaths > 0, {}, 6);
+    expect(d.sim.stats.deaths).toBe(1);
   });
 });

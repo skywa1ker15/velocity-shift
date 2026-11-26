@@ -26,7 +26,12 @@ export function nextTarget(medal: number, m: MedalTimes): { tier: number; time: 
 }
 
 // ----- objectives ------------------------------------------------------------------------
-export function objectiveDone(o: ObjectiveDef, stats: RunStats, data: LevelData, ownedCollectibles: string[]): boolean {
+export function objectiveDone(
+  o: ObjectiveDef,
+  stats: RunStats,
+  data: LevelData,
+  ownedCollectibles: string[],
+): boolean {
   switch (o.kind) {
     case 'noDeath':
       return stats.deaths === 0;
@@ -67,24 +72,84 @@ const medalOf = (s: SaveData, id: string) => s.levels[id]?.medal ?? 0;
 const totalShards = (s: SaveData) => Object.values(s.levels).reduce((n, r) => n + r.collectibles.length, 0);
 
 export const achievements: AchievementDef[] = [
-  { id: 'first-steps', name: 'First Steps', desc: 'Finish Training.', test: (c) => finished(c.save, 'training') },
-  { id: 'awakened', name: 'Awakened', desc: 'Finish The Awakening.', test: (c) => finished(c.save, 'awakening') },
-  { id: 'ascended', name: 'Ascended', desc: 'Finish Verticality.', test: (c) => finished(c.save, 'verticality') },
-  { id: 'unstoppable', name: 'Unstoppable', desc: 'Finish Momentum.', test: (c) => finished(c.save, 'momentum') },
-  { id: 'podium', name: 'Podium', desc: 'Earn a medal on every course.', test: (c) => courses().every((l) => medalOf(c.save, l.meta.id) >= 1) },
-  { id: 'gold-rush', name: 'Gold Rush', desc: 'Earn a gold medal.', test: (c) => courses().some((l) => medalOf(c.save, l.meta.id) >= 3) },
-  { id: 'all-gold', name: 'Midas Line', desc: 'Earn gold on every course.', test: (c) => courses().every((l) => medalOf(c.save, l.meta.id) >= 3) },
-  { id: 'shift', name: 'Velocity: Shift', desc: 'Beat a hidden Shift time.', test: (c) => courses().some((l) => medalOf(c.save, l.meta.id) >= 4) },
+  {
+    id: 'first-steps',
+    name: 'First Steps',
+    desc: 'Finish Training.',
+    test: (c) => finished(c.save, 'training'),
+  },
+  {
+    id: 'awakened',
+    name: 'Awakened',
+    desc: 'Finish The Awakening.',
+    test: (c) => finished(c.save, 'awakening'),
+  },
+  {
+    id: 'ascended',
+    name: 'Ascended',
+    desc: 'Finish Verticality.',
+    test: (c) => finished(c.save, 'verticality'),
+  },
+  {
+    id: 'unstoppable',
+    name: 'Unstoppable',
+    desc: 'Finish Momentum.',
+    test: (c) => finished(c.save, 'momentum'),
+  },
+  {
+    id: 'podium',
+    name: 'Podium',
+    desc: 'Earn a medal on every course.',
+    test: (c) => courses().every((l) => medalOf(c.save, l.meta.id) >= 1),
+  },
+  {
+    id: 'gold-rush',
+    name: 'Gold Rush',
+    desc: 'Earn a gold medal.',
+    test: (c) => courses().some((l) => medalOf(c.save, l.meta.id) >= 3),
+  },
+  {
+    id: 'all-gold',
+    name: 'Midas Line',
+    desc: 'Earn gold on every course.',
+    test: (c) => courses().every((l) => medalOf(c.save, l.meta.id) >= 3),
+  },
+  {
+    id: 'shift',
+    name: 'Velocity: Shift',
+    desc: 'Beat a hidden Shift time.',
+    test: (c) => courses().some((l) => medalOf(c.save, l.meta.id) >= 4),
+  },
   {
     id: 'deathless',
     name: 'Untouched',
     desc: 'Finish a course without dying.',
     test: (c) => !!c.stats && !!c.meta && !c.meta.training && c.stats.finished && c.stats.deaths === 0,
   },
-  { id: 'speed-demon', name: 'Speed Demon', desc: 'Reach 30 m/s.', test: (c) => c.save.totals.topSpeed >= 30 },
-  { id: 'wall-crawler', name: 'Wall Crawler', desc: 'Chain 4 wall-runs without touching the ground.', test: (c) => c.save.totals.longestWallChain >= 4 },
-  { id: 'long-slide', name: 'Frictionless', desc: 'Slide 100 m in a single run.', test: (c) => !!c.stats && c.stats.slideDistance >= 100 },
-  { id: 'air-time', name: 'Weightless', desc: 'Spend 25 seconds airborne in a single run.', test: (c) => !!c.stats && c.stats.airTime >= 25 },
+  {
+    id: 'speed-demon',
+    name: 'Speed Demon',
+    desc: 'Reach 30 m/s.',
+    test: (c) => c.save.totals.topSpeed >= 30,
+  },
+  {
+    id: 'wall-crawler',
+    name: 'Wall Crawler',
+    desc: 'Chain 4 wall-runs without touching the ground.',
+    test: (c) => c.save.totals.longestWallChain >= 4,
+  },
+  {
+    id: 'long-slide',
+    name: 'Frictionless',
+    desc: 'Slide 100 m in a single run.',
+    test: (c) => !!c.stats && c.stats.slideDistance >= 100,
+  },
+  {
+    id: 'air-time',
+    name: 'Weightless',
+    desc: 'Spend 25 seconds airborne in a single run.',
+    test: (c) => !!c.stats && c.stats.airTime >= 25,
+  },
   {
     id: 'frugal',
     name: 'Pure Momentum',
@@ -101,19 +166,43 @@ export const achievements: AchievementDef[] = [
     id: 'cartographer',
     name: 'Cartographer',
     desc: 'Find the hidden route on every course.',
-    test: (c) => courses().every((l) => c.save.levels[l.meta.id]?.objectives.some((o) => o.endsWith('-hidden'))),
+    test: (c) =>
+      courses().every((l) => c.save.levels[l.meta.id]?.objectives.some((o) => o.endsWith('-hidden'))),
   },
   { id: 'collector', name: 'Shard Hunter', desc: 'Collect 6 shards.', test: (c) => totalShards(c.save) >= 6 },
-  { id: 'completionist', name: 'Every Last One', desc: 'Collect all 12 shards.', test: (c) => totalShards(c.save) >= 12 },
+  {
+    id: 'completionist',
+    name: 'Every Last One',
+    desc: 'Collect all 12 shards.',
+    test: (c) => totalShards(c.save) >= 12,
+  },
   {
     id: 'objectives',
     name: 'Overachiever',
     desc: 'Complete every optional objective.',
-    test: (c) => levels.every((l) => l.meta.objectives.every((o) => c.save.levels[l.meta.id]?.objectives.includes(o.id))),
+    test: (c) =>
+      levels.every((l) =>
+        l.meta.objectives.every((o) => c.save.levels[l.meta.id]?.objectives.includes(o.id)),
+      ),
   },
-  { id: 'marathon', name: 'Marathon', desc: 'Travel 10 km in total.', test: (c) => c.save.totals.distance >= 10000 },
-  { id: 'persistent', name: 'Again.', desc: 'Fall 50 times. Get up 50 times.', test: (c) => c.save.totals.deaths >= 50 },
-  { id: 'vaulter', name: 'Up and Over', desc: 'Vault 4 obstacles in a single run.', test: (c) => !!c.stats && c.stats.vaults >= 4 },
+  {
+    id: 'marathon',
+    name: 'Marathon',
+    desc: 'Travel 10 km in total.',
+    test: (c) => c.save.totals.distance >= 10000,
+  },
+  {
+    id: 'persistent',
+    name: 'Again.',
+    desc: 'Fall 50 times. Get up 50 times.',
+    test: (c) => c.save.totals.deaths >= 50,
+  },
+  {
+    id: 'vaulter',
+    name: 'Up and Over',
+    desc: 'Vault 4 obstacles in a single run.',
+    test: (c) => !!c.stats && c.stats.vaults >= 4,
+  },
 ];
 
 // ----- cosmetics -------------------------------------------------------------------------
@@ -134,23 +223,117 @@ const has = (s: SaveData, a: string) => !!s.achievements[a];
 export const cosmetics: CosmeticDef[] = [
   // suit accent colour (gloves, forearm, shins)
   { id: 'ion', category: 'suit', name: 'Ion', color: 0xff9a3c, how: 'Default', unlocked: () => true },
-  { id: 'aurora', category: 'suit', name: 'Aurora', color: 0x38e0c8, how: 'Finish The Awakening', unlocked: (s) => has(s, 'awakened') },
-  { id: 'pulse', category: 'suit', name: 'Pulse', color: 0xff3fa8, how: 'Finish Verticality', unlocked: (s) => has(s, 'ascended') },
-  { id: 'glacier', category: 'suit', name: 'Glacier', color: 0x7fd8ff, how: 'Finish Momentum', unlocked: (s) => has(s, 'unstoppable') },
-  { id: 'midas', category: 'suit', name: 'Midas', color: 0xffd24a, how: 'Earn gold on every course', unlocked: (s) => has(s, 'all-gold') },
-  { id: 'void', category: 'suit', name: 'Void', color: 0xb48cff, how: 'Beat a hidden Shift time', unlocked: (s) => has(s, 'shift') },
+  {
+    id: 'aurora',
+    category: 'suit',
+    name: 'Aurora',
+    color: 0x38e0c8,
+    how: 'Finish The Awakening',
+    unlocked: (s) => has(s, 'awakened'),
+  },
+  {
+    id: 'pulse',
+    category: 'suit',
+    name: 'Pulse',
+    color: 0xff3fa8,
+    how: 'Finish Verticality',
+    unlocked: (s) => has(s, 'ascended'),
+  },
+  {
+    id: 'glacier',
+    category: 'suit',
+    name: 'Glacier',
+    color: 0x7fd8ff,
+    how: 'Finish Momentum',
+    unlocked: (s) => has(s, 'unstoppable'),
+  },
+  {
+    id: 'midas',
+    category: 'suit',
+    name: 'Midas',
+    color: 0xffd24a,
+    how: 'Earn gold on every course',
+    unlocked: (s) => has(s, 'all-gold'),
+  },
+  {
+    id: 'void',
+    category: 'suit',
+    name: 'Void',
+    color: 0xb48cff,
+    how: 'Beat a hidden Shift time',
+    unlocked: (s) => has(s, 'shift'),
+  },
   // dash / jump burst style
-  { id: 'pulse', category: 'trail', name: 'Pulse Ring', color: 0xffffff, style: 0, how: 'Default', unlocked: () => true },
-  { id: 'echo', category: 'trail', name: 'Echo', color: 0xffffff, style: 1, how: 'Collect 6 shards', unlocked: (s) => has(s, 'collector') },
-  { id: 'nova', category: 'trail', name: 'Nova', color: 0xffffff, style: 2, how: 'Chain 4 wall-runs', unlocked: (s) => has(s, 'wall-crawler') },
+  {
+    id: 'pulse',
+    category: 'trail',
+    name: 'Pulse Ring',
+    color: 0xffffff,
+    style: 0,
+    how: 'Default',
+    unlocked: () => true,
+  },
+  {
+    id: 'echo',
+    category: 'trail',
+    name: 'Echo',
+    color: 0xffffff,
+    style: 1,
+    how: 'Collect 6 shards',
+    unlocked: (s) => has(s, 'collector'),
+  },
+  {
+    id: 'nova',
+    category: 'trail',
+    name: 'Nova',
+    color: 0xffffff,
+    style: 2,
+    how: 'Chain 4 wall-runs',
+    unlocked: (s) => has(s, 'wall-crawler'),
+  },
   // speed-line colour
-  { id: 'classic', category: 'lines', name: 'Slipstream', color: 0, how: 'Default (matches the level)', unlocked: () => true },
-  { id: 'ember', category: 'lines', name: 'Ember', color: 0xff7a3c, how: 'Reach 30 m/s', unlocked: (s) => has(s, 'speed-demon') },
-  { id: 'spectral', category: 'lines', name: 'Spectral', color: 0xb48cff, how: 'Finish a course without dying', unlocked: (s) => has(s, 'deathless') },
+  {
+    id: 'classic',
+    category: 'lines',
+    name: 'Slipstream',
+    color: 0,
+    how: 'Default (matches the level)',
+    unlocked: () => true,
+  },
+  {
+    id: 'ember',
+    category: 'lines',
+    name: 'Ember',
+    color: 0xff7a3c,
+    how: 'Reach 30 m/s',
+    unlocked: (s) => has(s, 'speed-demon'),
+  },
+  {
+    id: 'spectral',
+    category: 'lines',
+    name: 'Spectral',
+    color: 0xb48cff,
+    how: 'Finish a course without dying',
+    unlocked: (s) => has(s, 'deathless'),
+  },
   // HUD theme
   { id: 'ion', category: 'hud', name: 'Ion', color: 0xff9a3c, how: 'Default', unlocked: () => true },
-  { id: 'mono', category: 'hud', name: 'Mono', color: 0xf2f4f8, how: 'Earn a medal on every course', unlocked: (s) => has(s, 'podium') },
-  { id: 'neon', category: 'hud', name: 'Neon', color: 0x21e4ff, how: 'Earn a gold medal', unlocked: (s) => has(s, 'gold-rush') },
+  {
+    id: 'mono',
+    category: 'hud',
+    name: 'Mono',
+    color: 0xf2f4f8,
+    how: 'Earn a medal on every course',
+    unlocked: (s) => has(s, 'podium'),
+  },
+  {
+    id: 'neon',
+    category: 'hud',
+    name: 'Neon',
+    color: 0x21e4ff,
+    how: 'Earn a gold medal',
+    unlocked: (s) => has(s, 'gold-rush'),
+  },
 ];
 
 export function cosmeticFor(s: SaveData, category: CosmeticCategory): CosmeticDef {
@@ -179,7 +362,13 @@ export interface ResultsData {
 }
 
 /** Unlock any achievements whose condition now holds. Returns the newly unlocked ones. */
-export function checkAchievements(save: SaveData, stats: RunStats | null, meta: LevelMeta | null, data: LevelData | null, medal = 0): AchievementDef[] {
+export function checkAchievements(
+  save: SaveData,
+  stats: RunStats | null,
+  meta: LevelMeta | null,
+  data: LevelData | null,
+  medal = 0,
+): AchievementDef[] {
   const out: AchievementDef[] = [];
   // two passes: some achievements depend on others unlocked in the same sweep
   for (let pass = 0; pass < 2; pass++) {
@@ -214,11 +403,18 @@ export function addTotals(save: SaveData, stats: RunStats) {
   t.longestWallChain = Math.max(t.longestWallChain, stats.longestWallChain);
 }
 
-export function finishRun(saveSys: SaveSystem, meta: LevelMeta, data: LevelData, stats: RunStats): ResultsData {
+export function finishRun(
+  saveSys: SaveSystem,
+  meta: LevelMeta,
+  data: LevelData,
+  stats: RunStats,
+): ResultsData {
   const save = saveSys.data;
   const rec = saveSys.record(meta.id);
   const time = stats.ticks / 120;
-  const unlockedBefore = new Set(cosmetics.filter((c) => c.unlocked(save)).map((c) => c.category + ':' + c.id));
+  const unlockedBefore = new Set(
+    cosmetics.filter((c) => c.unlocked(save)).map((c) => c.category + ':' + c.id),
+  );
 
   const previousBest = rec.best;
   const previousMedal = rec.medal;
@@ -242,7 +438,9 @@ export function finishRun(saveSys: SaveSystem, meta: LevelMeta, data: LevelData,
 
   addTotals(save, stats);
   const newAchievements = checkAchievements(save, stats, meta, data, medal);
-  const newCosmetics = cosmetics.filter((c) => c.unlocked(save) && !unlockedBefore.has(c.category + ':' + c.id));
+  const newCosmetics = cosmetics.filter(
+    (c) => c.unlocked(save) && !unlockedBefore.has(c.category + ':' + c.id),
+  );
   saveSys.flush();
 
   const idx = levels.findIndex((l) => l.meta.id === meta.id);

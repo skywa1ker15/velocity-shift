@@ -9,7 +9,15 @@
  * (`warn` rises toward 1, which the view turns into glow / flicker / shake and audio).
  */
 import type RAPIER from '@dimforge/rapier3d-compat';
-import { quatFromAxisAngle, quatFromEuler, quatRotateInv, v3, type Quat, type V3, type Vec3Tuple } from '../core/math';
+import {
+  quatFromAxisAngle,
+  quatFromEuler,
+  quatRotateInv,
+  v3,
+  type Quat,
+  type V3,
+  type Vec3Tuple,
+} from '../core/math';
 import type { MovementController } from '../movement/MovementController';
 import { movementConfig as cfg } from '../movement/movementConfig';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
@@ -135,7 +143,15 @@ export class Mover extends Entity {
     this.savePrev();
     if (this.def.ghost) return;
     this.body = phys.addKinematicBody(this.p, this.q);
-    phys.addBoxToBody(this.body, v3(), this.h, { x: 0, y: 0, z: 0, w: 1 }, this.def.wallrun ?? false, this, this.index);
+    phys.addBoxToBody(
+      this.body,
+      v3(),
+      this.h,
+      { x: 0, y: 0, z: 0, w: 1 },
+      this.def.wallrun ?? false,
+      this,
+      this.index,
+    );
   }
 
   /** 0..1 progress along the path at level time t. Pure function of time → deterministic. */
@@ -208,7 +224,15 @@ export class Rotator extends Entity {
   init(phys: PhysicsWorld) {
     this.body = phys.addKinematicBody(this.p, this.q);
     for (const part of this.def.parts) {
-      phys.addBoxToBody(this.body, { x: part.p[0], y: part.p[1], z: part.p[2] }, half(part.s), { x: 0, y: 0, z: 0, w: 1 }, part.wallrun ?? false, this, this.index);
+      phys.addBoxToBody(
+        this.body,
+        { x: part.p[0], y: part.p[1], z: part.p[2] },
+        half(part.s),
+        { x: 0, y: 0, z: 0, w: 1 },
+        part.wallrun ?? false,
+        this,
+        this.index,
+      );
     }
   }
   update(ctx: EntityCtx, phys: PhysicsWorld) {
@@ -286,7 +310,8 @@ export class Collapse extends Entity {
       this.timer -= ctx.dt;
       this.drop += ctx.dt;
       // rebuild (no soft-locks) once the player is clear of the space
-      if (this.timer <= 0 && !playerTouchesBox(ctx.player, this.p, this.h, undefined, 1.2)) this.restore(phys);
+      if (this.timer <= 0 && !playerTouchesBox(ctx.player, this.p, this.h, undefined, 1.2))
+        this.restore(phys);
     }
   }
   private restore(phys: PhysicsWorld) {

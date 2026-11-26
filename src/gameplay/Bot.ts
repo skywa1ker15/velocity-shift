@@ -16,6 +16,8 @@ export class Bot {
   private queue: string[] = [];
   private wait = 0;
   private waitingForGround = false;
+  private deferred = '';
+  private waitAhead = 0;
   private deaths = 0;
   private hit = {} as RayHit;
   stuckTicks = 0;
@@ -42,6 +44,7 @@ export class Bot {
     this.sliding = false;
     this.wait = 0;
     this.waitingForGround = false;
+    this.deferred = '';
   }
 
   step(): InputFrame {
@@ -73,13 +76,16 @@ export class Bot {
     inp.jumpHeld = true;
 
     if (this.waitingForGround) {
-      const n = pts[this.index];
-      const ok = sim.physics.raycast(n.p[0], n.p[1] + 1.2, n.p[2], 0, -1, 0, 2.6, this.hit);
-      if (ok) this.waitingForGround = false;
-      else {
+      const n = pts[Math.min(pts.length - 1, this.index + this.waitAhead)];
+      const ok = sim.physics.raycast(n.p[0], n.p[1] + 0.45, n.p[2], 0, -1, 0, 0.9, this.hit);
+      if (!ok) {
         inp.moveZ = 0;
         return inp;
       }
+      this.waitingForGround = false;
+      const deferred = this.deferred;
+      this.deferred = '';
+      if (deferred) this.perform(deferred);
     }
 
     // queued timed actions (double jump at apex, dash after jump…)
@@ -116,39 +122,15 @@ export class Bot {
 
     const reach = pt.r ?? 1.1;
     if (dist < reach || this.passed(this.index)) {
-      for (const tok of (pt.act ?? '').split('+')) {
-        switch (tok) {
-          case 'j':
-            inp.jumpPressed = true;
-            break;
-          case 'jj':
-            inp.jumpPressed = true;
-            this.queue.push('J2');
-            this.wait = 8;
-            break;
-          case 'd':
-            if (this.queue.length) this.queue.push('D');
-            else if (inp.jumpPressed) {
-              this.queue.push('DA');
-              this.wait = 8;
-            } else inp.dashPressed = true;
-            break;
-          case 's':
-            this.sliding = true;
-            inp.slidePressed = true;
-            break;
-          case 'u':
-            this.sliding = false;
-            break;
-          case 'wj':
-            if (pl.state === MoveState.WallRun) inp.jumpPressed = true;
-            else this.queue.push('WJ');
-            break;
-          case 'w':
-            this.waitingForGround = true;
-            break;
-        }
-      }
+      const act = pt.act ?? '';
+      const toks = act.split('+');
+      if (toks.includes('w') || toks.includes('w2')) {
+        // wait here until there is ground under the next point ('w') or the one after it ('w2'),
+        // then do the rest of the tokens (e.g. 'w+j')
+        this.waitingForGround = true;
+        this.waitAhead = toks.includes('w2') ? 1 : 0;
+        this.deferred = toks.filter((t) => t !== 'w' && t !== 'w2').join('+');
+      } else this.perform(act);
       this.index++;
       this.stuckTicks = 0;
     } else {
@@ -157,6 +139,41 @@ export class Bot {
     inp.slideHeld = this.sliding;
     if (this.sliding && pl.grounded && pl.state !== MoveState.Slide && pl.speed > 5) inp.slidePressed = true;
     return inp;
+  }
+
+  private perform(act: string) {
+    const inp = this.inp,
+      pl = this.sim.player;
+    for (const tok of act.split('+')) {
+      switch (tok) {
+        case 'j':
+          inp.jumpPressed = true;
+          break;
+        case 'jj':
+          inp.jumpPressed = true;
+          this.queue.push('J2');
+          this.wait = 8;
+          break;
+        case 'd':
+          if (this.queue.length) this.queue.push('D');
+          else if (inp.jumpPressed) {
+            this.queue.push('DA');
+            this.wait = 8;
+          } else inp.dashPressed = true;
+          break;
+        case 's':
+          this.sliding = true;
+          inp.slidePressed = true;
+          break;
+        case 'u':
+          this.sliding = false;
+          break;
+        case 'wj':
+          if (pl.state === MoveState.WallRun) inp.jumpPressed = true;
+          else this.queue.push('WJ');
+          break;
+      }
+    }
   }
 
   /** True once the player has gone past waypoint i along the line from the previous one. */
@@ -194,5 +211,12 @@ export function runBot(sim: Simulation, maxSeconds = 600, onTick?: (tick: number
     onTick?.(t);
   }
   const p = sim.player.pos;
-  return { finished: sim.stats.finished, time: sim.runTime, deaths: sim.stats.deaths, ticks: t, lastIndex: bot.index, pos: [p.x, p.y, p.z] };
+  return {
+    finished: sim.stats.finished,
+    time: sim.runTime,
+    deaths: sim.stats.deaths,
+    ticks: t,
+    lastIndex: bot.index,
+    pos: [p.x, p.y, p.z],
+  };
 }

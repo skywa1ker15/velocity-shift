@@ -123,7 +123,8 @@ export interface GravityDef extends EntityBase {
   scale: number;
 }
 
-export type EntityDef = MoverDef | RotatorDef | CollapseDef | BlinkDef | HazardDef | BoostDef | JumpPadDef | GravityDef;
+export type EntityDef =
+  MoverDef | RotatorDef | CollapseDef | BlinkDef | HazardDef | BoostDef | JumpPadDef | GravityDef;
 
 export interface CheckpointDef {
   p: Vec3Tuple; // respawn feet position
@@ -165,13 +166,15 @@ export interface BotPoint {
   /**
    * Action performed on reaching the point:
    *  j = jump, jj = jump + double jump at apex, d = dash, s = slide (until next 'u'), u = stop sliding,
-   *  wj = wall jump, w = wait until there is ground under the next point. Combine with '+', e.g. 'jj+d'.
+   *  wj = wall jump, w = wait until there is ground under the next point (w2: the point after that).
+   *  Combine with '+', e.g. 'jj+d'.
    */
   act?: string;
   r?: number; // arrival radius
 }
 
-export type ObjectiveKind = 'noDeath' | 'maxDashes' | 'hiddenRoute' | 'allCollectibles' | 'underTime' | 'noSlide' | 'wallTime';
+export type ObjectiveKind =
+  'noDeath' | 'maxDashes' | 'hiddenRoute' | 'allCollectibles' | 'underTime' | 'noSlide' | 'wallTime';
 export interface ObjectiveDef {
   id: string;
   kind: ObjectiveKind;

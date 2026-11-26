@@ -53,6 +53,7 @@ export class PhysicsWorld implements CollisionWorld {
   private probe = new RAPIER.Ball(PROBE_R);
   private t1 = v3();
   private t2 = v3();
+  private t3 = v3();
 
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: 0, z: 0 });
@@ -188,6 +189,23 @@ export class PhysicsWorld implements CollisionWorld {
         out.wallNz = nz;
       }
     }
+    if (out.hitWall) {
+      // Sliding along a wall can never carry the character further along it than it asked to go.
+      // (Without this, pressing into a wall that is itself sliding sideways drags the character
+      // along with it.)
+      const tl = Math.hypot(out.wallNx, out.wallNz);
+      if (tl > 0.5) {
+        const tx = -out.wallNz / tl,
+          tz = out.wallNx / tl;
+        const want = dx * tx + dz * tz;
+        const got = m.x * tx + m.z * tz;
+        if (got * want < 0 || Math.abs(got) > Math.abs(want) + 1e-5) {
+          const fix = (got * want < 0 ? 0 : want) - got;
+          out.x += tx * fix;
+          out.z += tz * fix;
+        }
+      }
+    }
     // ground: while grounded reach down (stairs, slopes); while falling only catch what the feet touch
     if (snap || dy <= 0) this.probeGround(out, lift, snap ? cfg.snapDistance : 0.02);
   }
@@ -198,7 +216,18 @@ export class PhysicsWorld implements CollisionWorld {
     t.x = out.x;
     t.y = out.y + lift + pr;
     t.z = out.z;
-    const hit = this.world.castShape(t, IDENTITY, DOWN, this.probe, 0, lift + down, true, undefined, QUERY_GROUPS, this.player);
+    const hit = this.world.castShape(
+      t,
+      IDENTITY,
+      DOWN,
+      this.probe,
+      0,
+      lift + down,
+      true,
+      undefined,
+      QUERY_GROUPS,
+      this.player,
+    );
     if (!hit) return;
     const ny = hit.normal1.y;
     if (ny < WALKABLE_NY) return; // too steep to stand on: the capsule will slide down it
@@ -210,7 +239,16 @@ export class PhysicsWorld implements CollisionWorld {
     out.gnz = hit.normal1.z;
   }
 
-  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max: number, out: RayHit): boolean {
+  raycast(
+    ox: number,
+    oy: number,
+    oz: number,
+    dx: number,
+    dy: number,
+    dz: number,
+    max: number,
+    out: RayHit,
+  ): boolean {
     const r = this.ray;
     r.origin.x = ox;
     r.origin.y = oy;
@@ -240,7 +278,70 @@ export class PhysicsWorld implements CollisionWorld {
     t.x = x;
     t.y = y + lift + (height - lift) / 2;
     t.z = z;
-    return this.world.intersectionWithShape(t, IDENTITY, shape, undefined, QUERY_GROUPS, this.player) === null;
+    return (
+      this.world.intersectionWithShape(t, IDENTITY, shape, undefined, QUERY_GROUPS, this.player) === null
+    );
+  }
+
+  overlapPush(feet: V3, height: number, out: V3): number {
+    const lift = Math.min(cfg.stepHeight, Math.max(0, height - 2 * cfg.radius));
+    let shape = this.fitShapes.get(height);
+    if (!shape) {
+      shape = new RAPIER.Capsule(Math.max(0.005, (height - lift) / 2 - cfg.radius), cfg.radius - 0.03);
+      this.fitShapes.set(height, shape);
+    }
+    const t = this.tmp;
+    const cx = feet.x,
+      cy = feet.y + lift + (height - lift) / 2,
+      cz = feet.z;
+    t.x = cx;
+    t.y = cy;
+    t.z = cz;
+    out.x = out.y = out.z = 0;
+    let best = 0;
+    let overlapped = false;
+    const d = this.t3;
+    this.world.intersectionsWithShape(
+      t,
+      IDENTITY,
+      shape,
+      (c) => {
+        overlapped = true;
+        if (!this.meta.get(c.handle)?.motion) return true;
+        this.surfaceDelta(c.handle, feet, d);
+        // only the part of its motion that drives INTO the player pushes; sliding past does not drag
+        t.x = cx;
+        t.y = cy;
+        t.z = cz;
+        const proj = c.projectPoint(t, true);
+        let nx: number,
+          ny = 0,
+          nz: number;
+        if (proj && !proj.isInside) {
+          nx = cx - proj.point.x;
+          ny = cy - proj.point.y;
+          nz = cz - proj.point.z;
+        } else {
+          const o = c.translation();
+          nx = cx - o.x;
+          nz = cz - o.z;
+        }
+        const nl = Math.hypot(nx, ny, nz);
+        if (nl < 1e-6) return true;
+        const along = (d.x * nx + d.y * ny + d.z * nz) / nl;
+        if (along > best) {
+          best = along;
+          out.x = (nx / nl) * along;
+          out.y = (ny / nl) * along;
+          out.z = (nz / nl) * along;
+        }
+        return true;
+      },
+      undefined,
+      QUERY_GROUPS,
+      this.player,
+    );
+    return !overlapped ? 0 : best > 0 ? 2 : 1;
   }
 
   surfaceDelta(id: number, p: V3, out: V3): void {

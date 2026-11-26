@@ -45,7 +45,12 @@ export class AudioEngine {
     comp.release.value = 0.2;
     this.master = ctx.createGain();
     this.master.connect(comp).connect(ctx.destination);
-    this.buses = { sfx: ctx.createGain(), ambience: ctx.createGain(), music: ctx.createGain(), ui: ctx.createGain() };
+    this.buses = {
+      sfx: ctx.createGain(),
+      ambience: ctx.createGain(),
+      music: ctx.createGain(),
+      ui: ctx.createGain(),
+    };
     for (const b of Object.values(this.buses)) b.connect(this.master);
 
     // 2 s of white noise, reused by every noise-based voice
@@ -95,7 +100,8 @@ export class AudioEngine {
   /** Duck everything while paused / tab hidden. */
   setMuted(m: boolean) {
     this.muted = m;
-    if (this.ctx && this.settings) this.master.gain.setTargetAtTime(m ? 0 : this.settings.volMaster, this.ctx.currentTime, 0.05);
+    if (this.ctx && this.settings)
+      this.master.gain.setTargetAtTime(m ? 0 : this.settings.volMaster, this.ctx.currentTime, 0.05);
   }
 
   // ----- continuous layers ---------------------------------------------------------------
@@ -142,7 +148,16 @@ export class AudioEngine {
     o.stop(t + dur + 0.02);
   }
 
-  private burst(bus: Bus, type: BiquadFilterType, f0: number, f1: number, dur: number, vol: number, q = 1, delay = 0) {
+  private burst(
+    bus: Bus,
+    type: BiquadFilterType,
+    f0: number,
+    f1: number,
+    dur: number,
+    vol: number,
+    q = 1,
+    delay = 0,
+  ) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime + delay;
@@ -285,12 +300,70 @@ export class AudioEngine {
  * `intensity` (0..1, from the player's speed) opens the filter and brings in the arp and hats,
  * so the track swells as the player builds momentum.
  */
-const PRESETS: Record<string, { bpm: number; root: number; scale: number[]; chords: number[][]; wave: OscillatorType }> = {
-  menu: { bpm: 84, root: 50, scale: [0, 2, 3, 7, 9], chords: [[0, 7, 14], [-4, 3, 10], [-2, 5, 12], [-5, 2, 9]], wave: 'triangle' },
-  training: { bpm: 104, root: 48, scale: [0, 2, 4, 7, 9], chords: [[0, 7, 16], [-3, 4, 12], [5, 12, 16], [-5, 2, 11]], wave: 'triangle' },
-  awakening: { bpm: 112, root: 50, scale: [0, 2, 4, 7, 9, 11], chords: [[0, 7, 16], [5, 12, 21], [-3, 4, 12], [7, 14, 19]], wave: 'triangle' },
-  verticality: { bpm: 124, root: 45, scale: [0, 2, 3, 7, 8, 10], chords: [[0, 7, 15], [-4, 3, 12], [-2, 5, 14], [3, 10, 19]], wave: 'sawtooth' },
-  momentum: { bpm: 140, root: 43, scale: [0, 3, 5, 7, 10], chords: [[0, 7, 15], [-2, 5, 14], [3, 10, 17], [-4, 3, 10]], wave: 'sawtooth' },
+const PRESETS: Record<
+  string,
+  { bpm: number; root: number; scale: number[]; chords: number[][]; wave: OscillatorType }
+> = {
+  menu: {
+    bpm: 84,
+    root: 50,
+    scale: [0, 2, 3, 7, 9],
+    chords: [
+      [0, 7, 14],
+      [-4, 3, 10],
+      [-2, 5, 12],
+      [-5, 2, 9],
+    ],
+    wave: 'triangle',
+  },
+  training: {
+    bpm: 104,
+    root: 48,
+    scale: [0, 2, 4, 7, 9],
+    chords: [
+      [0, 7, 16],
+      [-3, 4, 12],
+      [5, 12, 16],
+      [-5, 2, 11],
+    ],
+    wave: 'triangle',
+  },
+  awakening: {
+    bpm: 112,
+    root: 50,
+    scale: [0, 2, 4, 7, 9, 11],
+    chords: [
+      [0, 7, 16],
+      [5, 12, 21],
+      [-3, 4, 12],
+      [7, 14, 19],
+    ],
+    wave: 'triangle',
+  },
+  verticality: {
+    bpm: 124,
+    root: 45,
+    scale: [0, 2, 3, 7, 8, 10],
+    chords: [
+      [0, 7, 15],
+      [-4, 3, 12],
+      [-2, 5, 14],
+      [3, 10, 19],
+    ],
+    wave: 'sawtooth',
+  },
+  momentum: {
+    bpm: 140,
+    root: 43,
+    scale: [0, 3, 5, 7, 10],
+    chords: [
+      [0, 7, 15],
+      [-2, 5, 14],
+      [3, 10, 17],
+      [-4, 3, 10],
+    ],
+    wave: 'sawtooth',
+  },
 };
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -351,15 +424,19 @@ class Music {
       const bar = Math.floor(s / 16);
       const chord = p.chords[bar % p.chords.length];
       const k = this.intensity;
-      if (s % 16 === 0) for (const n of chord) this.voice(p.wave, mtof(p.root + 12 + n), t, sixteenth * 16, 0.05, 1.2);
-      if (s % 4 === 0) this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 3, 0.16 + k * 0.1, 0.02);
-      else if (s % 4 === 2 && k > 0.3) this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 1.5, 0.1 * k, 0.02);
+      if (s % 16 === 0)
+        for (const n of chord) this.voice(p.wave, mtof(p.root + 12 + n), t, sixteenth * 16, 0.05, 1.2);
+      if (s % 4 === 0)
+        this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 3, 0.16 + k * 0.1, 0.02);
+      else if (s % 4 === 2 && k > 0.3)
+        this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 1.5, 0.1 * k, 0.02);
       if (k > 0.12 || this.name === 'menu') {
         // arpeggio walks the scale against the chord
         const idx = (s * 3 + bar * 2) % (p.scale.length * 2);
         const oct = Math.floor(idx / p.scale.length);
         const note = p.root + 24 + chord[0] + p.scale[idx % p.scale.length] + oct * 12;
-        if (s % 2 === 0 || k > 0.6) this.voice('triangle', mtof(note), t, sixteenth * 1.6, 0.035 + k * 0.05, 0.01);
+        if (s % 2 === 0 || k > 0.6)
+          this.voice('triangle', mtof(note), t, sixteenth * 1.6, 0.035 + k * 0.05, 0.01);
       }
       if (k > 0.45 && s % 2 === 1) this.hat(t, 0.02 + k * 0.03);
       if (k > 0.25 && s % 8 === 0) this.kick(t, 0.2 + k * 0.2);

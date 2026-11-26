@@ -1,7 +1,15 @@
 /** Settings (applied live) and the key rebinding screen. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useUi } from '../app/store';
-import { actionLabels, actionOrder, defaultBindings, findConflicts, keyLabel, usesCtrl, type Action } from '../input/bindings';
+import {
+  actionLabels,
+  actionOrder,
+  defaultBindings,
+  findConflicts,
+  keyLabel,
+  usesCtrl,
+  type Action,
+} from '../input/bindings';
 import { defaultSettings, type Settings } from '../settings/settings';
 import { Btn, Panel, useGame } from './App';
 
@@ -30,19 +38,43 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const s = game.settings;
   const set = (patch: Partial<Settings>) => game.updateSettings(patch);
 
-  const slider = (key: keyof Settings, min: number, max: number, step: number, fmt: (v: number) => string = (v) => v.toFixed(2)) => (
+  const slider = (
+    key: keyof Settings,
+    min: number,
+    max: number,
+    step: number,
+    fmt: (v: number) => string = (v) => v.toFixed(2),
+  ) => (
     <>
-      <input type="range" min={min} max={max} step={step} value={s[key] as number} onChange={(e) => set({ [key]: Number(e.target.value) } as Partial<Settings>)} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={s[key] as number}
+        onChange={(e) => set({ [key]: Number(e.target.value) } as Partial<Settings>)}
+      />
       <output className="mono-num">{fmt(s[key] as number)}</output>
     </>
   );
   const toggle = (key: keyof Settings) => (
-    <button type="button" role="switch" aria-checked={!!s[key]} className={'switch' + (s[key] ? ' on' : '')} onClick={() => set({ [key]: !s[key] } as Partial<Settings>)}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!s[key]}
+      className={'switch' + (s[key] ? ' on' : '')}
+      onClick={() => set({ [key]: !s[key] } as Partial<Settings>)}
+    >
       <i />
     </button>
   );
   const select = <K extends keyof Settings>(key: K, options: [Settings[K], string][]) => (
-    <select value={String(s[key])} onChange={(e) => set({ [key]: options.find((o) => String(o[0]) === e.target.value)![0] } as Partial<Settings>)}>
+    <select
+      value={String(s[key])}
+      onChange={(e) =>
+        set({ [key]: options.find((o) => String(o[0]) === e.target.value)![0] } as Partial<Settings>)
+      }
+    >
       {options.map(([v, l]) => (
         <option key={String(v)} value={String(v)}>
           {l}
@@ -83,7 +115,10 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       <div className="settings">
         {tab === 'Graphics' && (
           <>
-            <Row label="Quality preset" hint={s.preset === 'auto' ? `Auto is currently using: ${game.renderer.tierName}` : undefined}>
+            <Row
+              label="Quality preset"
+              hint={s.preset === 'auto' ? `Auto is currently using: ${game.renderer.tierName}` : undefined}
+            >
               {select('preset', [
                 ['auto', 'Auto (adapts to your machine)'],
                 ['low', 'Low'],
@@ -124,7 +159,16 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           <>
             <Row label="Mouse sensitivity">
               {slider('sensitivity', 0.1, 5, 0.05)}
-              <input className="num" type="number" min={0.1} max={5} step={0.05} value={s.sensitivity} onChange={(e) => set({ sensitivity: Number(e.target.value) || 1 })} aria-label="Sensitivity value" />
+              <input
+                className="num"
+                type="number"
+                min={0.1}
+                max={5}
+                step={0.05}
+                value={s.sensitivity}
+                onChange={(e) => set({ sensitivity: Number(e.target.value) || 1 })}
+                aria-label="Sensitivity value"
+              />
             </Row>
             <Row label="Invert vertical look">{toggle('invertY')}</Row>
             <Row label="Sprint" hint="Auto: always sprint when moving forward">
@@ -147,7 +191,10 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
         )}
         {tab === 'Comfort' && (
           <>
-            <Row label="Reduce motion" hint="Turns off head bob, shake and screen distortion; softens roll, FOV changes and speed lines">
+            <Row
+              label="Reduce motion"
+              hint="Turns off head bob, shake and screen distortion; softens roll, FOV changes and speed lines"
+            >
               {toggle('reduceMotion')}
             </Row>
             <Row label="Head bob">{slider('headBob', 0, 1, 0.05, pct)}</Row>
@@ -156,7 +203,10 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             </Row>
             <Row label="Camera shake">{slider('cameraShake', 0, 1, 0.05, pct)}</Row>
             <Row label="Speed lines">{slider('speedLines', 0, 1, 0.05, pct)}</Row>
-            <Row label="High-contrast hazards" hint="Stronger stripe pattern on lethal surfaces (colour-blind friendly)">
+            <Row
+              label="High-contrast hazards"
+              hint="Stronger stripe pattern on lethal surfaces (colour-blind friendly)"
+            >
               {toggle('colorblind')}
             </Row>
             <Row label="Tutorial prompts">{toggle('tutorials')}</Row>
@@ -198,7 +248,13 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             </Row>
             <Row label="Import save" hint="Replaces the current progress">
               <Btn onClick={() => fileRef.current?.click()}>Import…</Btn>
-              <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => void importSave(e.target.files?.[0])} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => void importSave(e.target.files?.[0])}
+              />
             </Row>
             <Row label="Reset settings" hint="Back to defaults; progress is kept">
               <Btn
@@ -233,7 +289,9 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
               )}
             </Row>
             {note && <p className="fine">{note}</p>}
-            {!game.save.available && <p className="fine warn">Storage is unavailable in this browser mode — nothing can be saved.</p>}
+            {!game.save.available && (
+              <p className="fine warn">Storage is unavailable in this browser mode — nothing can be saved.</p>
+            )}
           </>
         )}
       </div>
@@ -264,13 +322,22 @@ export function ControlsPanel({ onBack }: { onBack: () => void }) {
     next[action] = next[action].filter((x, i, arr) => x && arr.indexOf(x) === i);
     game.setBindings(next);
     const notes: string[] = [];
-    if (conflicts.length) notes.push(`${keyLabel(code)} was removed from: ${conflicts.map((c) => actionLabels[c]).join(', ')}.`);
-    if (usesCtrl(next)) notes.push('Ctrl + W closes browser tabs. Play in fullscreen (F11) in Chrome or Edge so the game can block that shortcut.');
+    if (conflicts.length)
+      notes.push(`${keyLabel(code)} was removed from: ${conflicts.map((c) => actionLabels[c]).join(', ')}.`);
+    if (usesCtrl(next))
+      notes.push(
+        'Ctrl + W closes browser tabs. Play in fullscreen (F11) in Chrome or Edge so the game can block that shortcut.',
+      );
     setWarning(notes.join(' '));
   };
 
   return (
-    <Panel title="Controls" kicker="Click a key to rebind · Esc cancels" wide onBack={capturing ? undefined : onBack}>
+    <Panel
+      title="Controls"
+      kicker="Click a key to rebind · Esc cancels"
+      wide
+      onBack={capturing ? undefined : onBack}
+    >
       <div className="binds">
         {actionOrder.map((a) => (
           <div className="bind-row" key={a}>
@@ -278,7 +345,11 @@ export function ControlsPanel({ onBack }: { onBack: () => void }) {
             {[0, 1].map((slot) => {
               const active = capturing?.action === a && capturing.slot === slot;
               return (
-                <Btn key={slot} className={'key' + (active ? ' capturing' : '')} onClick={() => void rebind(a, slot)}>
+                <Btn
+                  key={slot}
+                  className={'key' + (active ? ' capturing' : '')}
+                  onClick={() => void rebind(a, slot)}
+                >
                   {active ? 'Press a key…' : keyLabel(b[a][slot])}
                 </Btn>
               );
@@ -308,8 +379,8 @@ export function ControlsPanel({ onBack }: { onBack: () => void }) {
         </Btn>
       </div>
       <p className="fine">
-        Wall-running and vaulting are automatic: jump alongside a lit wall while moving forward to run on it, and run straight at waist-high
-        obstacles to vault them.
+        Wall-running and vaulting are automatic: jump alongside a lit wall while moving forward to run on it,
+        and run straight at waist-high obstacles to vault them.
       </p>
     </Panel>
   );

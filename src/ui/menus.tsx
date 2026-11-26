@@ -5,7 +5,14 @@ import { formatTime } from '../core/math';
 import { getEnv } from '../environment/presets';
 import { keyLabel } from '../input/bindings';
 import { levelById, levels } from '../levels/registry';
-import { achievements, cosmetics, isUnlocked, MEDAL_LABELS, nextTarget, type CosmeticCategory } from '../progression/Progression';
+import {
+  achievements,
+  cosmetics,
+  isUnlocked,
+  MEDAL_LABELS,
+  nextTarget,
+  type CosmeticCategory,
+} from '../progression/Progression';
 import { Btn, Panel, useGame, useMenuNav } from './App';
 
 const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
@@ -97,7 +104,12 @@ export function LevelSelect() {
               className={'level-card' + (open ? '' : ' locked')}
               disabled={!open}
               onClick={() => void game.loadLevel(m.id)}
-              style={{ ['--c1' as any]: hex(env.sky.top), ['--c2' as any]: hex(env.sky.horizon), ['--c3' as any]: hex(env.palette.accent), ['--c4' as any]: hex(env.palette.base) }}
+              style={{
+                ['--c1' as any]: hex(env.sky.top),
+                ['--c2' as any]: hex(env.sky.horizon),
+                ['--c3' as any]: hex(env.palette.accent),
+                ['--c4' as any]: hex(env.palette.base),
+              }}
             >
               <div className="art" aria-hidden>
                 <i className="sun" />
@@ -116,10 +128,13 @@ export function LevelSelect() {
                 </div>
                 <div className="row small">
                   <span>
-                    Shards {rec?.collectibles.length ?? 0}/3 · Objectives {rec?.objectives.length ?? 0}/{m.objectives.length}
+                    Shards {rec?.collectibles.length ?? 0}/3 · Objectives {rec?.objectives.length ?? 0}/
+                    {m.objectives.length}
                   </span>
                   {target && medal < 3 && <span>Next: {formatTime(target.time)}</span>}
-                  {target && medal === 3 && <span className="shift-hint">Shift: {formatTime(target.time)}</span>}
+                  {target && medal === 3 && (
+                    <span className="shift-hint">Shift: {formatTime(target.time)}</span>
+                  )}
                 </div>
               </div>
             </Btn>
@@ -130,7 +145,12 @@ export function LevelSelect() {
   );
 }
 
-const categoryNames: Record<CosmeticCategory, string> = { suit: 'Suit accent', trail: 'Burst style', lines: 'Speed lines', hud: 'HUD theme' };
+const categoryNames: Record<CosmeticCategory, string> = {
+  suit: 'Suit accent',
+  trail: 'Burst style',
+  lines: 'Speed lines',
+  hud: 'HUD theme',
+};
 
 export function Collection() {
   const game = useGame();
@@ -142,7 +162,12 @@ export function Collection() {
   const got = achievements.filter((a) => save.achievements[a.id]).length;
   const t = save.totals;
   return (
-    <Panel title="Achievements & Collection" kicker={`${got} / ${achievements.length} achievements`} wide onBack={back}>
+    <Panel
+      title="Achievements & Collection"
+      kicker={`${got} / ${achievements.length} achievements`}
+      wide
+      onBack={back}
+    >
       <div className="tabs">
         <Btn className={tab === 'ach' ? 'on' : ''} onClick={() => setTab('ach')}>
           Achievements
@@ -178,8 +203,18 @@ export function Collection() {
                   const open = c.unlocked(save);
                   const on = save.equipped[cat] === c.id;
                   return (
-                    <Btn key={c.id} className={'cos' + (on ? ' on' : '') + (open ? '' : ' locked')} disabled={!open} onClick={() => game.equip(cat, c.id)}>
-                      <i style={{ background: c.color ? hex(c.color) : 'linear-gradient(135deg,#fff,#7fd8ff)' }} data-style={c.style ?? 0} />
+                    <Btn
+                      key={c.id}
+                      className={'cos' + (on ? ' on' : '') + (open ? '' : ' locked')}
+                      disabled={!open}
+                      onClick={() => game.equip(cat, c.id)}
+                    >
+                      <i
+                        style={{
+                          background: c.color ? hex(c.color) : 'linear-gradient(135deg,#fff,#7fd8ff)',
+                        }}
+                        data-style={c.style ?? 0}
+                      />
                       <strong>{c.name}</strong>
                       <span>{open ? (on ? 'Equipped' : 'Equip') : c.how}</span>
                     </Btn>
@@ -228,7 +263,8 @@ export function Credits() {
         <p>
           <strong>Technology</strong>
           <br />
-          three.js (MIT) · Rapier physics (Apache-2.0) · postprocessing (Zlib) · React (MIT) · Zustand (MIT) · Vite (MIT)
+          three.js (MIT) · Rapier physics (Apache-2.0) · postprocessing (Zlib) · React (MIT) · Zustand (MIT) ·
+          Vite (MIT)
         </p>
         <p>
           <strong>Typefaces</strong>
@@ -238,8 +274,8 @@ export function Credits() {
         <p>
           <strong>Art and sound</strong>
           <br />
-          Every model, material, animation, sound effect and piece of music is generated in code at runtime. No third-party art or audio
-          assets are used.
+          Every model, material, animation, sound effect and piece of music is generated in code at runtime.
+          No third-party art or audio assets are used.
         </p>
         <p className="fine">See ASSETS_LICENSES.md in the repository for the full list.</p>
       </div>
@@ -257,7 +293,13 @@ export function Loading() {
       <div>
         {meta && <span className="kicker">{meta.subtitle}</span>}
         <h2>{meta?.name ?? 'Loading'}</h2>
-        <div className="progress" role="progressbar" aria-valuenow={Math.round(p * 100)} aria-valuemin={0} aria-valuemax={100}>
+        <div
+          className="progress"
+          role="progressbar"
+          aria-valuenow={Math.round(p * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <i style={{ width: `${Math.round(p * 100)}%` }} />
         </div>
         <p>{label}</p>
@@ -312,8 +354,9 @@ export function Ready() {
           ))}
         </ul>
         <p className="keys">
-          <kbd>{keyLabel(b.jump[0])}</kbd> jump <kbd>{keyLabel(b.slide[0])}</kbd> slide <kbd>{keyLabel(b.dash[0])}</kbd> dash <kbd>{keyLabel(b.restart[0])}</kbd>{' '}
-          restart <kbd>ESC</kbd> pause
+          <kbd>{keyLabel(b.jump[0])}</kbd> jump <kbd>{keyLabel(b.slide[0])}</kbd> slide{' '}
+          <kbd>{keyLabel(b.dash[0])}</kbd> dash <kbd>{keyLabel(b.restart[0])}</kbd> restart <kbd>ESC</kbd>{' '}
+          pause
         </p>
         <div className="row">
           <Btn className="primary" data-autofocus onClick={begin}>
@@ -336,8 +379,9 @@ export function Unsupported() {
       <Logo small />
       <h2>This browser can’t run the game</h2>
       <p>
-        VELOCITY: SHIFT needs WebGL 2, which is missing or switched off here. It runs in current versions of Chrome, Edge and Firefox on a
-        desktop or laptop. If you are already using one of those, check that hardware acceleration is enabled in the browser settings.
+        VELOCITY: SHIFT needs WebGL 2, which is missing or switched off here. It runs in current versions of
+        Chrome, Edge and Firefox on a desktop or laptop. If you are already using one of those, check that
+        hardware acceleration is enabled in the browser settings.
       </p>
     </div>
   );
@@ -348,7 +392,10 @@ export function TouchNotice() {
     <div className="screen notice">
       <Logo small />
       <h2>Keyboard and mouse required</h2>
-      <p>VELOCITY: SHIFT is a fast first-person game built for a keyboard and mouse. Open this page on a desktop or laptop to play.</p>
+      <p>
+        VELOCITY: SHIFT is a fast first-person game built for a keyboard and mouse. Open this page on a
+        desktop or laptop to play.
+      </p>
     </div>
   );
 }

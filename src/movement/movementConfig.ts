@@ -18,7 +18,7 @@ export const movementConfig = {
   sprintAccel: 7, // run → sprint ramp (~0.6 s)
   groundSteer: 70, // how fast velocity re-aims toward input (m/s²)
   groundDecel: 48, // stop from run in ~0.15 s
-  overspeedDecay: 5.5, // m/s² lost while above top speed on the ground (momentum is kept briefly)
+  overspeedDecay: 4, // m/s² lost while above top speed on the ground (momentum is kept briefly)
   stepHeight: 0.35,
   maxSlopeDeg: 50,
   snapDistance: 0.3,
@@ -57,7 +57,7 @@ export const movementConfig = {
   // Wall-run
   wallMinSpeed: 5.5,
   wallRunSpeedFloor: 9,
-  wallCheckDistance: 0.5,
+  wallCheckDistance: 0.6,
   wallMaxAngleDeg: 60,
   wallDurationBase: 0.8,
   wallDurationPerSpeed: 0.06,

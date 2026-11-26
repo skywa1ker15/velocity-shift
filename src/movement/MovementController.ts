@@ -12,7 +12,14 @@
 import { Emitter } from '../core/events';
 import { clamp, hlen, v3 } from '../core/math';
 import { movementConfig as cfg } from './movementConfig';
-import { MoveState, type CollisionWorld, type InputFrame, type MoveEvents, type MoveResult, type RayHit } from './types';
+import {
+  MoveState,
+  type CollisionWorld,
+  type InputFrame,
+  type MoveEvents,
+  type MoveResult,
+  type RayHit,
+} from './types';
 
 const DEG = Math.PI / 180;
 
@@ -70,6 +77,7 @@ export class MovementController {
   private vaultSpeed = 0;
   private stepDist = 0;
   private speedBeforeMove = 0;
+  private pushTicks = 0;
 
   private readonly res = {} as MoveResult;
   private readonly hit = {} as RayHit;
@@ -160,7 +168,8 @@ export class MovementController {
     this.pitch = inp.pitch;
 
     // timers
-    if (this.dashEnergy < cfg.dashCharges) this.dashEnergy = Math.min(cfg.dashCharges, this.dashEnergy + dt / cfg.dashRecharge);
+    if (this.dashEnergy < cfg.dashCharges)
+      this.dashEnergy = Math.min(cfg.dashCharges, this.dashEnergy + dt / cfg.dashRecharge);
     this.dashCooldown -= dt;
     this.slideBoostCd -= dt;
     this.sinceDash += dt;
@@ -199,6 +208,25 @@ export class MovementController {
         pv.y = d.y / dt;
         pv.z = d.z / dt;
       }
+    }
+
+    // shoved by moving terrain (sliding walls, shutters): move with it; if pinned, get crushed
+    const overlap = this.world.overlapPush(p, this.height, this.tmp);
+    if (overlap === 2) {
+      const d = this.tmp;
+      const len = Math.hypot(d.x, d.y, d.z) || 1;
+      const k = (len + 0.03) / len;
+      const r = this.res;
+      this.world.move(p, this.height, d.x * k, Math.max(0, d.y * k), d.z * k, false, r);
+      p.x = r.x;
+      p.y = r.y;
+      p.z = r.z;
+    }
+    if (overlap === 0) this.pushTicks = 0;
+    else if (++this.pushTicks > 30) {
+      this.pushTicks = 0;
+      this.events.emit('crushed', {});
+      return;
     }
 
     if (this.state === MoveState.Vault) {
@@ -252,7 +280,8 @@ export class MovementController {
       return;
     }
     let speed = hlen(v);
-    if (this.state !== MoveState.Slide && inp.slidePressed && speed >= cfg.slideMinEnterSpeed) this.enterSlide();
+    if (this.state !== MoveState.Slide && inp.slidePressed && speed >= cfg.slideMinEnterSpeed)
+      this.enterSlide();
 
     if (this.state === MoveState.Slide) {
       // slopes feed the slide: gravity projected onto the ground plane
@@ -290,11 +319,16 @@ export class MovementController {
       this.crouched = false;
       this.height = cfg.standHeight;
     }
-    const top = this.crouched ? cfg.crouchSpeed : inp.sprint && inp.moveZ > 0 ? cfg.sprintSpeed : cfg.runSpeed;
+    const top = this.crouched
+      ? cfg.crouchSpeed
+      : inp.sprint && inp.moveZ > 0
+        ? cfg.sprintSpeed
+        : cfg.runSpeed;
     if (this.hasWish) {
       let ns: number;
       if (speed > top) ns = Math.max(top, speed - cfg.overspeedDecay * dt);
-      else if (speed < Math.min(top, cfg.runSpeed)) ns = Math.min(Math.min(top, cfg.runSpeed), speed + cfg.runAccel * dt);
+      else if (speed < Math.min(top, cfg.runSpeed))
+        ns = Math.min(Math.min(top, cfg.runSpeed), speed + cfg.runAccel * dt);
       else ns = Math.min(top, speed + cfg.sprintAccel * dt);
       // carrying extra momentum only works when roughly following it
       if (speed > 0.1 && (v.x * this.wx + v.z * this.wz) / speed < 0.5) ns = Math.min(ns, top);
@@ -304,7 +338,12 @@ export class MovementController {
     }
     v.y = 0;
     speed = hlen(v);
-    this.state = speed < 0.4 && !this.hasWish ? MoveState.Idle : speed > cfg.runSpeed + 0.6 ? MoveState.Sprint : MoveState.Run;
+    this.state =
+      speed < 0.4 && !this.hasWish
+        ? MoveState.Idle
+        : speed > cfg.runSpeed + 0.6
+          ? MoveState.Sprint
+          : MoveState.Run;
 
     // footsteps
     this.stepDist += speed * dt;
@@ -333,7 +372,11 @@ export class MovementController {
     const v = this.vel;
     const speed = hlen(v);
     let boosted = false;
-    if (this.slideBoostCd <= 0 && speed >= cfg.runSpeed * 0.9 && speed < cfg.sprintSpeed + cfg.slideBoost + 0.5) {
+    if (
+      this.slideBoostCd <= 0 &&
+      speed >= cfg.runSpeed * 0.9 &&
+      speed < cfg.sprintSpeed + cfg.slideBoost + 0.5
+    ) {
       const ns = speed + cfg.slideBoost;
       v.x *= ns / speed;
       v.z *= ns / speed;
@@ -402,7 +445,16 @@ export class MovementController {
         // about to land? keep the press buffered for a bunny-hop instead of burning the double jump
         const landingSoon =
           v.y < -1 &&
-          this.world.raycast(this.pos.x, this.pos.y + 0.1, this.pos.z, 0, -1, 0, -v.y * this.jumpBuffer + 0.15, this.hit) &&
+          this.world.raycast(
+            this.pos.x,
+            this.pos.y + 0.1,
+            this.pos.z,
+            0,
+            -1,
+            0,
+            -v.y * this.jumpBuffer + 0.15,
+            this.hit,
+          ) &&
           this.hit.ny > 0.6;
         if (!landingSoon) this.doubleJump();
       }
@@ -546,7 +598,15 @@ export class MovementController {
     return false;
   }
 
-  private startWallRun(nx: number, nz: number, id: number, side: 1 | -1, speed: number, hx: number, hz: number) {
+  private startWallRun(
+    nx: number,
+    nz: number,
+    id: number,
+    side: 1 | -1,
+    speed: number,
+    hx: number,
+    hz: number,
+  ) {
     const nl = Math.hypot(nx, nz) || 1;
     nx /= nl;
     nz /= nl;
@@ -561,11 +621,18 @@ export class MovementController {
     this.wallNormal.z = nz;
     this.wallDir.x = tx;
     this.wallDir.z = tz;
-    this.wallSpeed = Math.max(speed, cfg.wallRunSpeedFloor) + (this.sinceDash < 0.45 ? cfg.wallDashBonus : 0);
+    // only the speed already travelling ALONG the wall carries over: sideways speed from a
+    // previous kick-off is absorbed, so wall-to-wall chains cannot accelerate without limit
+    const along = speed * (hx * tx + hz * tz);
+    this.wallSpeed = Math.max(along, cfg.wallRunSpeedFloor) + (this.sinceDash < 0.45 ? cfg.wallDashBonus : 0);
     this.vel.y = Math.max(clamp(this.vel.y, -3, 5), cfg.wallStartLift);
     this.wallTime = 0;
     this.wallNoInput = 0;
-    this.wallMax = clamp(cfg.wallDurationBase + this.wallSpeed * cfg.wallDurationPerSpeed, cfg.wallDurationBase, cfg.wallDurationMax);
+    this.wallMax = clamp(
+      cfg.wallDurationBase + this.wallSpeed * cfg.wallDurationPerSpeed,
+      cfg.wallDurationBase,
+      cfg.wallDurationMax,
+    );
     this.wallSide = side;
     this.lastWallId = id;
     this.canDoubleJump = true;
@@ -589,7 +656,10 @@ export class MovementController {
       return;
     }
     // still touching a runnable wall?
-    const ok = this.world.raycast(p.x, p.y + this.height * 0.55, p.z, -n.x, 0, -n.z, cfg.radius + 0.8, h) && h.wallrun && Math.abs(h.ny) < 0.3;
+    const ok =
+      this.world.raycast(p.x, p.y + this.height * 0.55, p.z, -n.x, 0, -n.z, cfg.radius + 0.8, h) &&
+      h.wallrun &&
+      Math.abs(h.ny) < 0.3;
     this.wallNoInput = inp.moveZ > 0 ? 0 : this.wallNoInput + dt;
     if (!ok || this.wallTime >= this.wallMax || this.wallNoInput > 0.18) {
       this.endWallRun(true);
@@ -665,7 +735,8 @@ export class MovementController {
     const ax = p.x - nx * (cfg.radius + 0.25),
       az = p.z - nz * (cfg.radius + 0.25);
     const top = p.y + cfg.vaultMaxHeight + 0.25;
-    if (!this.world.raycast(ax, top, az, 0, -1, 0, cfg.vaultMaxHeight + 0.25 - cfg.vaultMinHeight, h)) return false;
+    if (!this.world.raycast(ax, top, az, 0, -1, 0, cfg.vaultMaxHeight + 0.25 - cfg.vaultMinHeight, h))
+      return false;
     if (h.ny < 0.7 || h.dist < 0.02) return false;
     const topY = top - h.dist;
     const lx = p.x - nx * (cfg.radius + cfg.vaultReach),
@@ -734,7 +805,8 @@ export class MovementController {
 
     if (st === MoveState.WallRun) {
       if (r.grounded) this.land(inp, 0);
-      else if (r.hitWall && r.wallNx * this.wallDir.x + r.wallNz * this.wallDir.z < -0.5) this.endWallRun(false);
+      else if (r.hitWall && r.wallNx * this.wallDir.x + r.wallNz * this.wallDir.z < -0.5)
+        this.endWallRun(false);
       return;
     }
 

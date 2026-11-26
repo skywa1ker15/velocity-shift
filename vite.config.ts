@@ -9,7 +9,24 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
-    chunkSizeWarningLimit: 2600,
+    chunkSizeWarningLimit: 4600,
+    rollupOptions: {
+      output: {
+        // keep the big, rarely-changing libraries in their own long-cached chunks
+        manualChunks(id: string) {
+          if (id.includes('@dimforge/rapier3d')) return 'physics';
+          if (id.includes('node_modules/three/') || id.includes('node_modules/postprocessing/'))
+            return 'three';
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/scheduler') ||
+            id.includes('node_modules/zustand')
+          )
+            return 'ui-vendor';
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     environment: 'node',

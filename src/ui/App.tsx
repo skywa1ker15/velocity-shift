@@ -1,11 +1,28 @@
 /**
  * React UI root: picks the screen from the store. All screens are DOM layered over the canvas.
  */
-import { createContext, useContext, useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from 'react';
 import type { Game } from '../app/Game';
 import { useUi } from '../app/store';
 import { Hud } from './Hud';
-import { Collection, Credits, LevelSelect, Loading, MainMenu, Ready, Title, TouchNotice, Unsupported } from './menus';
+import {
+  Collection,
+  Credits,
+  LevelSelect,
+  Loading,
+  MainMenu,
+  Ready,
+  Title,
+  TouchNotice,
+  Unsupported,
+} from './menus';
 import { Pause, Results } from './overlays';
 import { ControlsPanel, SettingsPanel } from './Settings';
 
@@ -13,7 +30,13 @@ const GameCtx = createContext<Game | null>(null);
 export const useGame = (): Game => useContext(GameCtx)!;
 
 /** Button with UI sounds. Every button in the game goes through this. */
-export function Btn({ onClick, children, className = '', quiet, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { quiet?: boolean }) {
+export function Btn({
+  onClick,
+  children,
+  className = '',
+  quiet,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { quiet?: boolean }) {
   const game = useContext(GameCtx);
   return (
     <button
@@ -41,7 +64,8 @@ export function useMenuNav(onBack?: () => void, autoFocus = true) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const items = () => Array.from(el.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, [tabindex="0"]'));
+    const items = () =>
+      Array.from(el.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, [tabindex="0"]'));
     if (autoFocus && !focused.current) {
       focused.current = true;
       (el.querySelector<HTMLElement>('[data-autofocus]') ?? items()[0])?.focus({ preventScroll: true });
@@ -70,7 +94,19 @@ export function useMenuNav(onBack?: () => void, autoFocus = true) {
   return ref;
 }
 
-export function Panel({ title, kicker, children, wide, onBack }: { title: string; kicker?: string; children: ReactNode; wide?: boolean; onBack?: () => void }) {
+export function Panel({
+  title,
+  kicker,
+  children,
+  wide,
+  onBack,
+}: {
+  title: string;
+  kicker?: string;
+  children: ReactNode;
+  wide?: boolean;
+  onBack?: () => void;
+}) {
   const ref = useMenuNav(onBack);
   return (
     <div className="screen dim">
@@ -104,7 +140,15 @@ function Toasts() {
     <div className="toasts" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className={'toast ' + t.kind}>
-          <span className="toast-kind">{t.kind === 'achievement' ? 'ACHIEVEMENT' : t.kind === 'unlock' ? 'UNLOCKED' : t.kind === 'collect' ? 'SHARD' : 'NOTE'}</span>
+          <span className="toast-kind">
+            {t.kind === 'achievement'
+              ? 'ACHIEVEMENT'
+              : t.kind === 'unlock'
+                ? 'UNLOCKED'
+                : t.kind === 'collect'
+                  ? 'SHARD'
+                  : 'NOTE'}
+          </span>
           <strong>{t.title}</strong>
           <span>{t.text}</span>
         </div>
@@ -174,8 +218,14 @@ export function App({ game }: { game: Game | null }) {
       {overlay === 'settings' && <SettingsPanel onBack={closeOverlay} />}
       {overlay === 'controls' && <ControlsPanel onBack={closeOverlay} />}
       <Toasts />
-      {contextLost && <div className="banner">Graphics context lost — waiting for the browser to restore it…</div>}
-      {!storageOk && screen === 'menu' && <div className="banner soft">Storage is unavailable in this browser mode — progress will not be saved.</div>}
+      {contextLost && (
+        <div className="banner">Graphics context lost — waiting for the browser to restore it…</div>
+      )}
+      {!storageOk && screen === 'menu' && (
+        <div className="banner soft">
+          Storage is unavailable in this browser mode — progress will not be saved.
+        </div>
+      )}
     </GameCtx.Provider>
   );
 }
