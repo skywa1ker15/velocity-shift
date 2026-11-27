@@ -20,6 +20,7 @@ import type { Simulation } from '../gameplay/Simulation';
 import type { DecorDef, LevelData, MatId } from '../levels/types';
 import { GeoBuilder, type Fx } from './geometry';
 import { createWorldMaterial } from './WorldMaterial';
+import { ROLE, RoleColor } from '../multiverse/uniforms';
 
 interface Animated {
   mesh: THREE.Object3D;
@@ -61,14 +62,15 @@ export class LevelView {
     owned: Set<string> = new Set(),
   ) {
     const p = env.palette;
-    this.structure = new THREE.Color(env.look.structure);
+    // colours carry their material role, so other universes can repaint the same geometry
+    this.structure = new RoleColor(env.look.structure).withRole(ROLE.structure);
     this.palette = {
-      base: new THREE.Color(p.base),
-      alt: new THREE.Color(p.alt),
-      dark: new THREE.Color(p.dark),
-      accent: new THREE.Color(p.accent),
-      glass: new THREE.Color(p.glass),
-      hazard: new THREE.Color(p.hazard),
+      base: new RoleColor(p.base).withRole(ROLE.base),
+      alt: new RoleColor(p.alt).withRole(ROLE.alt),
+      dark: new RoleColor(p.dark).withRole(ROLE.dark),
+      accent: new RoleColor(p.accent).withRole(ROLE.accent),
+      glass: new RoleColor(p.glass).withRole(ROLE.glass),
+      hazard: new RoleColor(p.hazard).withRole(ROLE.hazard),
     };
     this.material = createWorldMaterial();
     this.disposables.push(this.material, this.shardGeo);

@@ -24,6 +24,8 @@ import {
 } from 'postprocessing';
 import type { EnvPreset } from '../environment/presets';
 import { Sky } from './Sky';
+import { UniverseEffect } from './UniversePost';
+import { NO_SCREEN, type ScreenLook } from '../multiverse/universes';
 import { worldUniforms } from './WorldMaterial';
 import { tiers, type Tier, type TierName } from './quality';
 
@@ -50,6 +52,9 @@ export class Renderer {
   onContextLost: () => void = () => {};
   onContextRestored: () => void = () => {};
 
+  /** Screen-space half of the current universe's look. */
+  universeFx = new UniverseEffect();
+  private screenArgs: [ScreenLook, ScreenLook, number] = [NO_SCREEN, NO_SCREEN, 0];
   private composer!: EffectComposer;
   private bloom!: BloomEffect;
   private vignette!: VignetteEffect;
@@ -136,7 +141,13 @@ export class Renderer {
     if (this.postEnabled) effects.push(this.vignette);
     effects.push(this.tone, this.grade, this.contrast);
     this.composer.addPass(new EffectPass(this.camera, ...effects));
-    // (no chromatic aberration: colour fringes fight the ink lines; dashes use drawn speed lines)
+    if (this.postEnabled) {
+      const keep = this.universeFx.intensity;
+      this.universeFx = new UniverseEffect();
+      this.universeFx.intensity = keep;
+      this.universeFx.setLook(...this.screenArgs);
+      this.composer.addPass(new EffectPass(this.camera, this.universeFx));
+    }
     if (t.smaa)
       this.composer.addPass(
         new EffectPass(
@@ -211,6 +222,7 @@ export class Renderer {
 
   applyEnv(env: EnvPreset) {
     this.env = env;
+    this.post = null;
     this.sky.apply(env);
     this.sunDir.set(...env.sky.sunDir).normalize();
     const l = env.light;
@@ -250,8 +262,34 @@ export class Renderer {
     this.applyEnvPost();
   }
 
+  /** Lights and grading for whichever universe (or blend of two) the camera is in. */
+  applyAmbient(l: EnvPreset['light'], post: EnvPreset['post']) {
+    this.sun.color.set(l.sun);
+    this.sun.intensity = l.sunIntensity;
+    this.hemi.color.set(l.skyAmbient);
+    this.hemi.groundColor.set(l.groundAmbient);
+    this.hemi.intensity = l.ambient;
+    this.viewSun.color.set(l.sun).lerp(_white, 0.55);
+    this.viewSun.intensity = l.sunIntensity * 1.1;
+    this.viewHemi.color.set(l.skyAmbient).lerp(_white, 0.45);
+    this.viewHemi.groundColor.set(l.groundAmbient).lerp(_grey, 0.4);
+    this.viewHemi.intensity = l.ambient * 1.6;
+    worldUniforms.uSunPower.value =
+      Math.max(this.sun.color.r, this.sun.color.g, this.sun.color.b) * l.sunIntensity;
+    this.post = post;
+    this.applyEnvPost();
+  }
+
+  /** Screen treatment: blend of two universes' looks (k = how far into b). */
+  setScreen(a: ScreenLook, b: ScreenLook, k: number) {
+    this.screenArgs = [a, b, k];
+    this.universeFx.setLook(a, b, k);
+  }
+
+  private post: EnvPreset['post'] | null = null;
+
   private applyEnvPost() {
-    const p = this.env.post;
+    const p = this.post ?? this.env.post;
     this.bloom.intensity = p.bloom * this.tier.bloomScale * 0.6; // the inked look wants restrained glow
     this.bloom.luminanceMaterial.threshold = p.bloomThreshold;
     this.vignette.darkness = p.vignette;
@@ -313,6 +351,7 @@ export class Renderer {
       this.sun.position.copy(this.sunDir).multiplyScalar(100);
     }
 
+    this.universeFx.tick(time, dt);
     this.gl.info.reset();
     this.composer.render(dt);
   }

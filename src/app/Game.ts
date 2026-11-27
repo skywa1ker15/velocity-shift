@@ -17,6 +17,8 @@ import { FixedLoop, SIM_DT } from '../core/loop';
 import { getEnv, type EnvPreset } from '../environment/presets';
 import { Motes, Sparks, SpeedLines, Sprite, Stickers } from '../fx/Fx';
 import { worldUniforms } from '../render/WorldMaterial';
+import { Director } from '../multiverse/Director';
+import type { UniverseId } from '../multiverse/universes';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -224,7 +226,7 @@ export class Game {
     this.ghost.setColor(suit.color);
     this.trailStyle = cosmeticFor(s, 'trail').style ?? 0;
     const lines = cosmeticFor(s, 'lines');
-    this.streak.set(lines.color || this.env.streak);
+    this.streak.set(lines.color || this.universeStreak || this.env.streak);
     this.lines.setColor(this.streak.getHex());
     document.documentElement.dataset.hud = cosmeticFor(s, 'hud').id;
   }
@@ -281,6 +283,49 @@ export class Game {
     this.ghost.load(null);
   }
 
+  /**
+   * The multiverse: which universe is on screen and the shifts between them. Visual only; the
+   * simulation never reads it.
+   */
+  readonly multiverse = new Director({
+    ambient: (a) => this.renderer.applyAmbient(a.light, a.post),
+    screen: (a, b, k) => this.renderer.setScreen(a, b, k),
+    arrive: (def, env) => {
+      document.documentElement.dataset.universe = def.id;
+      this.body.setPalette(env.hands);
+      this.menuRunner.setPalette(env.hands);
+      this.setMotes(env);
+      this.universeStreak = env.streak;
+      this.applyCosmetics();
+    },
+  });
+  private universeStreak = 0;
+  /** Tests / debugging: use this seed for the next runs instead of a fresh random one. */
+  mvSeed: number | null = null;
+
+  /** Start (or restart) the visual run plan for the loaded level. */
+  private beginMultiverse(levelId: string, checkpoints: number) {
+    const seed = this.mvSeed ?? Math.floor(Math.random() * 0x7fffffff);
+    this.multiverse.begin(levelId, this.env, seed, checkpoints);
+  }
+
+  /** Debug: shift to a universe from a point just ahead of the camera. */
+  debugShift(to: UniverseId, transition = 0) {
+    const yaw = this.input.yaw;
+    _v.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    return this.multiverse.shiftAhead(to, this.rig.eye, _v, transition);
+  }
+
+  private setMotes(env: EnvPreset) {
+    this.motes?.dispose();
+    const m = env.motes;
+    const count = Math.round(m.count * this.renderer.tier.particles * Math.max(0.2, this.settings.particles));
+    this.motes = new Motes(count, m.color, m.size, m.rise);
+    this.motes.setViewportHeight(window.innerHeight);
+    this.motes.points.visible = this.settings.particles > 0.05;
+    this.renderer.scene.add(this.motes.points);
+  }
+
   private setEnv(id: string) {
     this.env = getEnv(id);
     document.documentElement.style.setProperty(
@@ -290,13 +335,8 @@ export class Game {
     this.renderer.applyEnv(this.env);
     this.body.setPalette(this.env.hands);
     this.menuRunner.setPalette(this.env.hands);
-    this.motes?.dispose();
-    const m = this.env.motes;
-    const count = Math.round(m.count * this.renderer.tier.particles * Math.max(0.2, this.settings.particles));
-    this.motes = new Motes(count, m.color, m.size, m.rise);
-    this.motes.setViewportHeight(window.innerHeight);
-    this.motes.points.visible = this.settings.particles > 0.05;
-    this.renderer.scene.add(this.motes.points);
+    this.universeStreak = this.env.streak;
+    this.setMotes(this.env);
     this.applyCosmetics();
   }
 
@@ -305,6 +345,7 @@ export class Game {
     this.loadToken++;
     this.clearLevel();
     this.setEnv('awakening');
+    this.multiverse.begin('menu', this.env, 1, 0);
     if (this.menuData) {
       this.menuSim = new Simulation(levelById('awakening')!.meta, this.menuData);
       this.menuBot = new Bot(this.menuSim);
@@ -383,6 +424,7 @@ export class Game {
       this.data = data;
       this.setEnv(entry.meta.env);
       this.sim = new Simulation(entry.meta, data);
+      this.beginMultiverse(id, data.checkpoints.length - 1);
       const owned = new Set(this.save.record(id).collectibles);
       this.view = new LevelView(data, this.env, this.sim, owned);
       this.breaks = new BreakableView(data.breakables, this.env.palette, this.sim);
@@ -479,6 +521,7 @@ export class Game {
     if (!this.sim) return;
     this.abandonRun();
     this.sim.restart();
+    this.beginMultiverse(this.sim.meta.id, this.sim.data.checkpoints.length - 1);
     this.view?.showCollectibles();
     this.recorder.reset();
     this.finishDelay = -1;
@@ -719,6 +762,8 @@ export class Game {
 
     sim.events.on('checkpoint', ({ index, time }) => {
       audio.checkpoint();
+      _n.set(-Math.sin(this.input.yaw), 0, -Math.cos(this.input.yaw));
+      this.multiverse.checkpoint(index, _v.set(pl.pos.x, pl.pos.y, pl.pos.z), _n);
       const best = this.save.record(sim.meta.id).splits[index];
       ui.getState().fire(
         'checkpoint',
@@ -1134,6 +1179,7 @@ export class Game {
     );
     this.carry.set(pl.vel.x * 0.8, 0, pl.vel.z * 0.8);
     worldUniforms.uPlayer.value.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
+    this.multiverse.update(dt, this.rig.eye, _n.set(fwdX, 0, fwdZ));
     this.ghost.update(
       sim.runTime,
       this.settings.ghost && sim.stats.started && !sim.stats.finished,

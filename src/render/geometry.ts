@@ -3,6 +3,7 @@
  * (one draw call each) carrying the custom attributes WorldMaterial needs.
  */
 import * as THREE from 'three';
+import type { RoleColor } from '../multiverse/uniforms';
 
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
@@ -42,6 +43,9 @@ const FACES: [number[], number[], number[]][] = [
   ],
 ];
 
+/** Material role of a colour (0 = base when the colour carries none). */
+const roleOf = (c: THREE.Color) => (c as Partial<RoleColor>).role ?? 0;
+
 export type Fx = [wallrun: number, glow: number, hazard: number];
 
 export class GeoBuilder {
@@ -50,6 +54,7 @@ export class GeoBuilder {
   private col: number[] = [];
   private face: number[] = [];
   private fx: number[] = [];
+  private role: number[] = [];
   private idx: number[] = [];
   private count = 0;
 
@@ -91,6 +96,7 @@ export class GeoBuilder {
         this.col.push(color.r, color.g, color.b);
         this.face.push(su > 0 ? fw : 0, sv > 0 ? fh : 0, fw, fh);
         this.fx.push(fx[0], fx[1], fx[2]);
+        this.role.push(roleOf(color));
         this.count++;
       }
       this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -113,6 +119,7 @@ export class GeoBuilder {
       this.col.push(color.r, color.g, color.b);
       this.face.push(50, 50, 100, 100); // far from any edge: no rim, no seams
       this.fx.push(fx[0], fx[1], fx[2]);
+      this.role.push(roleOf(color));
       this.idx.push(base + i);
       this.count++;
     }
@@ -126,6 +133,7 @@ export class GeoBuilder {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('aFace', new THREE.Float32BufferAttribute(this.face, 4));
     g.setAttribute('aFx', new THREE.Float32BufferAttribute(this.fx, 3));
+    g.setAttribute('aRole', new THREE.Float32BufferAttribute(this.role, 1));
     g.setIndex(
       this.count > 65535
         ? new THREE.Uint32BufferAttribute(this.idx, 1)

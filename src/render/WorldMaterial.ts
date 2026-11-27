@@ -14,6 +14,8 @@
  *   far megastructures, sinks into the atmosphere.
  */
 import * as THREE from 'three';
+import { surfaceDecl } from '../multiverse/surface';
+import { mv, mvGLSL } from '../multiverse/uniforms';
 
 export interface WorldUniforms {
   uTime: { value: number };
@@ -112,13 +114,15 @@ export function createWorldMaterial(opts: { warn?: { value: number } } = {}): TH
   const warn = opts.warn ?? { value: 0 };
   mat.userData.warn = warn;
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, worldUniforms, { uWarn: warn });
+    Object.assign(shader.uniforms, worldUniforms, mv, { uWarn: warn });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
 attribute vec4 aFace;
 attribute vec3 aFx;
+attribute float aRole;
+varying float vRole;
 varying vec4 vFace;
 varying vec3 vFx;
 varying vec3 vWPos;
@@ -129,6 +133,7 @@ varying vec3 vWNormal;`,
         `#include <begin_vertex>
 vFace = aFace;
 vFx = aFx;
+vRole = aRole;
 vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
 vWNormal = normalize(mat3(modelMatrix) * normal);`,
       );
@@ -159,6 +164,8 @@ uniform float uMotifAmt;
 uniform float uLip;
 uniform float uGlow;
 ${fogGLSL}
+${mvGLSL}
+${surfaceDecl}
 float vsHash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
   p *= 17.0;
@@ -237,6 +244,9 @@ vec3 vsMotif(vec2 p, float px) {
   float up = vWNormal.y;
   bool boxFace = fw < 99.0;
   vec3 c = diffuseColor.rgb;
+  mvU = u; mvV = v; mvFw = fw; mvFh = fh; mvEdge = edge; mvPx = px; mvUp = up; mvBox = boxFace ? 1.0 : 0.0;
+  mvSdfV = uUniOn > 0.5 ? mvSdf(vWPos) : 1000.0;
+  mvM = uUniOn > 0.5 ? mvMask(mvSdfV) : 0.0;
 
   // ---- painted tone: crisp-edged swatches instead of smooth noise, like gouache blocks ----
   float n1 = vsNoise(vWPos * 0.21);
@@ -249,6 +259,7 @@ vec3 vsMotif(vec2 p, float px) {
 
   // ---- floor identity + the safe-ground lip on walkable tops ----
   float walk = smoothstep(0.75, 0.9, up) * (boxFace ? 1.0 : 0.0) * (1.0 - step(0.5, vFx.z));
+  mvWalk = walk;
   if (walk > 0.0 && uMotif > 0.5) {
     vec3 mo = vsMotif(vWPos.xz, px) * walk;
     c = mix(c, c * 0.62, mo.x);
@@ -262,12 +273,14 @@ vec3 vsMotif(vec2 p, float px) {
     float faceMin = min(fw, fh);
     float tiny = clamp(faceMin / (px * 9.0), 0.0, 1.0);   // faces only a few pixels wide stay clean
     vsInk = (1.0 - smoothstep(w, w + px, edge)) * tiny;
+    mvTiny = tiny;
     // an inner highlight line just inside the ink on lit tops: the "drawn" bevel
     float hl = smoothstep(w + px, w + px * 2.0, edge) * (1.0 - smoothstep(w * 2.4, w * 2.4 + px, edge));
     c += hl * uRim * (0.25 + 0.75 * max(up, 0.0)) * mix(vec3(1.0), uAccent, 0.3) * tiny;
     // a painted band just inside the edge of walkable ground: reads as "safe to land"
     float lipBand = smoothstep(w + px, w + px * 2.0, edge) * (1.0 - smoothstep(0.16, 0.16 + px * 1.5, edge));
     c = mix(c, mix(c * 1.35 + 0.06, uAccent, 0.35), lipBand * walk * uLip * tiny * step(1.0, faceMin));
+    mvLip = lipBand * walk * max(uLip, 0.5) * tiny * step(1.0, faceMin);
     // panel seams every 2.5 m as thin ink scratches
     vec2 cell = abs(fract(vec2(u - fw * 0.5, v - fh * 0.5) / 2.5 + 0.5) - 0.5) * 2.5;
     float seamD = min(cell.x, cell.y);
@@ -293,6 +306,7 @@ vec3 vsMotif(vec2 p, float px) {
     // the wall wakes up as the player gets close
     float near = 1.0 - smoothstep(3.0, 16.0, distance(vWPos, uPlayer));
     float paint = clamp(rail + chevron + guide * 0.7, 0.0, 1.0);
+    mvPaint = paint; mvNear = near; mvRun = inside;
     c = mix(c, c * 0.72, inside * 0.6);
     c = mix(c, uAccent, paint);
     vsEmissive += uAccent * paint * (0.35 + near * 0.9) * uGlow;
@@ -300,6 +314,7 @@ vec3 vsMotif(vec2 p, float px) {
   }
   // ---- glow strips / accent pieces ----
   if (vFx.y > 0.0) {
+    mvGlow = vFx.y;
     vsEmissive += diffuseColor.rgb * vFx.y * uGlow * (1.5 + 0.35 * sin(uTime * 1.7 + vWPos.x * 0.3 + vWPos.z * 0.3));
     vsInk = 0.0;
     vsHatch = 0.0;
@@ -309,6 +324,7 @@ vec3 vsMotif(vec2 p, float px) {
     float d = fract((vWPos.x + vWPos.y + vWPos.z) * 0.7 + uTime * 0.9);
     float stripe = smoothstep(0.46, 0.5, d) * (1.0 - smoothstep(0.96, 1.0, d));
     float pulse = 0.75 + 0.25 * sin(uTime * 6.0);
+    mvHaz = 1.0; mvStripe = stripe;
     c = mix(uInk, uHazard, stripe);
     vsEmissive += uHazard * stripe * (0.9 + uHazardAlt * 1.2) * pulse;
     vsHatch = 0.0;
@@ -318,6 +334,7 @@ vec3 vsMotif(vec2 p, float px) {
     float flick = 0.55 + 0.45 * sin(uTime * 22.0);
     float crack = smoothstep(0.55, 0.6, vsNoise(vWPos * 2.3 + 7.0));
     vsEmissive += uHazard * uWarn * (0.5 + crack * 2.0) * flick;
+    mvWarn = uWarn * (0.5 + crack) * flick;
     c = mix(c, uHazard, uWarn * 0.25 * flick);
   }
   // ---- the world answers a landing: a ring of light runs out across nearby surfaces ----
@@ -326,6 +343,7 @@ vec3 vsMotif(vec2 p, float px) {
     float pd = distance(vWPos, uPulse.xyz);
     float ring = (1.0 - smoothstep(0.0, 0.22, abs(pd - age * 13.0))) * (1.0 - age / 0.7);
     vsEmissive += uAccent * ring * uPulseAmt * 1.4;
+    mvRing = ring * uPulseAmt;
   }
   diffuseColor.rgb = c;
 }`,
@@ -346,14 +364,14 @@ vec3 vsMotif(vec2 p, float px) {
   // levels keep readable mid-tones
   outgoingLight += diffuseColor.rgb * uShade * uShadeAmt * (0.35 + 0.65 * shade) * 0.55;
   outgoingLight = mix(outgoingLight, uInk, vsInk * 0.92);
+  mvLit = clamp(sunLit, 0.0, 1.0);
+  mvNdl = dot(normalize(vWNormal), uSunDir);
+  mvResolve(outgoingLight);
 }
 #include <opaque_fragment>`,
       )
-      .replace(
-        '#include <fog_fragment>',
-        `gl_FragColor.rgb = applyWorldFog(gl_FragColor.rgb, vWPos, cameraPosition);`,
-      );
+      .replace('#include <fog_fragment>', `gl_FragColor.rgb = mvCompose(cameraPosition);`);
   };
-  mat.customProgramCacheKey = () => 'vs-world-toon';
+  mat.customProgramCacheKey = () => 'vs-world-mv1';
   return mat;
 }

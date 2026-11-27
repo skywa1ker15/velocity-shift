@@ -227,3 +227,55 @@ for (const vp of [
     await expect(page.locator('.ready-card .primary')).toBeVisible();
   });
 }
+
+test('multiverse: a shift completes mid-run without touching the simulation or leaking resources', async ({
+  page,
+}) => {
+  await boot(page);
+  await page.evaluate(() => {
+    const g = (window as any).__vs;
+    g.mvSeed = 7;
+  });
+  await startLevel(page, 'awakening');
+  const info = await page.evaluate(() => (window as any).__vs.multiverse.describe());
+  expect(info.seed).toBe(7);
+  expect(info.plan.shifts.length).toBeGreaterThan(0);
+  expect(info.here).toBe(info.plan.home);
+
+  // the same inputs with and without shifts must leave the player in exactly the same place
+  const run = async (shift: boolean) =>
+    page.evaluate(async (shift) => {
+      const g = (window as any).__vs;
+      g.restartLevel();
+      g.multiverse.snap(g.multiverse.plan.home);
+      g.debugAdvance(0.4, { moveZ: 1 });
+      const others = g.multiverse.plan.shifts.map((s: any) => s.to);
+      if (shift) g.debugShift(others[0]);
+      g.debugAdvance(1.2, { moveZ: 1, jump: true });
+      const p = g.sim.player;
+      return [p.pos.x, p.pos.y, p.pos.z, p.vel.x, p.vel.y, p.vel.z, g.sim.runTime];
+    }, shift);
+  const plain = await run(false);
+  const shifted = await run(true);
+  expect(shifted).toEqual(plain);
+
+  // let several shifts run to completion and check nothing accumulates
+  const mem = () =>
+    page.evaluate(() => {
+      const s = (window as any).__vs.renderer.stats;
+      return { geometries: s.geometries, textures: s.textures };
+    });
+  const before = await mem();
+  const home = info.plan.home;
+  const other = info.plan.shifts[0].to;
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate((to) => (window as any).__vs.debugShift(to), i % 2 ? home : other);
+    await page.waitForFunction(() => !(window as any).__vs.multiverse.describe().shifting, null, {
+      timeout: 60_000,
+    });
+  }
+  const after = await mem();
+  expect(after.geometries).toBeLessThanOrEqual(before.geometries + 2);
+  expect(after.textures).toBeLessThanOrEqual(before.textures + 2);
+  expect((await page.evaluate(() => (window as any).__vs.multiverse.describe())).here).toBe(home);
+});

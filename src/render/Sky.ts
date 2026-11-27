@@ -1,6 +1,11 @@
 /** Procedural sky dome: gradient, sun, drifting cloud bands, stars and aurora ribbons. */
 import * as THREE from 'three';
 import type { EnvPreset } from '../environment/presets';
+import { skyStyles } from '../multiverse/sky';
+import { mv, mvGLSL } from '../multiverse/uniforms';
+
+/** The sky is treated as a shell this far from the camera, so it flips a few seconds after the ground. */
+export const SKY_SHELL = 300;
 
 export class Sky {
   readonly mesh: THREE.Mesh;
@@ -31,6 +36,7 @@ export class Sky {
         uSpires: { value: 0 },
         uWindows: { value: 0 },
         uAccentSky: { value: new THREE.Color() },
+        ...mv,
       },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
@@ -73,8 +79,11 @@ export class Sky {
           win = cov * step(0.72, hash(floor(wg) + cell)) * step(0.25, fract(wg.x)) * step(0.35, fract(wg.y)) * step(h, top - 0.004);
           return cov;
         }
-        void main() {
-          vec3 d = normalize(vDir);
+        ${mvGLSL}
+        uniform vec3 uSkyA[4];
+        uniform vec3 uSkyB[4];
+        ${skyStyles}
+        vec3 skyAnime(vec3 d) {
           float h = d.y;
           // a painted sky: the gradient steps through soft-edged bands instead of blending smoothly
           float q = pow(clamp(h, 0.0, 1.0), 0.55) * 7.0;
@@ -140,6 +149,21 @@ export class Sky {
           // a graphic sun: flat disc, one drawn halo ring, restrained glow
           float ring = 1.0 - smoothstep(0.00012, 0.00028, abs(sd - 0.9972));
           col += uSun * (smoothstep(0.9990, 0.9992, sd) * 4.0 + ring * 0.9 + pow(sd, 60.0) * 0.3 * uSunGlow + pow(sd, 7.0) * 0.14 * uSunGlow);
+          return col;
+        }
+        vec3 skyOf(float id, vec3 d, vec3 k[4]) {
+          if (id < 0.5) return skyAnime(d);
+          return mvSky(id, d, k);
+        }
+        void main() {
+          vec3 d = normalize(vDir);
+          // the sky is treated as a shell around the camera, so the front sweeps across it too
+          float sdf = uUniOn > 0.5 ? mvSdf(cameraPosition + d * ${SKY_SHELL.toFixed(1)}) : 1000.0;
+          float m = uUniOn > 0.5 ? mvMask(sdf / 6.0) : 0.0;
+          vec3 a = m < 0.999 ? skyOf(uUniA, d, uSkyA) : vec3(0.0);
+          vec3 b = m > 0.001 ? skyOf(uUniB, d, uSkyB) : vec3(0.0);
+          vec3 col = mix(a, b, m);
+          if (uUniOn > 0.5) col += (mix(uSkyA[1], uSkyB[1], 0.5) + 0.3) * exp(-abs(sdf) * 0.12) * 0.8;
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
