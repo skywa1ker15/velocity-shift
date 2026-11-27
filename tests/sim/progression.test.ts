@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { Simulation } from '../../src/gameplay/Simulation';
 import { levelById } from '../../src/levels/registry';
 import { initPhysics } from '../../src/physics/PhysicsWorld';
-import { Structure } from '../../src/entities/Entities';
+import { Collapse, Structure } from '../../src/entities/Entities';
 import { Driver, type Keys } from './harness';
 
 beforeAll(async () => {
@@ -477,4 +477,94 @@ describe('Level 7, Blockfall: the blocks turn (up/down rotation)', () => {
     expect(deaths()).toBe(0);
     expect(sim.stats.finished).toBe(true);
   });
+});
+
+describe('Level 8, Corrupted Core: Meltdown (everything at once)', () => {
+  const CE = 20,
+    LD = -18,
+    TP = -2,
+    CP = -36;
+  const collapses = (sim: Simulation, z0: number, z1: number) =>
+    sim.entities.filter((e): e is Collapse => e instanceof Collapse && e.def.p[2] > z0 && e.def.p[2] < z1);
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])(
+    'Breach: %s launches, runs the ceiling upside down as it collapses, and survives the 38 m fall',
+    async (_n, keys) => {
+      const { sim, d, deaths } = await at('core', 258);
+      const panels = collapses(sim, 268, 317);
+      expect(panels).toHaveLength(8);
+      const gone = new Set<Collapse>();
+      const s = hold(d, keys, 340, 20, () => {
+        for (const p of panels) if (p.phase !== 0) gone.add(p);
+      });
+      expect(deaths()).toBe(0);
+      const inverted = s.filter((p) => p.grounded && p.up.y < -0.99);
+      expect(inverted.length / 120).toBeGreaterThan(1.5);
+      for (const p of inverted) expect(p.y).toBeCloseTo(CE, 0);
+      expect(gone.size).toBeGreaterThanOrEqual(6); // it came apart behind
+      expect(Math.min(...s.map((p) => p.y))).toBeCloseTo(LD, 0);
+    },
+  );
+
+  test('Breach: stopping on the ceiling is fatal (the destruction is real)', async () => {
+    const { d, deaths } = await at('core', 258);
+    hold(d, SPRINT, 285, 10);
+    d.run(5, { moveZ: 0 });
+    expect(deaths()).toBeGreaterThan(0);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('Twist & Climb: %s rides the tube left and back, then runs up the face and over', async (_n, keys) => {
+    const { d, deaths } = await at('core', 358);
+    const s = hold(d, keys, 442, 30);
+    expect(deaths()).toBe(0);
+    expect(s.some((p) => p.grounded && p.up.x < -0.99)).toBe(true); // rolled left
+    expect(s.filter((p) => p.z > 415 && p.z < 425).every((p) => p.up.y > 0.95)).toBe(true); // and back
+    expect(s.some((p) => p.grounded && p.up.z < -0.99 && p.y > LD + 6)).toBe(true); // up the face
+    expect(s[s.length - 1].y).toBeCloseTo(TP, 0);
+  });
+
+  test.each([
+    ['running into the braces', 0],
+    ['slipping between them and waiting', 1.05],
+  ])('Twist & Climb: the tower falls for %s', async (_n, x) => {
+    const { sim, d, deaths } = await at('core', 440);
+    d.pl.pos.x = x;
+    hold(d, RUN, 459, 10);
+    d.run(2.5, { moveZ: 0 });
+    d.pl.pos.x = 0;
+    hold(d, RUN, 486, 10);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(486);
+    if (x === 0) expect(sim.broken.some((b, i) => b && sim.data.breakables[i].fires === 'tower')).toBe(true);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])(
+    'the Core Plunge: %s drops 40 m, is thrown onto the wall, runs it as it falls away and reaches the core',
+    async (_n, keys) => {
+      const { sim, d, deaths } = await at('core', 500);
+      const panels = collapses(sim, 540, 566);
+      expect(panels).toHaveLength(4);
+      const gone = new Set<Collapse>();
+      const s = hold(d, keys, 605, 30, () => {
+        for (const p of panels) if (p.phase !== 0) gone.add(p);
+      });
+      expect(deaths()).toBe(0);
+      expect(sim.stats.finished).toBe(true);
+      expect(Math.min(...s.map((p) => p.y))).toBeLessThan(-40);
+      expect(s.some((p) => p.grounded && p.up.x < -0.99 && Math.abs(p.x - 6) < 0.15)).toBe(true);
+      expect(gone.size).toBeGreaterThanOrEqual(3);
+      expect(
+        s.filter((p) => p.grounded && p.z > 590 && p.z < 600).every((p) => Math.abs(p.y - CP) < 0.5),
+      ).toBe(true);
+    },
+  );
 });

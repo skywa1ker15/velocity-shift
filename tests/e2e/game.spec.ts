@@ -472,3 +472,42 @@ test("Level 7: holding W through Blockfall's Climb and Drop (real keyboard, real
   expect(down).toBe(true);
   expect(s.z).toBeGreaterThanOrEqual(316);
 });
+
+test("Level 8: holding W through Corrupted Core's Breach (real keyboard, real-time): launch, ceiling, fall", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'core');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 258) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        y: p.pos.y,
+        z: p.pos.z,
+        uy: u.y,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let s = await pl();
+  let ceiling = false;
+  for (let i = 0; i < 3000 && s.z < 336 && s.deaths === 0; i++) {
+    s = await pl();
+    if (s.grounded && s.uy < -0.99 && Math.abs(s.y - 20) < 0.3) ceiling = true;
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(ceiling).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(336);
+  expect(s.y).toBeCloseTo(-18, 0);
+});

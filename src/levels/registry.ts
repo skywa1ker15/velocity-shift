@@ -201,12 +201,18 @@ export const levels: LevelEntry[] = [
       index: 8,
       name: 'CORRUPTED CORE',
       subtitle: 'Level 8',
-      description: 'Inside a machine that is coming apart. The finale: beams, walls, crushers, all at once.',
+      description:
+        'Inside a machine that is coming apart. Beams, walls and crushers, then nothing obeys the rules: gravity, structure and direction all at once.',
       env: 'core',
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      killY: -40,
-      medals: { bronze: 51, silver: 36, gold: 27.5, platinum: 23.5 },
+      layout: 2, // rebuilt with Meltdown (bests reset)
+      killY: -70,
+      bounds: [
+        [-60, -70, -30],
+        [60, 60, 660],
+      ],
+      medals: { bronze: 112, silver: 79, gold: 60.5, platinum: 51.5 },
       objectives: [
         { id: 'co-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'co-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

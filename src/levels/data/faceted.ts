@@ -9,6 +9,7 @@
  * a gap inside it and collapsing tiles out to the finish. Home universe: Low-Poly.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { tube } from '../tubes';
 import type { LevelData } from '../types';
 
 const Y = 1.4; // the middle terrace
@@ -124,13 +125,13 @@ export function build(): LevelData {
     'The valley folds from here. Whatever is under you is the floor',
   );
   // (1) fold left: a quarter turn to the left as you run (gravity ends up pulling toward +X)
-  tube(b, 'fold1', 272.5, 322.5, { steps: [{ t: 1.6, rot: [0, 0, 1, 90] }] });
+  tube(b, T, 'fold1', 272.5, 322.5, { steps: [{ t: 1.6, rot: [0, 0, 1, 90] }] });
   b.trigger([0, T + 2, 274], [4, 4, 2], 'fold1');
   corridor(b, 322.5, 352.5, [{ dir: 1 }]);
   b.checkpoint(0, T, 326);
   // (2) fold right through 180°: from the left wall, over the top (upside down halfway), to the
   // right wall
-  tube(b, 'fold2', 352.5, 402.5, { r0: 90, steps: [{ t: 2.2, rot: [0, 0, 1, 180] }] });
+  tube(b, T, 'fold2', 352.5, 402.5, { r0: 90, steps: [{ t: 2.2, rot: [0, 0, 1, 180] }] });
   b.trigger([0, T + 2, 354], [4, 4, 2], 'fold2');
   b.prompt([0, T + 2, 340], [4, 4, 8], 'forward', 'Next fold: all the way over, to the other side');
   // (3) the Crossing: gravity pulls to whichever wall is nearer. Each wall has a gap; jump before
@@ -148,7 +149,7 @@ export function build(): LevelData {
   b.prompt([0, T + 2, 410], [4, 4, 6], 'jump', 'Jump across before the gap: gravity flips to the other wall');
   // (4) unfold: back upright, then wall-run the tube's side over the gap in its floor; the tiles
   // outside give way under you
-  tube(b, 'unfold', 470, 520, {
+  tube(b, T, 'unfold', 470, 520, {
     r0: -90,
     steps: [{ t: 1.6, rot: [0, 0, 1, 90] }],
     gap: [504, 512],
@@ -239,64 +240,6 @@ export function build(): LevelData {
   b.breakable('crate', -1.5, T, 527);
   b.breakable('panel', 1.5, T + 1.9, 560);
   return b.data;
-}
-
-/**
- * A square paper tube, 4 m inside, along z0..z1 with its pivot on the axis. Its local -Y face is
- * the floor (lit centre line) and its own gravity always pulls toward it. `r0`: starting roll in
- * degrees about Z; `gap`: a hole in the floor face (world z range); `wallrun`: the side faces can
- * be wall-run (and are painted so).
- */
-function tube(
-  b: LevelBuilder,
-  id: string,
-  z0: number,
-  z1: number,
-  o: {
-    r0?: number;
-    steps: { t: number; rot: [number, number, number, number] }[];
-    gap?: [number, number];
-    wallrun?: boolean;
-  },
-) {
-  const len = z1 - z0,
-    zc = (z0 + z1) / 2;
-  type Part = {
-    p: [number, number, number];
-    s: [number, number, number];
-    mat?: 'base' | 'alt' | 'accent' | 'dark';
-    wallrun?: boolean;
-  };
-  const parts: Part[] = [];
-  const floor = (a: number, c: number) => {
-    parts.push({ p: [0, -2.5, (a + c) / 2 - zc], s: [6, 1, c - a] });
-    parts.push({ p: [0, -1.97, (a + c) / 2 - zc], s: [0.3, 0.06, c - a - 0.4], mat: 'accent' });
-  };
-  if (o.gap) {
-    floor(z0, o.gap[0]);
-    floor(o.gap[1], z1);
-  } else floor(z0, z1);
-  parts.push({ p: [2.5, 0, 0], s: [1, 4, len], mat: 'alt', wallrun: !!o.wallrun });
-  parts.push({ p: [-2.5, 0, 0], s: [1, 4, len], mat: 'alt', wallrun: !!o.wallrun });
-  parts.push({ p: [0, 2.5, 0], s: [6, 1, len], mat: 'base' });
-  for (const x of [-1.9, 1.9]) parts.push({ p: [x, 1.9, 0], s: [0.12, 0.12, len], mat: 'accent' });
-  for (let z = -len / 2 + 3; z < len / 2; z += 6)
-    for (const k of [-1, 1]) {
-      // ribs: thin frames round the outside of the tube
-      parts.push({ p: [0, k * 3.1, z], s: [6.4, 0.2, 0.3], mat: 'dark' });
-      parts.push({ p: [k * 3.1, 0, z], s: [0.2, 6.4, 0.3], mat: 'dark' });
-    }
-  b.entity({
-    type: 'structure',
-    id,
-    on: id,
-    p: [0, T + 2, zc],
-    r: o.r0 ? [0, 0, (o.r0 * Math.PI) / 180] : undefined,
-    warn: 0.75,
-    steps: o.steps,
-    parts,
-  });
-  b.entity({ type: 'field', mode: 'structure', link: id, p: [0, 0, 0], s: [4, 4, len] });
 }
 
 /**

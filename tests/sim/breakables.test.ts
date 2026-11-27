@@ -129,7 +129,7 @@ describe('destructible placement', () => {
 });
 
 describe('the sword on the real courses', () => {
-  it('slashing everything in reach changes neither the route nor the time', () => {
+  it('slashing everything in reach never changes the route, and only braces may change the time', () => {
     for (const { meta, data } of loaded) {
       const run = (slash: boolean) => {
         const sim = new Simulation(meta, data);
@@ -150,7 +150,11 @@ describe('the sword on the real courses', () => {
         slash = run(true);
       expect(plain.finished, meta.id).toBe(true);
       expect(slash.finished, meta.id).toBe(true);
-      expect(slash.ticks, `${meta.id} time`).toBe(plain.ticks);
+      // props never change the route; destructible architecture (a brace that brings a tower down)
+      // is meant to be cut, and cutting it from sword range may only ever help
+      if (data.breakables.some((b) => b.fires))
+        expect(slash.ticks, `${meta.id} time`).toBeLessThanOrEqual(plain.ticks);
+      else expect(slash.ticks, `${meta.id} time`).toBe(plain.ticks);
       expect(slash.deaths, meta.id).toBe(plain.deaths);
       // the line passes close enough that the blade can take most of them
       expect(slash.cuts, `${meta.id} cuts`).toBeGreaterThanOrEqual(Math.ceil(data.breakables.length * 0.6));
