@@ -29,6 +29,7 @@ describe('advanced move presentation', () => {
       expect(fx.trail.streak).toBeGreaterThanOrEqual(0);
       expect(fx.trail.hot).toBeGreaterThan(0);
       expect(fx.trail.ink).toBeGreaterThanOrEqual(0);
+      expect(fx.trail.style).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -65,7 +66,7 @@ describe('advanced move presentation', () => {
     const fx = new SlashFx();
     const arc = (fx as unknown as { arcs: { mat: THREE.ShaderMaterial }[] }).arcs[0];
     fx.setAccent(new THREE.Color(0x112233));
-    fx.setLook({ tint: null, ink: 0x0b0d14, streak: 1, hot: 1 });
+    fx.setLook({ tint: null, ink: 0x0b0d14, streak: 1, hot: 1, style: 0 });
     expect(arc.mat.uniforms.uAccent.value.getHex()).toBe(0x112233);
     fx.setLook(FX.neon.trail);
     expect(arc.mat.uniforms.uAccent.value.getHex()).toBe(FX.neon.trail.tint);
@@ -74,6 +75,22 @@ describe('advanced move presentation', () => {
     expect(arc.mat.uniforms.uAccent.value.getHex()).toBe(FX.neon.trail.tint);
     fx.setLook(FX.anime.trail);
     expect(arc.mat.uniforms.uAccent.value.getHex()).toBe(0x445566);
+  });
+});
+
+describe('sword arc framing', () => {
+  it('every universe family gets its own stroke style, and the arc stays inside the view', () => {
+    expect(new Set(Object.values(FX).map((f) => f.trail.style)).size).toBeGreaterThanOrEqual(8);
+    const fx = new SlashFx();
+    const arcs = (fx as unknown as { arcs: { pos: Float32Array }[] }).arcs;
+    for (let kind = 0; kind < 3; kind++) {
+      fx.spawn({ kind, mirror: kind === 1 ? -1 : 1, low: false, fromSheath: false } as never, kind + 1);
+      const arc = arcs[kind];
+      for (let i = 0; i < arc.pos.length; i += 3) {
+        expect(Math.abs(arc.pos[i])).toBeLessThan(1.3);
+        expect(Math.abs(arc.pos[i + 1])).toBeLessThan(0.9);
+      }
+    }
   });
 });
 

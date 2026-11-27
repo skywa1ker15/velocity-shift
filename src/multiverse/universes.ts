@@ -1,3 +1,4 @@
+import type { TrailLook } from '../fx/SlashFx';
 /**
  * The universe library. Each universe is a complete visual identity: how surfaces are rendered
  * (a style branch in the world shader, selected by `index`), its sky, palette, light, fog,
@@ -80,7 +81,7 @@ export interface FxLook {
    */
   slide: { colors: number[]; size: number; rate: number; life: number };
   /** Sword stroke: body tint (null = the suit accent), border colour, streakiness, edge heat. */
-  trail: { tint: number | null; ink: number; streak: number; hot: number };
+  trail: TrailLook;
 }
 
 export const FX: Record<UniverseId, FxLook> = {
@@ -90,7 +91,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xf6f2e6,
     darkStreaks: false,
     slide: { colors: [], size: 1, rate: 1, life: 0.3 },
-    trail: { tint: null, ink: 0x0b0d14, streak: 1, hot: 1 },
+    trail: { tint: null, ink: 0x0b0d14, streak: 1, hot: 1, style: 0 },
   },
   neon: {
     lines: 1,
@@ -98,7 +99,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0x7ff6ff,
     darkStreaks: false,
     slide: { colors: [0x19f2ff, 0xff2bd6], size: 1.2, rate: 1.5, life: 0.45 },
-    trail: { tint: 0x19f2ff, ink: 0xff2bd6, streak: 0.35, hot: 1.4 },
+    trail: { tint: 0x19f2ff, ink: 0xff2bd6, streak: 0.35, hot: 1.4, style: 1 },
   },
   comic: {
     lines: 2,
@@ -106,7 +107,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xffffff,
     darkStreaks: true,
     slide: { colors: [0xffe23d, 0xffffff], size: 1.6, rate: 0.8, life: 0.25 },
-    trail: { tint: 0xffe23d, ink: 0x050508, streak: 0, hot: 1 },
+    trail: { tint: 0xffe23d, ink: 0x050508, streak: 0, hot: 1, style: 2 },
   },
   lowpoly: {
     lines: 0,
@@ -114,7 +115,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xfff2e0,
     darkStreaks: false,
     slide: { colors: [0xffd9a0, 0xfff2e0], size: 1.9, rate: 0.7, life: 0.35 },
-    trail: { tint: null, ink: 0x2a2f45, streak: 0, hot: 0.8 },
+    trail: { tint: null, ink: 0x2a2f45, streak: 0, hot: 0.8, style: 4 },
   },
   psyche: {
     lines: 1,
@@ -122,7 +123,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xfff23d,
     darkStreaks: false,
     slide: { colors: [0xff3d6e, 0xffd23d, 0x3dff9e, 0x3d9eff, 0xc13dff], size: 1.3, rate: 1.4, life: 0.4 },
-    trail: { tint: 0xff3d6e, ink: 0x3d9eff, streak: 0.6, hot: 1.3 },
+    trail: { tint: 0xff3d6e, ink: 0x3d9eff, streak: 0.6, hot: 1.3, style: 6 },
   },
   voxel: {
     lines: 3,
@@ -130,7 +131,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xffffff,
     darkStreaks: false,
     slide: { colors: [0xffffff, 0xb7e4ff], size: 2.4, rate: 0.6, life: 0.4 },
-    trail: { tint: 0xffffff, ink: 0x14161f, streak: 0, hot: 0.9 },
+    trail: { tint: 0xffffff, ink: 0x14161f, streak: 0, hot: 0.9, style: 4 },
   },
   ink: {
     lines: 4,
@@ -138,7 +139,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0x222222,
     darkStreaks: true,
     slide: { colors: [], size: 1, rate: 0, life: 0.3 },
-    trail: { tint: 0x15151c, ink: 0x0a0a0d, streak: 1.4, hot: 1.2 },
+    trail: { tint: 0x15151c, ink: 0x0a0a0d, streak: 1.4, hot: 1.2, style: 3 },
   },
   painted: {
     lines: 4,
@@ -146,7 +147,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xfff0c0,
     darkStreaks: false,
     slide: { colors: [0xffc46b, 0xfff0c0], size: 1.5, rate: 0.9, life: 0.5 },
-    trail: { tint: 0xffc46b, ink: 0x6b3a1e, streak: 1.2, hot: 0.9 },
+    trail: { tint: 0xffc46b, ink: 0x6b3a1e, streak: 1.2, hot: 0.9, style: 7 },
   },
   synth: {
     lines: 1,
@@ -154,7 +155,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0xff7ad9,
     darkStreaks: false,
     slide: { colors: [0xff2e9f, 0xffd23d], size: 1.2, rate: 1.4, life: 0.4 },
-    trail: { tint: 0xff2e9f, ink: 0x19f2ff, streak: 0.4, hot: 1.4 },
+    trail: { tint: 0xff2e9f, ink: 0x19f2ff, streak: 0.4, hot: 1.4, style: 1 },
   },
   corrupt: {
     lines: 5,
@@ -162,7 +163,7 @@ export const FX: Record<UniverseId, FxLook> = {
     dust: 0x16ff73,
     darkStreaks: false,
     slide: { colors: [0x16ff73, 0xff1a3c, 0x1a5cff], size: 1.3, rate: 1.2, life: 0.22 },
-    trail: { tint: 0x16ff73, ink: 0xff1a3c, streak: 0.8, hot: 1.2 },
+    trail: { tint: 0x16ff73, ink: 0xff1a3c, streak: 0.8, hot: 1.2, style: 5 },
   },
 };
 

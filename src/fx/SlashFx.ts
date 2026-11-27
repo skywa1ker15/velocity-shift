@@ -26,33 +26,80 @@ uniform float uFade;
 uniform float uWidth;
 uniform float uHot;
 uniform float uStreak;
+uniform float uStyle;
+uniform float uSeed;
 uniform vec3 uAccent;
 uniform vec3 uInk;
 float h1(float x) { return fract(sin(x * 91.7) * 43758.5453); }
+float n1(float x) { float i = floor(x), f = fract(x); return mix(h1(i), h1(i + 1.0), f * f * (3.0 - 2.0 * f)); }
+vec3 hue(float t) { return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
 void main() {
   float u = vUV.x, v = vUV.y;
+  float st = uStyle;
+  // faceted universes: the stroke is built from flat steps
+  if (st > 3.5 && st < 4.5) { u = floor(u * 14.0) / 14.0; v = floor(v * 5.0) / 5.0 + 0.1; }
+  // corrupt: slices of the stroke jump sideways and drop out
+  if (st > 4.5 && st < 5.5) {
+    float sl = floor(u * 18.0);
+    if (h1(sl + uSeed + floor(uHead * 12.0)) < 0.18) discard;
+    v = clamp(v + (h1(sl * 3.1 + uSeed) - 0.5) * 0.35, 0.0, 1.0);
+  }
   if (u > uHead) discard;
   float age = uHead - u;
-  // crescent: fat in the middle of the stroke, tapering to points at both ends, and thicker
-  // right behind the blade
-  float cres = pow(sin(3.14159 * clamp(u, 0.0, 1.0)), 0.65);
-  float th = uWidth * (0.25 + 0.75 * cres) * (0.55 + 0.45 * exp(-age * 6.0));
+  // crescent: fat in the middle, pointed at both ends, thickest just behind the blade
+  float cres = pow(sin(3.14159 * clamp(u, 0.0, 1.0)), 0.6);
+  float th = uWidth * (0.3 + 0.7 * cres) * (0.6 + 0.4 * exp(-age * 5.0));
+  // ink: a rough, bristly inner edge
+  if (st > 2.5 && st < 3.5) th *= 0.7 + 0.6 * n1(u * 22.0 + uSeed);
   float inner = 1.0 - th;
-  if (v < inner) discard;
-  float k = (v - inner) / max(th, 1e-3);          // 0 inner edge .. 1 outer (cutting) edge
+  // ink splatter flicks off the inner side of the stroke
+  if (v < inner) {
+    if (st > 2.5 && st < 3.5) {
+      float c = floor(u * 26.0);
+      vec2 d = vec2(fract(u * 26.0) - 0.5, (v - (inner - 0.08 - h1(c) * 0.15)) * 9.0);
+      if (h1(c + 5.0) > 0.55 && length(d) < 0.22 && age < 0.8) { gl_FragColor = vec4(uInk, exp(-age * 2.0) * uFade); return; }
+    }
+    discard;
+  }
+  float k = (v - inner) / max(th, 1e-3);   // 0 inner edge .. 1 outer (cutting) edge
   float aa = fwidth(k) * 1.5 + 0.02;
-  // dry-brush streaks running along the stroke in its inner half
   float lane = floor(k * 9.0);
   float streak = step(0.35 + 0.4 * h1(lane + 3.1), fract(u * (6.0 + h1(lane) * 10.0) + h1(lane + 7.0)));
   float body = mix(1.0, streak, uStreak * (1.0 - smoothstep(0.45, 0.7, k)));
-  vec3 col = mix(uAccent, vec3(1.0), smoothstep(0.62, 0.8, k) * (0.6 + 0.4 * uHot));
-  // ink border on both edges
-  float ink = 1.0 - smoothstep(0.0, aa * 2.0, k) + smoothstep(1.0 - aa * 1.4, 1.0, k);
-  col = mix(col, uInk, clamp(ink, 0.0, 1.0) * 0.85);
-  float fade = exp(-age * 3.2) * uFade;
-  float a = body * fade * smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.97, 1.0, u));
+  vec3 acc = st > 5.5 && st < 6.5 ? hue(u * 1.6 - uHead * 0.8) : uAccent;
+  vec3 col = mix(acc, vec3(1.0), smoothstep(0.62, 0.82, k) * (0.6 + 0.4 * uHot));
+  float inkW = 2.0;
+  if (st > 0.5 && st < 1.5) {
+    // neon: hollow tube: a white-hot rim on the cutting edge, a second rim in the ink colour inside
+    float rim = exp(-pow((1.0 - k) * 7.0, 2.0)) + 0.6 * exp(-pow((k - 0.35) * 9.0, 2.0));
+    col = mix(uInk, mix(acc, vec3(1.0), exp(-pow((1.0 - k) * 14.0, 2.0))), smoothstep(0.2, 0.75, k));
+    body = clamp(rim + 0.18, 0.0, 1.0);
+    inkW = 0.0;
+  } else if (st > 1.5 && st < 2.5) {
+    // comic: a flat solid ribbon, a heavy black border, and speed-cut gaps toward the tail
+    col = mix(acc, vec3(1.0), step(0.78, k) * 0.9);
+    body = 1.0 - step(0.5, fract(u * 9.0)) * step(0.25, age) * step(k, 0.7);
+    inkW = 4.0;
+  } else if (st > 2.5 && st < 3.5) {
+    // ink: a dark wet stroke; only the cutting edge catches a little paper-white
+    col = mix(uAccent, vec3(0.92), smoothstep(0.88, 1.0, k) * 0.5);
+    body = mix(1.0, streak, 0.35 * (1.0 - k));
+    inkW = 0.0;
+  } else if (st > 6.5) {
+    // painted: bristle lanes in two warm tones along the stroke, soft edges, no hard border
+    float br = n1(k * 11.0 + uSeed);
+    col = mix(uAccent * 0.8, mix(uAccent, vec3(1.0, 0.96, 0.85), 0.55), br);
+    col = mix(col, vec3(1.0), smoothstep(0.85, 1.0, k) * 0.5);
+    body *= 0.85 + 0.15 * n1(u * 30.0 + k * 7.0);
+    inkW = 0.0;
+  }
+  float ink = 1.0 - smoothstep(0.0, aa * inkW, k) + smoothstep(1.0 - aa * inkW * 0.7, 1.0, k);
+  if (inkW > 0.0) col = mix(col, uInk, clamp(ink, 0.0, 1.0) * 0.9);
+  float fade = exp(-age * 1.9) * uFade;
+  float a = body * fade * smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.96, 1.0, u));
+  if (st > 6.5) a *= smoothstep(0.0, 0.2, k);
   if (a < 0.02) discard;
-  gl_FragColor = vec4(col, a);
+  gl_FragColor = vec4(col, min(a, 0.92));
 }`;
 
 interface Arc {
@@ -74,6 +121,19 @@ export function swingHilt(b: [number, number, number], out: THREE.Vector3) {
   return out.set(0.06 + b[0] * 0.3, -0.2 + b[1] * 0.16, -0.3 + b[2] * 0.28 - Math.max(0, b[1]) * 0.12);
 }
 
+/** How a universe draws its sword stroke (see `FxLook.trail`). */
+export interface TrailLook {
+  tint: number | null;
+  ink: number;
+  streak: number;
+  hot: number;
+  /** 0 brush, 1 neon tube, 2 comic ribbon, 3 ink splash, 4 faceted, 5 glitch, 6 rainbow, 7 paint. */
+  style: number;
+}
+
+/** Keep a projected point inside the visible frame: values near the edge ease toward it. */
+const soft = (x: number, lim: number) => lim * Math.tanh(x / lim);
+
 export class SlashFx {
   readonly group = new THREE.Group();
   private arcs: Arc[] = [];
@@ -81,11 +141,12 @@ export class SlashFx {
   private accent = new THREE.Color(0xff9a3c);
   private suit = new THREE.Color(0xff9a3c);
   private ink = new THREE.Color(0x0b0d14);
-  private look: { tint: number | null; ink: number; streak: number; hot: number } = {
+  private look: TrailLook = {
     tint: null,
     ink: 0x0b0d14,
     streak: 1,
     hot: 1,
+    style: 0,
   };
 
   constructor() {
@@ -120,6 +181,8 @@ export class SlashFx {
           uWidth: { value: 0.6 },
           uHot: { value: 0 },
           uStreak: { value: 1 },
+          uStyle: { value: 0 },
+          uSeed: { value: 0 },
           uAccent: { value: this.accent },
           uInk: { value: this.ink },
         },
@@ -143,7 +206,7 @@ export class SlashFx {
    * How this universe draws a sword stroke: an optional body tint, the border (ink) colour, how
    * broken the dry-brush streaks are (0 = a solid ribbon) and how hot the leading edge burns.
    */
-  setLook(l: { tint: number | null; ink: number; streak: number; hot: number }) {
+  setLook(l: TrailLook) {
     this.look = l;
     this.ink.set(l.ink);
     this.applyLook();
@@ -169,7 +232,7 @@ export class SlashFx {
     // swelling toward the hilt side.
     const h = new THREE.Vector3();
     const reach = (pose.kind === Slash.Running ? 1.22 : 1.1) * scale;
-    const W = (0.13 + s.power * 0.11) * scale;
+    const W = (0.25 + s.power * 0.14) * scale;
     const sx: number[] = [],
       sy: number[] = [],
       hx: number[] = [],
@@ -178,12 +241,17 @@ export class SlashFx {
       const t = t0 + ((t1 - t0) * j) / (N - 1);
       bladeDir(pose, t, _b);
       swingHilt(_b, h);
-      const tz = Math.min(-0.2, h.z + _b[2] * reach);
-      sx.push((h.x + _b[0] * reach) / -tz);
-      sy.push((h.y + _b[1] * reach) / -tz);
+      // the tip passes beside the eye, so its true projection runs far off-screen; the stroke is
+      // laid out by the tip's *direction* from the eye instead (angles stay smooth where the
+      // projection blows up), mapped into the frame and lifted a little above the hands
+      const tx = h.x + _b[0] * reach,
+        ty = h.y + _b[1] * reach,
+        tzz = h.z + _b[2] * reach;
+      sx.push(soft((Math.atan2(tx, -tzz) / (Math.PI / 2)) * 1.15, 0.95));
+      sy.push(soft((Math.atan2(ty, Math.hypot(tx, tzz)) / (Math.PI / 2)) * 1.3 + 0.12, 0.5));
       const hz = Math.min(-0.2, h.z);
-      hx.push(h.x / -hz);
-      hy.push(h.y / -hz);
+      hx.push(soft((Math.atan2(h.x, -hz) / (Math.PI / 2)) * 1.15, 0.95));
+      hy.push(soft((Math.atan2(h.y, Math.hypot(h.x, hz)) / (Math.PI / 2)) * 1.3 + 0.12, 0.5));
     }
     const D = 1.0; // the crescent lives on the plane one metre in front of the eye
     for (let j = 0; j < N; j++) {
@@ -216,6 +284,8 @@ export class SlashFx {
     arc.mesh.geometry.computeBoundingSphere();
     const u = arc.mat.uniforms;
     u.uWidth.value = 1;
+    u.uStyle.value = this.look.style;
+    u.uSeed.value = serial * 7.31;
     u.uHot.value = (pose.kind === Slash.Vertical || pose.kind === Slash.Running ? 1 : 0.4) * this.look.hot;
     u.uStreak.value = (pose.kind === Slash.Running ? 1 : 0.7) * this.look.streak;
     arc.t0 = t0;
@@ -235,8 +305,8 @@ export class SlashFx {
       // reveal tracks the real swing; once the swing is over it keeps running on its own
       const head = a.serial === serial && attackT >= 0 ? (attackT - a.t0) / a.dur : a.life / a.dur;
       u.uHead.value = Math.min(1.6, Math.max(0, head));
-      u.uFade.value = 1 - Math.min(1, Math.max(0, (a.life - a.dur - 0.05) / 0.22));
-      if (a.life > a.dur + 0.3) {
+      u.uFade.value = 1 - Math.min(1, Math.max(0, (a.life - a.dur - 0.08) / 0.24));
+      if (a.life > a.dur + 0.34) {
         a.live = false;
         a.mesh.visible = false;
       }
