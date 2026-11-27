@@ -11,6 +11,8 @@
 - **New arm design**: a long sleeve with a bold stitched accent band and a rolled cuff, a gauntlet bracer with a swept "shift fin" along the back of the forearm, a glove with a bone-white knuckle plate and lit knuckle line, and accent-painted fingertips. Outline weight now varies per part (heavy on the sleeve, fine on the fingers).
 - All ten universes restyle the skinned arm through the existing character shader; the sword grip follows the new hand. See docs/phase-d for before/after images.
 
+- **D6 – advanced movement and sword presentation.** Wall-run entry slaps the wall-side palm flat while the free arm throws back, the palm presses with the stride and the buzz grows with speed, and leaving the wall peels the hand away. Vaults plant both palms on the lip with a view dip, nod and FOV punch. A dash's end recoils the arms. The carried sword now keeps the stride's rhythm, tucks in a slide, tilts with rise/fall and lags the look. Each universe has its own sword-stroke look (tint, border, streak, heat). Presentation only; no physics change. Not yet verified: live sword-arc screenshots (frame capture never caught an arc), so the trail tints are covered by unit tests only.
+
 ## Phase 3: Multiverse art and graphics overhaul
 
 - **Ten visual universes**, each a full rendering identity: Hand-Drawn (the original look), Neon District, Issue #1 (comic), Facet Valley (low-poly), The Bloom (psychedelic), Blockworld (voxel), Ink, Elderwild (painted fantasy), Outrun (synthwave) and ERR_REALITY (corruption). Each has its own surface rendering, sky, character and arm treatment, seeded 3D background scenery, light, fog, grading, screen treatment, movement effects, HUD theme and music voicing. See docs/ART_DIRECTION.md.

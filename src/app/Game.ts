@@ -352,6 +352,7 @@ export class Game {
     this.stickers.setMode(fx.sprites);
     this.dust.set(fx.dust);
     this.slideLook = fx.slide;
+    this.slash.setLook(fx.trail);
     this.streaks.setLook(env.streak, fx.darkStreaks);
     document.documentElement.style.setProperty(
       '--uni',
@@ -866,9 +867,12 @@ export class Game {
       this.rig.onSlideEnd();
       this.body.onSlideEnd();
     });
+    ev.on('wallRunEnd', () => this.body.onWallEnd());
+    ev.on('dashEnd', () => this.body.onDashEnd());
     ev.on('wallRunStart', () => {
       this.flowMove();
       audio.wallStart();
+      this.body.onWallStart(pl.wallSide);
       this.wallPoint(1.3, 0.3);
       _n.set(pl.wallNormal.x, 0, pl.wallNormal.z);
       this.stickers.spawn(_v, this.accent, {
@@ -900,6 +904,8 @@ export class Game {
     ev.on('vault', () => {
       this.flowMove();
       audio.vault();
+      this.rig.onVault();
+      this.body.onVault();
       // hands slap the ledge: two small puffs and action ticks where they plant
       const fx = -Math.sin(pl.yaw),
         fz = -Math.cos(pl.yaw);

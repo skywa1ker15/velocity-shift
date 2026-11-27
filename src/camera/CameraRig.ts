@@ -85,6 +85,12 @@ export class CameraRig {
     this.fovPunch.kick((boosted ? 70 : 28) * this.fxK);
     this.lurch.kick(0.9 * this.fxK);
   }
+  /** Up and over a ledge: the view ducks toward the hands as they plant, then lifts with the push. */
+  onVault() {
+    this.dip.kick(-0.45 * this.fxK);
+    this.nod.kick(-0.07 * this.fxK);
+    this.fovPunch.kick(25 * this.fxK);
+  }
   /** Coming out of a slide: the view rises past the standing height and settles. */
   onSlideEnd() {
     this.dip.kick(0.8 * this.fxK);

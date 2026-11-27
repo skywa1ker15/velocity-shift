@@ -79,6 +79,14 @@ export class SlashFx {
   private arcs: Arc[] = [];
   private next = 0;
   private accent = new THREE.Color(0xff9a3c);
+  private suit = new THREE.Color(0xff9a3c);
+  private ink = new THREE.Color(0x0b0d14);
+  private look: { tint: number | null; ink: number; streak: number; hot: number } = {
+    tint: null,
+    ink: 0x0b0d14,
+    streak: 1,
+    hot: 1,
+  };
 
   constructor() {
     for (let i = 0; i < 3; i++) {
@@ -113,7 +121,7 @@ export class SlashFx {
           uHot: { value: 0 },
           uStreak: { value: 1 },
           uAccent: { value: this.accent },
-          uInk: { value: new THREE.Color(0x0b0d14) },
+          uInk: { value: this.ink },
         },
       });
       const mesh = new THREE.Mesh(g, mat);
@@ -125,8 +133,24 @@ export class SlashFx {
     }
   }
 
+  /** The suit's accent; the universe's trail tint (if any) wins over it. */
   setAccent(c: THREE.Color) {
-    this.accent.copy(c);
+    this.suit.copy(c);
+    this.applyLook();
+  }
+
+  /**
+   * How this universe draws a sword stroke: an optional body tint, the border (ink) colour, how
+   * broken the dry-brush streaks are (0 = a solid ribbon) and how hot the leading edge burns.
+   */
+  setLook(l: { tint: number | null; ink: number; streak: number; hot: number }) {
+    this.look = l;
+    this.ink.set(l.ink);
+    this.applyLook();
+  }
+  private applyLook() {
+    if (this.look.tint !== null) this.accent.set(this.look.tint);
+    else this.accent.copy(this.suit);
   }
 
   /** Start the arc for a swing (called when its cutting window opens). */
@@ -192,8 +216,8 @@ export class SlashFx {
     arc.mesh.geometry.computeBoundingSphere();
     const u = arc.mat.uniforms;
     u.uWidth.value = 1;
-    u.uHot.value = pose.kind === Slash.Vertical || pose.kind === Slash.Running ? 1 : 0.4;
-    u.uStreak.value = pose.kind === Slash.Running ? 1 : 0.7;
+    u.uHot.value = (pose.kind === Slash.Vertical || pose.kind === Slash.Running ? 1 : 0.4) * this.look.hot;
+    u.uStreak.value = (pose.kind === Slash.Running ? 1 : 0.7) * this.look.streak;
     arc.t0 = t0;
     arc.dur = t1 - t0;
     arc.life = 0;

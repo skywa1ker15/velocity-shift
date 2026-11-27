@@ -493,6 +493,43 @@ export class Body {
       a.spring.v.z -= 1.3 * k;
     }
   }
+  /** Hitting a wall: the wall-side palm slaps flat against it; the free arm throws back for balance. */
+  onWallStart(side: 1 | -1) {
+    const k = this.motion.intensity;
+    for (const a of this.arms) {
+      if (a.side === side) {
+        a.spring.v.x += side * 2.6 * k;
+        a.spring.v.y += 0.5 * k;
+      } else {
+        a.spring.v.x -= side * 0.8 * k;
+        a.spring.v.z += 0.9 * k;
+      }
+    }
+  }
+  /** Leaving the wall (run out or jump): the planted hand peels away. */
+  onWallEnd() {
+    const k = this.motion.intensity;
+    for (const a of this.arms) {
+      a.spring.v.y += 0.9 * k;
+      a.spring.v.x -= a.side * 0.6 * k;
+    }
+  }
+  /** Up and over a ledge: both palms slap down on the lip. */
+  onVault() {
+    const k = this.motion.intensity;
+    for (const a of this.arms) {
+      a.spring.v.y -= 2.2 * k;
+      a.spring.v.z -= 0.6 * k;
+    }
+  }
+  /** The dash burst ends: the spear arm recoils and the arms settle back. */
+  onDashEnd() {
+    const k = this.motion.intensity;
+    for (const a of this.arms) {
+      a.spring.v.z += (a.side > 0 ? 1.6 : 0.8) * k;
+      a.spring.v.y -= 0.5 * k;
+    }
+  }
   onBump() {
     for (const a of this.arms) a.spring.v.z += 1.5;
   }
@@ -598,6 +635,8 @@ export class Body {
     }
     if (sum < 1e-4) this.stateW[ti] = sum = 1;
 
+    this.carrySlide = this.stateW[POSE_SLIDE] / sum;
+    this.carryRun = this.stateW[POSE_RUN] / sum;
     const swordArm = this.swordPose(dt, sp);
     for (const a of this.arms) {
       const s = a.side;
@@ -817,8 +856,9 @@ export class Body {
       case POSE_WALL:
         if (s === pl.wallSide) {
           // palm planted on the wall, fingers spread, buzzing as it drags
-          p.x = s * 0.43;
-          p.y = -0.02 + Math.sin(this.t * 27) * 0.005;
+          // (the palm presses and eases with the stride; the buzz grows with speed)
+          p.x = s * (0.43 - Math.max(0, Math.sin(this.phase * 2)) * 0.012);
+          p.y = -0.02 + Math.sin(this.t * 27) * (0.002 + 0.004 * sp);
           p.z = -0.4 + Math.sin(this.phase) * 0.02;
           p.roll = s * 1.4;
           p.bend = -0.6;
@@ -961,6 +1001,9 @@ export class Body {
   private swordHandQ = new THREE.Quaternion();
   private swordQ = new THREE.Quaternion();
   private swordStiff = 900;
+  /** How much of the body's pose is slide / run right now (the carried sword follows it). */
+  private carrySlide = 0;
+  private carryRun = 0;
   /** 0..1 how hard the current stroke is swinging (drives the off-hand and effects). */
   swordSwing = 0;
   private bd: [number, number, number] = [0, 0, 0];
@@ -1002,9 +1045,12 @@ export class Body {
       }
       case SwordPhase.Ready: {
         const r = readyDir();
-        b[0] = r[0];
-        b[1] = r[1];
-        b[2] = r[2];
+        const ak = this.motion.armSway;
+        // the carried blade follows the body: tip lifts on the way up, drops when falling, points
+        // low and forward in a slide, and lags behind a fast look
+        b[0] = r[0] - this.sway.x * 1.5 * ak + this.lateral * 0.08 * ak;
+        b[1] = r[1] + (this.cx.rise * 0.12 - this.cx.fall * 0.16 - this.carrySlide * 0.25) * ak;
+        b[2] = r[2] + this.carrySlide * 0.15 * ak;
         e[0] = 0;
         e[1] = 0.2;
         e[2] = -1;
@@ -1052,8 +1098,18 @@ export class Body {
     this.swordHandQ.setFromRotationMatrix(_m);
 
     // where the hilt is: resting low at the right, or carried on an arc around the chest
+    const ak = this.motion.armSway;
     const bob = Math.sin(this.phase * 2) * 0.012 * sp;
-    _sh.set(0.27, -0.3 + bob, -0.37);
+    // the carried hilt keeps the stride's rhythm, tucks low and back in a slide, rides up and down
+    // with the arc, hangs back when pushing off and leads when braking, and lags the look
+    _sh.set(
+      0.27 +
+        (Math.sin(this.phase) * 0.012 * sp * this.carryRun - this.carrySlide * 0.03 + this.sway.x * 0.5) * ak,
+      -0.3 +
+        bob +
+        (this.cx.rise * 0.03 - this.cx.fall * 0.02 - this.carrySlide * 0.05 + this.sway.y * 0.5) * ak,
+      -0.37 + (this.carrySlide * 0.06 + this.gait.accel * 0.03) * ak,
+    );
     this.bd[0] = _sb.x;
     this.bd[1] = _sb.y;
     this.bd[2] = _sb.z;
