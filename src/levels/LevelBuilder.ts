@@ -221,6 +221,11 @@ export class LevelBuilder {
   }
 
   /** A destructible prop. Ground kinds take the floor height; hanging kinds their centre. */
+  /** Evolve: a hand-placed collectible (body-centre height, i.e. about 0.9 m above the floor). */
+  evoItem(kind: string, x: number, y: number, z: number, chain?: { group: number; order: number }) {
+    (this.data.evoItems ??= []).push({ kind, p: [x, y, z], ...chain });
+  }
+
   breakable(kind: BreakableKind, x: number, y: number, z: number, o: Partial<BreakableDef> = {}) {
     const id = o.id ?? `${kind}-${this.data.breakables.length}`;
     const ground = kind === 'panel' || kind === 'sign' ? o.ground : (o.ground ?? y);

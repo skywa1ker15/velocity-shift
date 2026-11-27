@@ -1,6 +1,9 @@
 /**
  * TRAINING — the movement gym. One station per mechanic, in the order they are taught,
  * laid out in a straight line heading +Z. Also used by the automated bot test.
+ * The second half is the Evolve gym: one station per way of catching a collectible (run through,
+ * slide under, in the air, dash through, cut, along a wall, a chain in turn), then Flow and Surge.
+ * The stations are real obstacles in Pure too; their collectibles appear only in Evolve.
  */
 import { LevelBuilder } from '../LevelBuilder';
 import type { LevelData } from '../types';
@@ -116,20 +119,120 @@ export function build(): LevelData {
   b.checkpoint(0, -7, 317);
   for (let i = 0; i < 3; i++)
     b.entity({ type: 'collapse', p: [0, -7.3, 329 + i * 6], s: [5, 0.6, 5.8], delay: 0.9 });
-  b.plat(0, -7, 352, 14, 16); // 344..360
   b.prompt([0, -5.5, 321], [10, 4, 8], 'forward', 'Cracked ground falls away — keep moving');
-  b.finish(0, -7, 355, 10);
   b.collectible('t3', 0, -5.2, 335);
 
+  // ===== the Evolve gym ===================================================================
+  const Y = -7;
+  // --- 12. Glints: run through them -------------------------------------------------------
+  b.plat(0, Y, 372, 14, 56); // 344..400
+  b.checkpoint(0, Y, 362);
+  for (let z = 366; z <= 382; z += 4) b.evoItem('glint', 0, Y + 0.9, z);
+  b.prompt(
+    [0, Y + 1.5, 362],
+    [14, 4, 6],
+    'forward',
+    'Evolve: run through Glints for Flux. A full meter becomes an upgrade',
+  );
+  // --- 13. Undertow: slide under the low arch -----------------------------------------------
+  b.solid({ p: [0, Y + 1.05 + 0.6, 392], s: [14, 1.2, 1.4], mat: 'alt' });
+  b.strip([0, Y + 1.02, 391.18], [13, 0.05, 0.05], 0.9);
+  b.evoItem('undertow', 0, Y + 0.35, 392);
+  b.prompt(
+    [0, Y + 1.5, 385],
+    [14, 4, 4],
+    'slide',
+    'Slide under the arch. A ring hung low (Undertow) is caught only by sliding',
+  );
+  // --- 14. Skyknot: caught only in the air ---------------------------------------------------
+  b.plat(0, Y, 426, W, 40); // 406..446
+  b.evoItem('skyknot', 0, Y + 1.5, 402);
+  b.prompt(
+    [0, Y + 1.5, 396],
+    [14, 4, 3],
+    'jump',
+    'Jump the gap. A knot in the air (Skyknot) is caught only airborne',
+  );
+  b.checkpoint(0, Y, 410);
+  // --- 15. Rift Mote: only a dash catches it -------------------------------------------------
+  b.evoItem('rift', 0, Y + 0.9, 425);
+  b.prompt([0, Y + 1.5, 414], [W, 4, 6], 'dash', 'Dash through the Rift Mote: only a dash catches it');
+  // --- 16. Fracture Glyph: cut it ------------------------------------------------------------
+  b.evoItem('glyph', 1.3, Y + 1.45, 438);
+  b.prompt([0, Y + 1.5, 430], [W, 4, 5], 'attack', 'Cut the Fracture Glyph with the sword');
+  // --- 17. Wall Vein: touch it while wall-running ---------------------------------------------
+  b.wall(3.0, Y - 2, 453, 0.8, 8, 22); // 442..464, wall on the left
+  b.evoItem('vein', 2.2, Y + 3.2, 455);
+  b.prompt([0, Y + 1.5, 438], [W, 4, 4], 'jump', 'Wall-run the wall. Its Vein is caught only on the wall');
+  // --- 18. Echo Chain: four nodes in turn ------------------------------------------------------
+  b.plat(0, Y, 492, W, 56); // 464..520
+  b.checkpoint(0, Y, 468);
+  [478, 485, 492, 499].forEach((z, i) =>
+    b.evoItem('echo', [0, 0.7, -0.7, 0][i], Y + 0.9, z, { group: 0, order: i }),
+  );
+  b.prompt(
+    [0, Y + 1.5, 470],
+    [W, 4, 4],
+    'forward',
+    'Echo Chain: catch four nodes in turn, before each one fades',
+  );
+  // --- 19. Flow: chain different moves; a Paradox Core needs Flow tier 3 ------------------------
+  b.solid({ p: [0, Y + 1.05 + 0.7, 508], s: [W, 1.4, 1.6], mat: 'alt' }); // slide
+  b.solid({ p: [0, Y + 0.4, 515], s: [W - 0.4, 0.8, 0.6], mat: 'alt' }); // jump
+  b.plat(0, Y, 536, W, 24); // 524..548 (a gap to jump at 520..524)
+  b.solid({ p: [0, Y + 1.05 + 0.7, 530], s: [W, 1.4, 1.6], mat: 'alt' }); // slide
+  b.evoItem('paradox', 0, Y + 0.9, 544);
+  b.prompt(
+    [0, Y + 1.5, 503],
+    [W, 4, 4],
+    'slide',
+    'Chain different moves to build Flow. At tier 3 a Paradox Core can be held',
+  );
+  b.checkpoint(0, Y, 546);
+  // --- 20. Surge: shutters that slide across (Timeslip slows them) ------------------------------
+  b.plat(0, Y, 580, W, 64); // 548..612
+  for (const [z, x0, ph] of [
+    [566, -7.6, 0],
+    [578, 7.6, 1.4],
+    [590, -7.6, 0.7],
+  ] as const)
+    b.entity({
+      type: 'mover',
+      s: [7, 6, 1],
+      path: [
+        [x0, Y + 3, z],
+        [0, Y + 3, z],
+      ],
+      speed: 4.5,
+      pause: 1.1,
+      phase: ph,
+      mat: 'alt',
+    });
+  b.prompt(
+    [0, Y + 1.5, 553],
+    [W, 4, 6],
+    'surge',
+    'With Timeslip, Surge spends Flux to slow the world, never you',
+  );
+  // --- 21. down to the finish -----------------------------------------------------------------
+  b.checkpoint(0, Y, 606);
+  b.ramp([0, Y, 612], [0, Y - 6, 636], W);
+  b.plat(0, Y - 6, 670, 14, 68); // 636..704
+  b.entity({ type: 'boost', p: [0, Y - 5.4, 646], s: [5, 1.2, 4], dir: [0, 0, 1], add: 6, min: 16 });
+  b.checkpoint(0, Y - 6, 660);
+  b.finish(0, Y - 6, 696, 12);
+  b.gate(0, Y - 6, 703, 12, 8);
+
   // --- scenery --------------------------------------------------------------------------
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 17; i++) {
     const z = -20 + i * 46;
     b.monolith(-38 - (i % 3) * 9, -60, z, 12, 120 + (i % 4) * 26, 12, 'dark');
     b.monolith(40 + ((i + 1) % 3) * 8, -70, z + 20, 10, 130 + (i % 3) * 30, 14, 'dark');
   }
   b.ring(0, 30, 120, 60, 1.2, [1.2, 0, 0.2], [0, 0, 0.05], 'alt', 0.3);
   b.ring(0, 12, 300, 44, 0.9, [1.45, 0.3, 0], [0, 0, -0.06], 'alt', 0.3);
-  for (let i = 0; i < 26; i++) {
+  b.ring(0, 20, 560, 52, 1.1, [1.3, -0.2, 0.1], [0, 0, 0.05], 'alt', 0.3);
+  for (let i = 0; i < 52; i++) {
     const side = i % 2 ? 1 : -1;
     b.shard(
       side * (12 + ((i * 7) % 16)),
@@ -139,7 +242,7 @@ export function build(): LevelData {
       i % 5 === 0 ? 'accent' : 'alt',
     );
   }
-  for (let z = 20; z < 350; z += 30) {
+  for (let z = 20; z < 700; z += 30) {
     b.column(-W / 2 - 2.2, -30, z, 30 + ((z / 30) % 2) * 3, 0.7, 'dark');
     b.column(W / 2 + 2.2, -30, z + 15, 30, 0.7, 'dark');
   }
@@ -183,7 +286,32 @@ export function build(): LevelData {
     [0, -7, 318],
     [0, -7, 330],
     [0, -7, 346],
-    [0, -7, 356],
+    [0, -7, 386],
+    [0, -7, 389.4, 's'],
+    [0, -7, 395, 'u'],
+    [0, -7, 399.2, 'j', 0.8],
+    [0, -7, 412],
+    [0, -7, 421.5, 'd'],
+    [0, -7, 436],
+    [1.7, -7, 442],
+    [1.7, -7, 444.9, 'j', 0.8],
+    [2.2, -6, 452],
+    [2.2, -6, 459.5, 'wj'],
+    [0, -7, 472],
+    [0, -7, 478],
+    [0.7, -7, 485],
+    [-0.7, -7, 492],
+    [0, -7, 499],
+    [0, -7, 505.4, 's'],
+    [0, -7, 511, 'u'],
+    [0, -7, 513.8, 'j', 0.6],
+    [0, -7, 519.4, 'j', 0.8],
+    [0, -7, 527.4, 's'],
+    [0, -7, 534, 'u'],
+    [0, -7, 548],
+    [0, -7, 612.5, 's'],
+    [0, -13, 640, 'u'],
+    [0, -13, 696],
   );
   // ----- destructibles (Phase B): practice targets, barriers and crates beside the line. They
   // never collide and never block it: slash them on the move, or just run through.
@@ -202,5 +330,9 @@ export function build(): LevelData {
   b.breakable('barrier', 1.7, 1, 210, { yaw: 0.69 });
   b.breakable('crate', 1.5, -7, 324.6);
   b.breakable('target', -1.5, -7, 344.4);
+  b.breakable('barrier', -1.6, -7, 418, { yaw: 0.2 });
+  b.breakable('crate', 1.5, -7, 476);
+  b.breakable('target', -1.5, -7, 560);
+  b.breakable('crate', 1.5, -13, 680);
   return b.data;
 }

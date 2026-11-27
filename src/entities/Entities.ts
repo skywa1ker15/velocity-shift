@@ -246,7 +246,7 @@ export class Mover extends Entity {
         if (before === 0 && this.warn > 0 && this.atRest) ctx.signal('hazardWarn', this);
       } else this.warn = 1;
       // slightly smaller than the visible box: a graze at speed is not a death
-      if (playerTouchesBox(ctx.player, this.p, this.h, undefined, LETHAL_MOVER_GROW)) ctx.kill('crushed');
+      if (playerTouchesBox(ctx.player, this.p, this.h, undefined, LETHAL_MOVER_GROW)) ctx.kill('lethal');
     } else if (this.def.mode === 'once') {
       this.warn = this.moving ? 1 : Math.max(0, this.warn - ctx.dt * 2);
     }

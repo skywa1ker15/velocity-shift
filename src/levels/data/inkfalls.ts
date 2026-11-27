@@ -4,8 +4,9 @@
  * a time, a long ink chute and a wall chain over the void; then the gorge starts to come apart
  * (Level 5, destruction), one idea at a time: a pillar that topples across the gap to become the
  * bridge, a braced pillar you bring down yourself by cutting its brace, and the Cascade — a bridge
- * whose slabs all fall at once while you hop from one to the next. Last, the plunge and the final
- * failing bridge to the finish.
+ * whose slabs all fall at once while you hop from one to the next. Below the Cascade the lower
+ * gorge goes on: a third pillar, terraces, and a second wall chain over the void. Last, the plunge
+ * and the final failing bridge to the finish.
  * Home universe: Ink. Main line heads +Z down x = 0; a hidden ledge runs left of the chute.
  */
 import { LevelBuilder } from '../LevelBuilder';
@@ -13,7 +14,8 @@ import type { LevelData } from '../types';
 
 const C = -22; // the gorge floor
 const K = C - 25; // below the Cascade
-const F = K - 8; // the pool at the bottom
+const W = K - 8; // the lower gorge's wall chain
+const F = W - 8; // the pool at the bottom
 
 export function build(): LevelData {
   const b = new LevelBuilder();
@@ -117,17 +119,44 @@ export function build(): LevelData {
   b.plat(0, K, 467, 12, 24); // 455..479
   b.checkpoint(0, K, 459);
 
+  // ===== G. The lower gorge (a third pillar, terraces, a second wall chain) ====================
+  // (1) a third pillar topples across as you come off the Cascade
+  b.plat(0, K, 499, 12, 40); // 479..519
+  b.trigger([0, K + 1.5, 484], [12, 4, 2], 'pillar3');
+  pillar(b, 'pillar3', 519, 540.5, { warn: 0.8, t: 1.4 }, K);
+  b.prompt(
+    [0, K + 1.5, 470],
+    [12, 4, 8],
+    'forward',
+    'Still going down. Another pillar is about to fall your way',
+  );
+  b.plat(0, K, 550.5, 10, 20); // 540.5..560.5
+  b.checkpoint(0, K, 543);
+  // (2) two more terraces, a storey each
+  b.plat(0, K - 4, 570.5, 8, 12); // 564.5..576.5
+  b.plat(0, W, 590.25, 8, 19.5); // 580.5..600
+  b.checkpoint(0, W, 584);
+  // (3) a second wall chain over the void (section D, 406 m on and 33 m down)
+  b.wall(3.0, W - 2, 606, 0.8, 8, 22); // 595..617
+  b.plat(0, W, 624.5, 10, 14); // 617.5..631.5
+  b.checkpoint(0, W, 621);
+  b.wall(-3.0, W - 2, 637, 0.8, 9, 21); // 626.5..647.5
+  b.wall(3.0, W - 2, 652.5, 0.8, 9, 14); // 645.5..659.5
+  b.plat(0, W, 669.5, 10, 16); // 661.5..677.5
+  b.checkpoint(0, W, 665);
+  b.prompt([0, W + 1.5, 592], [8, 4, 6], 'jump', 'One more crossing over the void: walls, then down');
+
   // ===== F. The plunge and the last bridge ======================================================
-  b.ramp([0, K, 479], [0, F, 503], 8);
-  b.plat(0, F, 517, 8, 28); // 503..531
-  b.checkpoint(0, F, 506.5, Math.PI, [7, 6, 2]);
+  b.ramp([0, W, 677.5], [0, F, 701.5], 8);
+  b.plat(0, F, 715.5, 8, 28); // 701.5..729.5
+  b.checkpoint(0, F, 705, Math.PI, [7, 6, 2]);
   for (let i = 0; i < 5; i++)
-    b.entity({ type: 'collapse', p: [0, F - 0.3, 534 + i * 6], s: [6, 0.6, 5.8], delay: 0.9 });
-  b.collectible('i3', 0, F + 1.4, 546.5);
-  b.prompt([0, F + 1.5, 531.5], [8, 4, 5], 'jump', 'The bridge is going: double jump the last gap');
-  b.plat(0, F, 575.5, 12, 16); // 567.5..583.5
-  b.finish(0, F, 577.5, 10);
-  b.gate(0, F, 583, 10, 8);
+    b.entity({ type: 'collapse', p: [0, F - 0.3, 732.5 + i * 6], s: [6, 0.6, 5.8], delay: 0.9 });
+  b.collectible('i3', 0, F + 1.4, 745);
+  b.prompt([0, F + 1.5, 730], [8, 4, 5], 'jump', 'The bridge is going: double jump the last gap');
+  b.plat(0, F, 774, 12, 16); // 766..782
+  b.finish(0, F, 776, 10);
+  b.gate(0, F, 781.5, 10, 8);
 
   scenery(b);
 
@@ -171,14 +200,34 @@ export function build(): LevelData {
     [0, C - 18, 440, undefined, 30],
     [0, C - 23, 450, undefined, 30],
     [0, K, 462, undefined, 3],
-    [0, K, 479.5, 's'],
-    [0, F, 505],
-    [0, F, 522, 'u'],
-    [0, F, 529.5],
-    [0, F, 547.5],
-    [0, F, 559.7, 'jj', 0.8],
-    [0, F, 572.5],
-    [0, F, 577.5],
+    [0, K, 499],
+    [0, K, 518, 'w', 0.8],
+    [0, K, 530],
+    [0, K, 548],
+    [0, K, 559.7, 'j', 0.8],
+    [0, K - 4, 570],
+    [0, K - 4, 575.7, 'j', 0.8],
+    [0, W, 586],
+    [1.7, W, 595.5],
+    [1.7, W, 598.9, 'j', 0.8],
+    [2.2, W + 1, 606.5],
+    [2.2, W + 1, 612.5, 'wj'],
+    [0, W, 622.5],
+    [-1.7, W, 626.5],
+    [-1.7, W, 630.7, 'j', 0.8],
+    [-2.2, W + 1, 637.5],
+    [-2.2, W + 1, 643.5, 'wj'],
+    [2.2, W + 1, 650.5],
+    [2.2, W + 1, 656.5, 'wj'],
+    [0, W, 666.5],
+    [0, W, 677, 's'],
+    [0, F, 703.5],
+    [0, F, 720.5, 'u'],
+    [0, F, 728.0],
+    [0, F, 746.0],
+    [0, F, 758.2, 'jj', 0.8],
+    [0, F, 771.0],
+    [0, F, 774.5],
   );
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('relic', 1.5, 0, 8);
@@ -192,24 +241,35 @@ export function build(): LevelData {
   b.breakable('relic', -1.5, C, 285);
   b.breakable('relic', -1.5, C, 384);
   b.breakable('column', 1.5, K, 470);
-  b.breakable('relic', -1.5, F, 512.5);
-  b.breakable('column', 1.5, F, 525.5);
-  b.breakable('relic', -1.5, F, 573.5);
+  b.breakable('relic', -1.5, F, 711.0);
+  b.breakable('column', 1.5, F, 724.0);
+  b.breakable('relic', -1.5, F, 770.5);
+  b.breakable('relic', 1.5, K, 505);
+  b.breakable('column', -1.5, K, 553);
+  b.breakable('relic', 1.5, W, 627);
+  b.breakable('column', 1.5, W, 668);
   return b.data;
 }
 
 /**
  * A brush-stroke pillar rooted at the near deck's edge (z0). When `event` fires it topples forward
- * and lies across the gap as the bridge, flush with both decks (top surface at C, reaching z1).
+ * and lies across the gap as the bridge, flush with both decks (top surface at y, reaching z1).
  */
-function pillar(b: LevelBuilder, event: string, z0: number, z1: number, o: { warn: number; t: number }) {
+function pillar(
+  b: LevelBuilder,
+  event: string,
+  z0: number,
+  z1: number,
+  o: { warn: number; t: number },
+  y = C,
+) {
   const z = z0,
     len = z1 - z0;
   b.entity({
     type: 'structure',
     id: event,
     on: event,
-    p: [0, C - 2, z],
+    p: [0, y - 2, z],
     warn: o.warn,
     steps: [{ t: o.t, rot: [1, 0, 0, 90], ease: 'in' }],
     parts: [
@@ -218,12 +278,12 @@ function pillar(b: LevelBuilder, event: string, z0: number, z1: number, o: { war
       { p: [0, len * 0.3, -2.02], s: [0.5, len * 0.5, 0.04], mat: 'dark' }, // a crack running up its face
     ],
   });
-  b.plat(0, C - 3, z, 6, 6, { h: 30, mat: 'dark', dress: false }); // its footing
+  b.plat(0, y - 3, z, 6, 6, { h: 30, mat: 'dark', dress: false }); // its footing
 }
 
 function scenery(b: LevelBuilder) {
   // gorge walls: tall brush-stroke cliffs either side, stepping down with the route
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 41; i++) {
     const z = -10 + i * 20;
     const top = 10 - i * 2;
     for (const side of [-1, 1]) {
@@ -232,7 +292,7 @@ function scenery(b: LevelBuilder) {
     }
   }
   // the falls themselves: pale strips pouring off the left cliff
-  for (let i = 0; i < 6; i++) b.strip([-17, -20, 40 + i * 55], [3, 60, 0.3], 0.5);
-  for (let i = 0; i < 44; i++)
+  for (let i = 0; i < 9; i++) b.strip([-17, -20 - i * 3, 40 + i * 55], [3, 60, 0.3], 0.5);
+  for (let i = 0; i < 60; i++)
     b.shard(((i * 29) % 40) - 20, 6 - i * 1.2, i * 13, 0.8 + (i % 3) * 0.5, i % 5 ? 'base' : 'accent', 0.5);
 }

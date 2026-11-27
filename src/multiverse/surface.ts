@@ -412,10 +412,9 @@ vec3 mvPaintedStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
   return mvMarks(lit, pal[3], pal[5], vec3(0.12, 0.08, 0.14), 0.7);
 }
 
-// ---------- 9: REALITY CORRUPTION. A level whose data is failing ----------
+// ---------- 9: REALITY CORRUPTION. A level whose data is failing (steady: no flicker) ----------
 vec3 mvCorruptStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
-  float tick = floor(uTime * 7.0);
-  float slow = floor(uTime * 1.3);
+  // a level whose data is failing, rendered steadily: nothing here flickers or moves
   vec3 n = normalize(vWNormal);
   // untextured debug look: grey shaded geometry with a measurement grid
   float lum = dot(base, vec3(0.299, 0.587, 0.114));
@@ -424,30 +423,17 @@ vec3 mvCorruptStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
   float grid = max(mvLine(mvU, 0.012), mvLine(mvV, 0.012)) * fine * mvBox;
   float grid5 = max(mvLine(mvU / 5.0, 0.006), mvLine(mvV / 5.0, 0.006)) * mvBox;
   c = mix(c, vec3(0.85, 0.95, 1.0), grid * 0.22 + grid5 * 0.55);
-  // chunks of surface have lost their texture: the classic magenta/black checker
+  // chunks of surface have lost their texture: the classic magenta/black checker (fixed in place)
   vec3 chunk = floor(vWPos / 4.0);
-  float lost = step(0.86, mvHash(chunk + slow * 0.37)) * (1.0 - mvWalk * 0.75);
+  float lost = step(0.86, mvHash(chunk)) * (1.0 - mvWalk * 0.75);
   float chk = mod(floor(mvU * 2.0) + floor(mvV * 2.0), 2.0);
   c = mix(c, mix(vec3(0.02), vec3(1.0, 0.0, 0.86), chk), lost * mvBox);
-  // other chunks show raw memory: columns of flickering bytes
-  float mem = step(0.9, mvHash(chunk * 1.7 + 11.0 + floor(uTime * 0.6))) * (1.0 - mvWalk);
-  vec2 by = floor(vec2(mvU * 5.0, mvV * 3.0 + tick * 0.5));
-  float byte = step(0.5, mvH2(by + chunk.xz));
-  c = mix(c, vec3(0.1, 1.0, 0.45) * byte * 1.2, mem * mvBox * fine);
-  // horizontal tears: bands of the world are colour-shifted and offset
-  float band = floor(vWPos.y * 2.3 + tick * 0.13);
-  float tear = step(0.93, mvHash(vec3(band, tick, 3.0)));
-  c = mix(c, c.gbr * 1.4 + vec3(0.0, 0.2, 0.3), tear * 0.8);
-  // z-fighting shimmer on big faces
-  float zf = step(0.5, fract(gl_FragCoord.y * 0.25 + tick * 0.5)) * step(0.95, mvHash(chunk + 5.0 + slow));
-  c = mix(c, vec3(0.0), zf * 0.6 * (1.0 - mvWalk));
   // edges: RGB-split wireframe
   if (mvBox > 0.5) {
     float w = max(0.03, mvPx * 1.3);
-    float jitter = (mvH2(vec2(band, tick)) - 0.5) * 0.08;
-    float r = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.05 + jitter));
+    float r = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.05));
     float g = 1.0 - smoothstep(w, w + mvPx, mvEdge);
-    float b = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.1 - jitter));
+    float b = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.1));
     c = mix(c, vec3(1.6, 0.1, 0.2), r * 0.7 * mvTiny);
     c = mix(c, vec3(0.1, 0.4, 1.6), b * 0.7 * mvTiny);
     c = mix(c, vec3(1.5), g * mvTiny);

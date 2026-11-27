@@ -47,7 +47,22 @@ import { Runner } from '../character/Runner';
 import { moveStateNames } from '../movement/types';
 import { applyLayouts, deleteGhost, ghostKey, loadGhost, saveGhost, SaveSystem } from '../save/SaveSystem';
 import { motionProfile, type MotionProfile, type Settings } from '../settings/settings';
-import { ui } from './store';
+import { ui, type EvoHud } from './store';
+import { EvoView } from '../render/EvoView';
+import { ABILITIES, FLOW_NAMES, FLOW_TIERS, T as EVO_T, SYNERGIES } from '../evolution/abilities';
+import { KINDS, type Rarity } from '../evolution/collectibles';
+import type { Slot } from '../evolution/slots';
+
+const SLOT_FILES = import.meta.glob('../evolution/slots/*.json', { import: 'default' }) as Record<
+  string,
+  () => Promise<Slot[]>
+>;
+const loadSlots = async (id: string): Promise<Slot[]> =>
+  (await SLOT_FILES[`../evolution/slots/${id}.json`]?.()) ?? [];
+const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, mythic: 3 };
+/** Flow tier colours for the energy wisps (tier 1..4). */
+const FLOW_COLORS = [0x7ff3ff, 0x7ff3ff, 0x9dff7a, 0xffb547, 0xff5cf0];
+const FLOW_COLS = FLOW_COLORS.map((c) => new THREE.Color(c));
 
 type Mode = 'idle' | 'menu' | 'loading' | 'ready' | 'playing' | 'paused' | 'results';
 
@@ -209,6 +224,14 @@ export class Game {
     ui.getState().set({ saveRev: ui.getState().saveRev + 1 });
   }
 
+  /** Evolve / Pure from the ready card: the level is rebuilt in the chosen mode. */
+  async setGameMode(mode: Settings['gameMode']) {
+    if (this.settings.gameMode === mode) return;
+    this.updateSettings({ gameMode: mode });
+    const id = this.meta?.id;
+    if (id && (this.mode === 'ready' || this.mode === 'paused')) await this.loadLevel(id);
+  }
+
   private applySettings() {
     const s = this.settings;
     this.motion = motionProfile(s);
@@ -301,6 +324,14 @@ export class Game {
   private clearLevel() {
     this.view?.dispose();
     this.view = null;
+    this.evoView?.dispose();
+    this.evoView = null;
+    this.evoHudPrev = null;
+    this.body.setGlow(1);
+    if (this.evoTint >= 0) {
+      this.evoTint = -1;
+      this.body.setAccent(cosmeticFor(this.save.data, 'suit').color);
+    }
     this.breaks?.dispose();
     this.breaks = null;
     this.scenery?.dispose();
@@ -393,6 +424,187 @@ export class Game {
     if (this.flowCount === 3 || this.flowCount === 5 || this.flowCount === 8 || this.flowCount === 12) {
       ui.getState().call('flow', 'Flow ×' + this.flowCount);
       this.flowKick = Math.min(1, 0.45 + this.flowCount * 0.05);
+    }
+  }
+
+  // =====================================================================================
+  // Evolve mode
+  // =====================================================================================
+  private evoView: EvoView | null = null;
+  private evoHudPrev: EvoHud | null = null;
+  private evoHudT = 0;
+  private wispT = 0;
+  /** Tests / debugging: seed for the next Evolve runs (null = a fresh random one each load). */
+  evoSeed: number | null = null;
+
+  /** HUD snapshot for Evolve (the same object while nothing visible changed). */
+  private evoHud(force: boolean): EvoHud | null {
+    const evo = this.sim?.evo;
+    if (!evo) return null;
+    const prev = this.evoHudPrev;
+    if (!force && prev && this.time - this.evoHudT < 0.08) return prev;
+    const h = evo.hud();
+    const lo = FLOW_TIERS[h.tier],
+      hi = FLOW_TIERS[h.tier + 1] ?? 120;
+    const next: EvoHud = {
+      flux: Math.round(h.flux),
+      tier: h.tier,
+      flowFrac: Math.round(Math.min(1, Math.max(0, (h.flow - lo) / (hi - lo))) * 20) / 20,
+      stage: h.stage,
+      surge: Math.round(h.surge * 10) / 10,
+      surgeMax: h.surgeMax,
+      reflex: Math.round(h.reflex * 10) / 10,
+      aegis: Math.round(h.aegis * 20) / 20,
+      chain: h.chain,
+      chainLeft: Math.round(h.chainLeft * 10) / 10,
+      canSurge:
+        evo.level('timeslip') > 0 &&
+        (h.flux >= EVO_T.timeslipCost || (evo.level('chrono') > 0 && h.tier >= 3)),
+      abilities: h.abilities,
+      synergies: h.synergies.map((id) => SYNERGIES.find((s) => s.id === id)!.name),
+    };
+    this.evoHudT = this.time;
+    if (prev && JSON.stringify(prev) === JSON.stringify(next)) return prev;
+    this.evoHudPrev = next;
+    return next;
+  }
+
+  /** Evolve feedback: pickups, upgrades, synergies, Surge, the shield, shockwaves, Flow tiers. */
+  private wireEvo(sim: Simulation) {
+    const evo = sim.evo;
+    if (!evo) return;
+    const pl = sim.player;
+    const audio = this.audio;
+    const store = () => ui.getState();
+    evo.events.on('pickup', ({ index, kind }) => {
+      const it = evo.items[index];
+      const def = KINDS[kind];
+      const rank = RARITY_RANK[def.rarity];
+      audio.evoPickup(rank);
+      _v.set(it.p[0], it.p[1], it.p[2]);
+      const col = new THREE.Color(
+        rank === 0 ? 0x7ff3ff : rank === 1 ? 0x9dff7a : rank === 2 ? 0xffb547 : 0xff5cf0,
+      );
+      this.glints(_v, this.count(rank === 0 ? 3 : 8 + rank * 4), 2 + rank, 0.3 + rank * 0.12, col, 1);
+      if (rank >= 2 && (kind !== 'echo' || it.order === 3))
+        store().call('rare', def.name.toUpperCase(), 'Rare find');
+    });
+    evo.events.on('upgrade', ({ id, level, evolution }) => {
+      const def = ABILITIES[id];
+      audio.evoUpgrade(!!evolution);
+      store().call(
+        'evolve',
+        evolution ? evolution.toUpperCase() : `${def.name.toUpperCase()} ${level}`,
+        evolution ? `${def.name} ${level}` : def.levels[level - 1],
+      );
+      this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, evolution ? 0.35 : 0.15);
+    });
+    evo.events.on('synergy', ({ name, id }) => {
+      audio.evoSynergy();
+      store().call('synergy', name.toUpperCase(), SYNERGIES.find((s) => s.id === id)!.text);
+      this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.5);
+      _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
+      this.stickers.spawn(_v, new THREE.Color(0xff5cf0), {
+        sprite: Sprite.ring,
+        frames: 2,
+        size: 2,
+        grow: 6,
+        life: 0.7,
+        normal: UP,
+      });
+    });
+    evo.events.on('flowTier', ({ tier, up }) => {
+      if (up && tier >= 2) store().call('flow', FLOW_NAMES[tier].toUpperCase(), `Flow tier ${tier}`);
+      this.flowKick = Math.max(this.flowKick, up ? 0.4 + tier * 0.15 : 0);
+    });
+    evo.events.on('surge', ({ on }) => {
+      audio.evoSurge(on);
+      if (on) store().call('evolve', 'SURGE', 'The world slows');
+    });
+    evo.events.on('aegis', ({ kind }) => {
+      if (kind === 'ready') return;
+      audio.evoShield();
+      store().call(
+        'close',
+        kind === 'void' ? 'CAUGHT' : 'SHIELDED',
+        kind === 'void' ? 'Aegis pulled you back' : 'Aegis took the hit',
+      );
+      this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.45);
+    });
+    evo.events.on('reflex', () => store().call('close', 'REFLEX', 'Time slows'));
+    evo.events.on('chain', ({ node, failed }) => {
+      if (failed) store().call('close', 'CHAIN LOST', 'The echo faded: start again from the first node');
+      else if (node > 0 && node < 4) store().call('rare', `ECHO ${node}/4`, 'Catch the next node');
+    });
+    evo.events.on('phased', () =>
+      store().call('close', 'PHASED', 'Reach Flow tier 3 to hold a Paradox Core'),
+    );
+    evo.events.on('shockwave', ({ x, y, z, r, kind }) => {
+      audio.evoShock();
+      _v.set(x, kind === 'crescent' ? y : y - 0.85, z);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: Sprite.ring,
+        frames: 2,
+        size: 1,
+        grow: r * 2,
+        life: 0.4,
+        normal: UP,
+      });
+    });
+    evo.events.on('boost', ({ kind }) => {
+      if (kind === 'slingshot') store().call('evolve', 'SLINGSHOT');
+      else if (kind === 'surge') store().call('flow', 'WALL SURGE');
+      this.flowKick = Math.max(this.flowKick, 0.6);
+    });
+    evo.events.on('overflow', () => store().call('evolve', 'OVERFLOW', 'Full Flux became an upgrade'));
+  }
+
+  private evoTint = -1;
+  private slowFx = 0;
+  /**
+   * The runner's look follows the run: trims glow brighter with each evolution stage, take the
+   * Flow tier's colour from tier 2, and energy wisps stream past the view with Flow. While the
+   * world is slowed the screen takes a steady cool grade.
+   */
+  private evoVisuals(dt: number) {
+    const evo = this.sim?.evo;
+    const fx = this.renderer.universeFx;
+    this.slowFx += ((evo && evo.worldScale < 1 ? 1 : 0) - this.slowFx) * Math.min(1, dt * 6);
+    fx.slow = this.slowFx * (this.motion.screenFx ? 1 : 0.5);
+    if (!evo) return;
+    const pl = this.sim!.player;
+    const tier = evo.flowTier,
+      stage = evo.stage;
+    this.body.setGlow(1 + stage * 0.6 + tier * 0.25 + (evo.surgeLeft > 0 ? 1 : 0));
+    const tint = tier >= 2 ? FLOW_COLORS[tier] : -1;
+    if (tint !== this.evoTint) {
+      this.evoTint = tint;
+      this.body.setAccent(tint >= 0 ? tint : cosmeticFor(this.save.data, 'suit').color);
+    }
+    this.wispT -= dt;
+    if ((tier >= 1 || stage >= 2) && pl.speed > 5 && this.wispT <= 0 && this.settings.particles > 0) {
+      this.wispT = 0.12 / (1 + tier * 0.6 + stage * 0.3);
+      // in the first person the body is behind the eye: wisps start ahead and to the sides of
+      // the view and stream back past it, so the runner sees their own energy
+      const e = this.rig.eye;
+      const fx0 = -Math.sin(this.input.yaw),
+        fz0 = -Math.cos(this.input.yaw);
+      const s = Math.sin(this.time * 37.3);
+      const side = s > 0 ? 1 : -1;
+      _v.set(
+        e.x + fx0 * 2.2 - fz0 * side * (0.7 + Math.abs(s) * 0.6),
+        e.y - 0.5 + Math.abs(Math.sin(this.time * 23.1)) * 0.9,
+        e.z + fz0 * 2.2 + fx0 * side * (0.7 + Math.abs(s) * 0.6),
+      );
+      _w.set(pl.vel.x * 0.55, 0.3, pl.vel.z * 0.55);
+      this.stickers.spawn(_v, FLOW_COLS[Math.max(1, tier)], {
+        sprite: Sprite.glint,
+        size: 0.1 + stage * 0.025 + tier * 0.02,
+        grow: 0.2,
+        life: 0.3 + tier * 0.04,
+        vel: _w,
+        drag: 0.5,
+      });
     }
   }
 
@@ -577,7 +789,16 @@ export class Game {
       this.meta = entry.meta;
       this.data = data;
       this.setEnv(entry.meta.env);
-      this.sim = new Simulation(entry.meta, data);
+      const evolve =
+        this.settings.gameMode === 'evolve'
+          ? { seed: this.evoSeed ?? (Math.random() * 2 ** 31) >>> 0, slots: await loadSlots(id) }
+          : undefined;
+      if (token !== this.loadToken) return;
+      this.sim = new Simulation(entry.meta, data, { evolve });
+      if (this.sim.evo) {
+        this.evoView = new EvoView(this.sim.evo);
+        this.renderer.scene.add(this.evoView.group);
+      }
       this.beginMultiverse(id, data.checkpoints.length - 1);
       const owned = new Set(this.save.record(id).collectibles);
       this.view = new LevelView(data, this.env, this.sim, owned);
@@ -715,6 +936,7 @@ export class Game {
     const pl = sim.player,
       ev = pl.events,
       audio = this.audio;
+    this.wireEvo(sim);
     const feet = () => _v.set(pl.pos.x, pl.pos.y + 0.04, pl.pos.z);
     // a spot on the ground a moment ahead: where a first-person player actually sees a decal
     const ahead = (t: number) => _v.set(pl.pos.x + pl.vel.x * t, pl.pos.y + 0.04, pl.pos.z + pl.vel.z * t);
@@ -963,7 +1185,8 @@ export class Game {
       audio.checkpoint();
       _n.set(-Math.sin(this.input.yaw), 0, -Math.cos(this.input.yaw));
       this.multiverse.checkpoint(index, _v.set(pl.pos.x, pl.pos.y, pl.pos.z), _n);
-      const best = this.save.record(sim.meta.id).splits[index];
+      // split deltas compare Pure runs only (an upgraded run is not the same race)
+      const best = sim.evo ? undefined : this.save.record(sim.meta.id).splits[index];
       ui.getState().fire(
         'checkpoint',
         `CHECKPOINT ${index}/${sim.data.checkpoints.length - 1}`,
@@ -1269,7 +1492,23 @@ export class Game {
 
   private showResults() {
     const sim = this.sim!;
-    const res = finishRun(this.save, sim.meta, sim.data, sim.stats);
+    const evo = sim.evo;
+    const res = finishRun(
+      this.save,
+      sim.meta,
+      sim.data,
+      sim.stats,
+      evo
+        ? {
+            pickups: evo.stats.pickups,
+            byKind: evo.stats.byKind,
+            peakTier: evo.stats.peakTier,
+            stage: evo.stage,
+            abilities: evo.hud().abilities.map((a) => ({ name: a.name, level: a.level, max: a.max })),
+            synergies: [...evo.synergies].map((id) => SYNERGIES.find((s) => s.id === id)!.name),
+          }
+        : undefined,
+    );
     if (res.isRecord) {
       // the new best becomes the ghost straight away, and is stored for next time
       const run = this.recorder.toArray();
@@ -1305,7 +1544,13 @@ export class Game {
     if (this.finishDelay >= 0) {
       // run is over: let the player coast, ignore input
       inp.moveX = inp.moveZ = 0;
-      inp.jumpPressed = inp.dashPressed = inp.slidePressed = inp.attackPressed = inp.swordPressed = false;
+      inp.jumpPressed =
+        inp.dashPressed =
+        inp.slidePressed =
+        inp.attackPressed =
+        inp.swordPressed =
+        inp.surgePressed =
+          false;
     }
     sim.tick(inp);
     // Phase G: a gravity round trip folded its leftover turn into the look; keep the view still
@@ -1453,6 +1698,8 @@ export class Game {
     this.body.update(pl, this.rig.feet, this.gait, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
+    this.evoView?.update(this.time);
+    this.evoVisuals(dt);
     const sw = sim.sword;
     this.slash.update(dt, sw.serial, sw.phase === SwordPhase.Attack ? sw.t + alpha * SIM_DT : -1);
 
@@ -1800,8 +2047,10 @@ export class Game {
     };
     const hold = this.restartHold >= 0 ? Math.min(1, this.restartHold / 0.6) : -1;
     const ps = prev.sword;
+    const evo = this.evoHud(force);
     if (
       !force &&
+      evo === prev.evo &&
       prev.time === time &&
       prev.speed === pl.speed &&
       prev.dash === pl.dashEnergy &&
@@ -1827,6 +2076,8 @@ export class Game {
         checkpoints: Math.max(0, sim.data.checkpoints.length - 1),
         sword: swordHud,
         restartHold: hold,
+        dashMax: pl.cfg.dashCharges,
+        evo,
       },
     });
     this.maybeSwordHint(sim);
@@ -1885,6 +2136,7 @@ export class Game {
       slide: boolean;
       attack: boolean;
       sword: boolean;
+      surge: boolean;
     }> = {},
   ) {
     if (!this.sim) return;
@@ -1903,6 +2155,7 @@ export class Game {
         dashPressed: !!keys.dash && i === 0,
         attackPressed: !!keys.attack && i === 0,
         swordPressed: !!keys.sword && i === 0,
+        surgePressed: !!keys.surge && i === 0,
       });
     }
   }
@@ -1932,6 +2185,7 @@ export class Game {
       slide: boolean;
       attack: boolean;
       sword: boolean;
+      surge: boolean;
     }>,
   ) {
     const sim = this.sim;
@@ -1957,6 +2211,7 @@ export class Game {
           dashPressed: false,
           attackPressed: !!keys.attack && i === 0,
           swordPressed: !!keys.sword && i === 0,
+          surgePressed: !!keys.surge && i === 0,
         };
       } else {
         inp = bot.step();

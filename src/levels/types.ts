@@ -322,6 +322,11 @@ export interface LevelData {
   finish: { p: Vec3Tuple; s: Vec3Tuple };
   bot: BotPoint[];
   breakables: BreakableDef[];
+  /**
+   * Evolve: hand-placed collectibles (Training's stations). When present they replace the seeded
+   * spawner for this course.
+   */
+  evoItems?: { kind: string; p: [number, number, number]; group?: number; order?: number }[];
 }
 
 export interface LevelMeta {

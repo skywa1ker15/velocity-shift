@@ -1,6 +1,6 @@
 /**
  * Screen-space half of a universe's look: halftone, scanlines, pixel grid, colour fringe, grain,
- * posterising, paper texture, digital glitch and hue drift. One effect covers every universe, so
+ * posterising, paper texture, a transition kick and hue drift. One effect covers every universe, so
  * the post chain never has to be rebuilt (or a shader recompiled) when the world shifts; the
  * director just blends the numbers as the camera crosses the front.
  */
@@ -12,7 +12,8 @@ const frag = /* glsl */ `
 uniform float uRain;
 uniform float uPixelBurst;
 uniform float uFlash;
-uniform float uHalftone, uScan, uPixel, uFringe, uGrain, uPosterize, uPaper, uGlitch, uHueDrift, uT, uBurst;
+uniform float uSlow;
+uniform float uHalftone, uScan, uPixel, uFringe, uGrain, uPosterize, uPaper, uHueDrift, uT, uBurst;
 uniform vec2 uRes;
 float uvH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float uvN(vec2 p) {
@@ -33,8 +34,8 @@ vec3 uvHue(vec3 c, float a) {
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 p = uv;
-  float glitch = uGlitch + uBurst;
-  // digital tearing: rows jump sideways in bursts
+  // a universe transition's momentary kick: rows jump sideways for a moment
+  float glitch = uBurst;
   if (glitch > 0.001) {
     float row = floor(p.y * 38.0);
     float tick = floor(uT * 11.0);
@@ -103,6 +104,14 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     float g = uvH(uv * uRes + fract(uT * 7.0) * 91.7) - 0.5;
     col += g * uGrain * 0.09;
   }
+  // Evolve: while the world is slowed (Surge / Reflex) colour drains toward a cool grade and the
+  // edges darken — steady, never pulsing
+  if (uSlow > 0.001) {
+    float l2 = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(col, vec3(l2) * vec3(0.82, 0.95, 1.12), uSlow * 0.55);
+    float v = length(uv - 0.5);
+    col *= 1.0 - uSlow * 0.45 * smoothstep(0.32, 0.75, v);
+  }
   // a brief lift as the front passes through the lens
   col += uFlash * (0.35 + 0.65 * col);
   // negative channels (hue rotation, grain) would turn into NaN in the output transform
@@ -119,6 +128,8 @@ export class UniverseEffect extends Effect {
   flash = 0;
   /** Scales the harsher treatments (accessibility: reduced flashing). */
   intensity = 1;
+  /** Evolve: 0..1, how strongly the slowed-world grade shows (eased by the game). */
+  slow = 0;
 
   constructor() {
     super('UniverseEffect', frag, {
@@ -128,6 +139,7 @@ export class UniverseEffect extends Effect {
         ['uRain', new Uniform(0)],
         ['uPixelBurst', new Uniform(0)],
         ['uFlash', new Uniform(0)],
+        ['uSlow', new Uniform(0)],
         ['uHalftone', new Uniform(0)],
         ['uScan', new Uniform(0)],
         ['uPixel', new Uniform(0)],
@@ -135,7 +147,6 @@ export class UniverseEffect extends Effect {
         ['uGrain', new Uniform(0)],
         ['uPosterize', new Uniform(0)],
         ['uPaper', new Uniform(0)],
-        ['uGlitch', new Uniform(0)],
         ['uHueDrift', new Uniform(0)],
         ['uT', new Uniform(0)],
         ['uBurst', new Uniform(0)],
@@ -166,7 +177,6 @@ export class UniverseEffect extends Effect {
     u.get('uGrain')!.value = o.grain;
     u.get('uPosterize')!.value = o.posterize;
     u.get('uPaper')!.value = o.paper;
-    u.get('uGlitch')!.value = o.glitch * i;
     u.get('uHueDrift')!.value = o.hueDrift * i;
   }
 
@@ -178,6 +188,7 @@ export class UniverseEffect extends Effect {
     this.uniforms.get('uPixelBurst')!.value = this.pixelBurst > 1.5 ? Math.round(this.pixelBurst) : 0;
     this.flash = Math.max(0, this.flash - dt * 3.2);
     this.uniforms.get('uFlash')!.value = this.flash * this.flash * 0.5 * this.intensity;
+    this.uniforms.get('uSlow')!.value = this.slow;
   }
 
   override setSize(width: number, height: number) {

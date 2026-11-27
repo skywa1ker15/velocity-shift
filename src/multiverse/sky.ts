@@ -408,24 +408,19 @@ vec3 skyPainted(vec3 d, vec3 k[4]) {
   return col;
 }
 
-// ---------- 9: REALITY CORRUPTION. The skybox is failing to load ----------
+// ---------- 9: REALITY CORRUPTION. The skybox is failing to load (steady: no flicker) ----------
 vec3 skyCorrupt(vec3 d, vec3 k[4]) {
-  float tick = floor(uTime * 6.0);
-  float slow = floor(uTime * 0.8);
   float h = d.y;
   float az = atan(d.x, d.z);
-  // rows of the sky slide sideways
-  float row = floor(h * 30.0);
-  az += step(0.9, hash(vec2(row, tick))) * (hash(vec2(tick, row)) - 0.5) * 0.6;
   // a banded, low bit-depth gradient
   vec3 col = mix(k[1], k[0], floor(clamp(h * 1.4, 0.0, 1.0) * 6.0) / 6.0);
   col = mix(col, k[2], 1.0 - step(0.0, h));
-  // the sky is a grid of tiles; some never loaded (black, or static), some show the wrong texture
+  // the sky is a grid of tiles; some never loaded (black, or frozen noise), some show the wrong texture
   vec2 tg = vec2(az * 7.0, h * 9.0);
   vec2 tc = floor(tg);
   vec2 tf = fract(tg);
-  float tr = hash(tc + slow * 0.13);
-  float staticN = hash(floor(tf * 22.0) + tick + tc);
+  float tr = hash(tc);
+  float staticN = hash(floor(tf * 22.0) + tc);
   col = mix(col, vec3(0.0), step(0.8, tr));
   col = mix(col, vec3(staticN) * vec3(0.8, 0.95, 1.0), step(0.9, tr));
   float chk = mod(floor(tf.x * 6.0) + floor(tf.y * 6.0), 2.0);
@@ -433,18 +428,17 @@ vec3 skyCorrupt(vec3 d, vec3 k[4]) {
   // tile seams glow like a wireframe
   float seam = 1.0 - smoothstep(0.0, 0.02, min(min(tf.x, tf.y), min(1.0 - tf.x, 1.0 - tf.y)));
   col += vec3(0.1, 0.9, 1.0) * seam * 0.35;
-  // a sun that cannot decide where it is: three offset ghosts in R, G and B
+  // a sun split into three offset ghosts in R, G and B
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
-    vec3 off = vec3(sin(tick * 1.7 + fi * 2.0), 0.0, cos(tick * 1.3 + fi)) * 0.03 * step(0.6, hash(vec2(tick, fi)));
+    vec3 off = vec3(sin(fi * 2.0), 0.0, cos(fi)) * 0.02;
     float sdn = dot(d, normalize(uSunDir + off));
     vec3 ch = vec3(fi == 0.0 ? 1.0 : 0.0, fi == 1.0 ? 1.0 : 0.0, fi == 2.0 ? 1.0 : 0.0);
     col += ch * step(0.9965, sdn) * 1.3;
   }
-  // a vertical tear where another universe shows through as raw colour bars
-  float tearX = fract(az * 0.5 + slow * 0.37);
-  float tear = step(tearX, 0.035) * step(0.5, hash(vec2(slow, 2.0)));
-  col = mix(col, skyHsv(floor(h * 14.0 + tick) * 0.14, 0.9, 1.0), tear * step(0.0, h));
+  // a fixed vertical tear where another universe shows through as raw colour bars
+  float tear = step(fract(az * 0.5 + 0.37), 0.035);
+  col = mix(col, skyHsv(floor(h * 14.0) * 0.14, 0.9, 1.0), tear * step(0.0, h));
   return col;
 }
 

@@ -250,6 +250,15 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
                 ['classic', 'Classic look'],
               ])}
             </Row>
+            <Row
+              label="Game mode"
+              hint="Evolve: collectibles and upgrades grow during each run. Pure: the course alone — medals, ghosts and personal bests come from Pure runs. Takes effect on the next level load."
+            >
+              {select('gameMode', [
+                ['evolve', 'Evolve'],
+                ['pure', 'Pure'],
+              ])}
+            </Row>
             <Row label="Show personal-best ghost">{toggle('ghost')}</Row>
             <Row label="Speedometer">{toggle('showSpeed')}</Row>
             <Row label="Movement indicators" hint="Double jump, wall-run timer, slide">

@@ -353,6 +353,46 @@ export class AudioEngine {
   collect() {
     [880, 1175, 1568].forEach((f, i) => this.tone('ui', 'triangle', f, f, 0.16, 0.16, i * 0.06));
   }
+  /** Evolve: a pickup, pitched by rarity (0 common .. 3 mythic). Glints are a quiet tick. */
+  evoPickup(rarity: number) {
+    if (rarity === 0) {
+      this.tone('ui', 'sine', 1760, 2093, 0.06, 0.07);
+      return;
+    }
+    const base = [0, 784, 988, 1175][rarity];
+    [1, 1.25, 1.5, rarity >= 2 ? 2 : 0].forEach(
+      (k, i) => k && this.tone('ui', 'triangle', base * k, base * k, 0.18, 0.14, i * 0.05),
+    );
+  }
+  /** Evolve: an ability level gained (an evolution rings longer). */
+  evoUpgrade(evolution: boolean) {
+    this.tone('ui', 'sine', 523, 1047, 0.25, 0.14);
+    if (evolution) {
+      this.tone('ui', 'triangle', 1319, 1319, 0.5, 0.14, 0.12);
+      this.burst('ui', 'highpass', 2500, 8000, 0.5, 0.08, 0.1, 0.25);
+    }
+  }
+  /** Evolve: two abilities lock together. */
+  evoSynergy() {
+    [523, 784, 1047, 1568].forEach((f, i) => this.tone('ui', 'sine', f, f, 0.45, 0.14, i * 0.07));
+    this.tone('sfx', 'sawtooth', 110, 220, 0.5, 0.08);
+  }
+  /** Evolve: Surge on (the world slows) / off. */
+  evoSurge(on: boolean) {
+    if (on) {
+      this.tone('sfx', 'sine', 440, 110, 0.6, 0.18);
+      this.burst('sfx', 'lowpass', 1200, 200, 0.6, 0.2, 0.4);
+    } else this.tone('sfx', 'sine', 110, 440, 0.3, 0.12);
+  }
+  /** Evolve: the shield takes a hit, or a shockwave goes off. */
+  evoShield() {
+    this.tone('sfx', 'square', 880, 330, 0.25, 0.12);
+    this.burst('sfx', 'bandpass', 2000, 600, 0.3, 0.2, 0.25);
+  }
+  evoShock() {
+    this.tone('sfx', 'sawtooth', 90, 40, 0.4, 0.2);
+    this.burst('sfx', 'lowpass', 800, 150, 0.4, 0.3, 0.4);
+  }
   finish(medal: number) {
     const base = [523, 659, 784, 1047];
     base.forEach((f, i) => this.tone('ui', 'triangle', f, f, 0.5, 0.2, i * 0.1));

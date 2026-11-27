@@ -899,3 +899,199 @@ html[data-universe='psyche'] .hud-tl {
     animation: none;
   }
 }
+
+/* ---------- Evolve: ability rail, Flux / Flow, timers ---------- */
+.evo-rail {
+  position: absolute;
+  left: 1.6vw;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 0.3em;
+  text-shadow: var(--ol);
+  max-height: 60vh;
+}
+.evo-rail .ab {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-size: 0.8em;
+}
+.evo-rail .ab b {
+  display: grid;
+  place-items: center;
+  width: 2.1em;
+  height: 1.55em;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  color: #0a0c14;
+  background: var(--cat, #7ff3ff);
+  clip-path: polygon(14% 0, 100% 0, 86% 100%, 0 100%);
+  text-shadow: none;
+}
+.evo-rail .ab.mv {
+  --cat: #7ff3ff;
+}
+.evo-rail .ab.cb {
+  --cat: #ff8a5c;
+}
+.evo-rail .ab.sv {
+  --cat: #9dff7a;
+}
+.evo-rail .ab.sp {
+  --cat: #ffd35c;
+}
+.evo-rail .ab.my {
+  --cat: #ff5cf0;
+}
+.evo-rail .lv {
+  display: flex;
+  gap: 2px;
+}
+.evo-rail .lv i {
+  width: 0.42em;
+  height: 0.42em;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 1px rgba(4, 5, 9, 0.5);
+  transform: skewX(-20deg);
+}
+.evo-rail .lv i.on {
+  background: var(--cat, #fff);
+  box-shadow: 0 0 6px var(--cat, #fff);
+}
+.evo-rail .syn {
+  margin-top: 0.2em;
+  font-size: 0.6em;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ff9cf6;
+  font-weight: 700;
+}
+.evo-meters {
+  display: grid;
+  justify-items: end;
+  gap: 0.35em;
+  margin-top: 0.2em;
+}
+.evo-meters .flux,
+.evo-meters .flow {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.evo-meters span {
+  font-size: 0.58em;
+  letter-spacing: 0.26em;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.evo-meters .bar {
+  position: relative;
+  width: 8.4em;
+  height: 0.45em;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 1px rgba(4, 5, 9, 0.5);
+  transform: skewX(-25deg);
+}
+.evo-meters .bar i {
+  position: absolute;
+  inset: 0;
+  background: #7ff3ff;
+  box-shadow: 0 0 10px #7ff3ff;
+  transform-origin: left;
+}
+.evo-meters .bar u {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgba(4, 5, 9, 0.85);
+}
+.evo-meters .flux.ready .bar i {
+  background: #ffd35c;
+  box-shadow: 0 0 12px #ffd35c;
+}
+.evo-meters .surge-key {
+  font-size: 0.6em;
+}
+.evo-meters .segs {
+  display: flex;
+  gap: 3px;
+}
+.evo-meters .segs i {
+  position: relative;
+  width: 1.9em;
+  height: 0.45em;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 1px rgba(4, 5, 9, 0.5);
+  transform: skewX(-25deg);
+  overflow: hidden;
+}
+.evo-meters .segs i em {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.55);
+  transform-origin: left;
+}
+.evo-meters .flow.t1 .segs i.on {
+  background: #7ff3ff;
+}
+.evo-meters .flow.t2 .segs i.on {
+  background: #9dff7a;
+}
+.evo-meters .flow.t3 .segs i.on {
+  background: #ffb547;
+  box-shadow: 0 0 8px #ffb547;
+}
+.evo-meters .flow.t4 .segs i.on {
+  background: #ff5cf0;
+  box-shadow: 0 0 10px #ff5cf0;
+}
+.evo-meters .timers {
+  display: flex;
+  gap: 0.6em;
+  font-size: 0.7em;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+}
+.evo-meters .tm b {
+  font-weight: 700;
+}
+.evo-meters .tm.surge {
+  color: #ffd35c;
+}
+.evo-meters .tm.reflex {
+  color: #9dff7a;
+}
+.evo-meters .tm.aegis {
+  color: rgba(255, 255, 255, 0.7);
+}
+.evo-meters .tm.aegis.ready {
+  color: #9dff7a;
+}
+.evo-meters .tm.chain {
+  color: #ffb547;
+}
+.callout.evolve b {
+  color: #7ff3ff;
+}
+.callout.rare b {
+  color: #ffb547;
+}
+.callout.synergy {
+  animation-duration: 2.4s;
+}
+.callout.synergy b {
+  font-size: clamp(16px, 2vw, 26px);
+  color: #ff5cf0;
+  letter-spacing: 0.2em;
+}
+.callout.evolve {
+  animation-duration: 1.7s;
+}
+.callout.rare {
+  animation-duration: 1.5s;
+}

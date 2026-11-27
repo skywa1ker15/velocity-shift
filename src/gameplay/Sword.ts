@@ -242,6 +242,9 @@ export class Sword {
   combo = 0;
   /** Index of the attack in this session (lets the renderer spot a new swing). */
   serial = 0;
+  /** Evolve modifiers (Edge, Reach, Severance, Mirror Edge). 1 and 0 in Pure. */
+  attackSpeed = 1;
+  reachAdd = 0;
   private buffered = false;
   private idle = 0;
   private hitSet = new Set<number>();
@@ -320,7 +323,7 @@ export class Sword {
       return false;
     }
     const prevT = this.t;
-    this.t += dt;
+    this.t += this.phase === SwordPhase.Attack ? dt * this.attackSpeed : dt;
     let opened = false;
     switch (this.phase) {
       case SwordPhase.Sheathed:
@@ -417,7 +420,7 @@ export class Sword {
         dy = tg.y - ey,
         dz = tg.z - ez;
       const dist = Math.hypot(dx, dy, dz);
-      if (dist > s.reach + tg.r || dist < 0.05) continue;
+      if (dist > s.reach + this.reachAdd + tg.r || dist < 0.05) continue;
       dx /= dist;
       dy /= dist;
       dz /= dist;

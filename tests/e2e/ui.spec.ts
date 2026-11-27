@@ -25,10 +25,10 @@ test.afterEach(() => {
 async function boot(page: Page, patch: Record<string, unknown> = {}) {
   await page.goto('/');
   await page.waitForSelector('.title', { timeout: 90_000 });
-  await page.evaluate(
-    (p) => (window as any).__vs.updateSettings({ preset: 'low', tutorials: false, ...p }),
-    patch,
-  );
+  await page.evaluate((p) => {
+    (window as any).__vs.evoSeed = 1; // Evolve layouts stay the same run to run
+    (window as any).__vs.updateSettings({ preset: 'low', tutorials: false, ...p });
+  }, patch);
   await page.click('.title');
   await page.waitForSelector('.menu');
 }
@@ -131,7 +131,7 @@ test('results: card fits the window, achievements sit inside it, nothing floats 
   await page.evaluate(() => {
     const g = (window as any).__vs;
     g.debugAdvance(0.5, { moveZ: 1 });
-    g.sim.player.reset(0, -6.9, 351, Math.PI);
+    g.sim.player.reset(0, -12.9, 691, Math.PI);
     g.input.setLook(Math.PI, 0);
   });
   await page.keyboard.down('KeyW');

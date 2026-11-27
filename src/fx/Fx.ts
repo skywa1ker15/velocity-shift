@@ -56,19 +56,6 @@ export class SpeedLines {
           if (uStyle > 2.5 && uStyle < 3.5) sp = (floor(vP * 34.0) + 0.5) / 34.0;
           vec2 p = (sp - uCenter) * vec2(uAspect, 1.0);
           float r = length(p);
-          if (uStyle > 4.5) {
-            // corruption: not rays at all, but rows of the picture tearing sideways from the edges
-            float frame5 = floor(uTime * 14.0);
-            float row = floor((vP.y * 0.5 + 0.5) * 46.0);
-            float on5 = step(h1(row + frame5 * 3.0), 0.05 + k * 0.22);
-            float reach = (0.08 + h1(row * 1.7 + frame5) * 0.3) * (0.4 + k);
-            float edge5 = 1.0 - abs(vP.x);
-            float bar = on5 * step(edge5, reach);
-            if (bar < 0.01) discard;
-            float ch = h1(row * 2.3 + frame5 * 5.0);
-            gl_FragColor = vec4(ch < 0.33 ? vec3(1.0, 0.1, 0.3) : ch < 0.66 ? vec3(0.1, 1.0, 0.45) : vec3(0.2, 0.5, 1.0), bar * (0.35 + 0.3 * k));
-            return;
-          }
           float ang = atan(p.y, p.x) / 6.2831853 + 0.5;
           float frame = floor(uTime * ${STEP_FPS}.0);          // redrawn 12 times a second
           const float N = 120.0;
@@ -122,7 +109,7 @@ export class SpeedLines {
   setAspect(a: number) {
     this.mat.uniforms.uAspect.value = a;
   }
-  /** 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush, 5 glitch bars. */
+  /** 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush. */
   setStyle(style: number, rawColor?: number) {
     this.mat.uniforms.uStyle.value = style;
     // brush universes want the true colour (black ink), not a tint of white

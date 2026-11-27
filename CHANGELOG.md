@@ -1,5 +1,13 @@
 # Changelog
 
+## Gameplay expansion: longer courses, Evolve mode
+
+- **Corrupt flicker removed.** No more flickering horizontal blocks, screen glitch or moving surface tears.
+- **Six courses roughly doubled** (Training, Awakening, Verticality, Momentum, Ink Falls, Shift Point) with new sections, recalibrated medals and bumped layout versions (old bests on those courses are cleared once).
+- **Evolve mode (default) and Pure mode.** Evolve adds seeded collectibles with rarities and different catch methods, 18 stackable upgrades with caps and diminishing returns, evolutions, a Flow momentum meter, six synergies, a Surge slow-down (V/G), triple jump, Aegis, and a player that visibly evolves. Pure is the original game; medals, ghosts and reference runs come only from Pure. Evolve keeps its own best time.
+- **Engine:** per-player movement config layer, `evoItems` for hand-placed items, slots generated from the reference line (`npm run gen:slots`).
+- **Tests:** evolution suite plus updated progression, save and e2e tests. Report: `docs/expansion/README.md`. Evolve balance is bot-tested only and has had no human playtest.
+
 ## Progressive level design: the world learns to move
 
 - **A progression across the nine courses.** Levels 1–2 are unchanged; each later course keeps its own sections and identity and adds one new idea, introduced on its own and then combined:

@@ -21,6 +21,8 @@ export interface LevelRecord {
   completions: number;
   /** Course layout version this record was set on (see LevelMeta.layout). */
   layout: number;
+  /** Evolve: best time with upgrades (kept apart from the Pure best, medals and ghost). */
+  evolveBest: number | null;
 }
 
 export interface Totals {
@@ -61,6 +63,7 @@ export const emptyRecord = (layout = 1): LevelRecord => ({
   objectives: [],
   completions: 0,
   layout,
+  evolveBest: null,
 });
 
 /**
@@ -78,6 +81,7 @@ export function applyLayouts(data: SaveData, layouts: Record<string, number>): s
       r.best = null;
       r.splits = [];
       r.medal = 0;
+      r.evolveBest = null;
     }
     r.layout = layout;
   }
@@ -142,6 +146,7 @@ export function sanitizeSave(raw: unknown): SaveData {
         objectives: strArr(r.objectives),
         completions: Math.max(0, Math.floor(numOr(r.completions, 0))),
         layout: Math.max(1, Math.floor(numOr(r.layout, 1))),
+        evolveBest: typeof r.evolveBest === 'number' && r.evolveBest > 0 ? r.evolveBest : null,
       };
     }
   }

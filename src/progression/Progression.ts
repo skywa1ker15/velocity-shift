@@ -442,6 +442,21 @@ export interface ResultsData {
   newAchievements: AchievementDef[];
   newCosmetics: CosmeticDef[];
   nextLevelId: string | null;
+  /** Which mode the run was played in; Evolve runs carry their upgrade summary. */
+  mode: 'pure' | 'evolve';
+  evolve?: EvolveSummary;
+}
+
+/** What an Evolve run became (results screen). */
+export interface EvolveSummary {
+  previousBest: number | null;
+  isRecord: boolean;
+  pickups: number;
+  byKind: Partial<Record<string, number>>;
+  peakTier: number;
+  stage: number;
+  abilities: { name: string; level: number; max: number }[];
+  synergies: string[];
 }
 
 /** Unlock any achievements whose condition now holds. Returns the newly unlocked ones. */
@@ -491,24 +506,34 @@ export function finishRun(
   meta: LevelMeta,
   data: LevelData,
   stats: RunStats,
+  evolve?: Omit<EvolveSummary, 'previousBest' | 'isRecord'>,
 ): ResultsData {
   const save = saveSys.data;
   const rec = saveSys.record(meta.id);
   const time = stats.ticks / 120;
+  const pure = !evolve;
   const unlockedBefore = new Set(
     cosmetics.filter((c) => c.unlocked(save)).map((c) => c.category + ':' + c.id),
   );
 
+  // medals, the personal best, splits and the ghost come from Pure runs only
   const previousBest = rec.best;
   const previousMedal = rec.medal;
   const bestSplits = rec.splits.slice();
-  const isRecord = previousBest === null || time < previousBest;
-  const medal = medalFor(time, meta.medals);
+  const isRecord = pure && (previousBest === null || time < previousBest);
+  const medal = pure ? medalFor(time, meta.medals) : 0;
   if (isRecord) {
     rec.best = time;
     rec.splits = stats.splits.slice();
   }
   rec.medal = Math.max(rec.medal, medal);
+  let evo: EvolveSummary | undefined;
+  if (evolve) {
+    const prev = rec.evolveBest;
+    const rec2 = prev === null || time < prev;
+    if (rec2) rec.evolveBest = time;
+    evo = { ...evolve, previousBest: prev, isRecord: rec2 };
+  }
   rec.completions++;
   for (const id of stats.collected) if (!rec.collectibles.includes(id)) rec.collectibles.push(id);
 
@@ -544,6 +569,8 @@ export function finishRun(
     newAchievements,
     newCosmetics,
     nextLevelId: next ? next.meta.id : null,
+    mode: pure ? 'pure' : 'evolve',
+    evolve: evo,
   };
 }
 

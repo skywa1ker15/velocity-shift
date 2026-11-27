@@ -289,6 +289,10 @@ export class Body {
   setSword(sw: Sword | null) {
     this.sword = sw;
   }
+  /** Evolve: how strongly the accent trims and fingertips glow (1 = normal). */
+  setGlow(k: number) {
+    this.mat.userData.glowK.value = k;
+  }
   setAccent(hex: number) {
     this.mat.userData.accent.value.set(hex);
   }

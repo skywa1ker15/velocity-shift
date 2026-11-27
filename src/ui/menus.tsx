@@ -395,6 +395,25 @@ export function Ready() {
             </div>
           ))}
         </div>
+        <div className="mode-pick" role="radiogroup" aria-label="Game mode">
+          {(
+            [
+              ['evolve', 'Evolve', 'Collectibles and upgrades during the run'],
+              ['pure', 'Pure', 'The course alone · medals, ghost and best time'],
+            ] as const
+          ).map(([k, label, sub]) => (
+            <Btn
+              key={k}
+              role="radio"
+              aria-checked={game.settings.gameMode === k}
+              className={'mode' + (game.settings.gameMode === k ? ' on' : '')}
+              onClick={() => void game.setGameMode(k)}
+            >
+              <b>{label}</b>
+              <span>{sub}</span>
+            </Btn>
+          ))}
+        </div>
         <ul className="objectives">
           {m.objectives.map((o) => (
             <li key={o.id} className={rec?.objectives.includes(o.id) ? 'done' : ''}>
@@ -416,6 +435,11 @@ export function Ready() {
             <kbd>{keyLabel(atk)}</kbd>
             <kbd>LMB</kbd> sword
           </span>
+          {game.settings.gameMode === 'evolve' && (
+            <span>
+              <kbd>{keyLabel(b.surge[0])}</kbd> surge
+            </span>
+          )}
           <span>
             <kbd>{keyLabel(b.restart[0])}</kbd> restart
           </span>
@@ -425,7 +449,13 @@ export function Ready() {
         </div>
         <div className="row">
           <Btn className="primary" data-autofocus onClick={begin}>
-            {rec?.best ? `Start · best ${formatTime(rec.best)}` : 'Start'}
+            {game.settings.gameMode === 'evolve'
+              ? rec?.evolveBest
+                ? `Start · Evolve best ${formatTime(rec.evolveBest)}`
+                : 'Start · Evolve'
+              : rec?.best
+                ? `Start · best ${formatTime(rec.best)}`
+                : 'Start'}
           </Btn>
           <Btn className="ghost" onClick={back}>
             Back

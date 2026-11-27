@@ -11,6 +11,7 @@ export type Action =
   | 'dash'
   | 'attack'
   | 'sword'
+  | 'surge'
   | 'restart'
   | 'pause';
 
@@ -27,6 +28,7 @@ export const actionLabels: Record<Action, string> = {
   dash: 'Dash',
   attack: 'Sword slash (draws the sword)',
   sword: 'Draw / sheathe sword',
+  surge: 'Surge: slow the world (Evolve, needs Timeslip)',
   restart: 'Restart checkpoint (hold: level)',
   pause: 'Pause',
 };
@@ -42,6 +44,7 @@ export const actionOrder: Action[] = [
   'dash',
   'attack',
   'sword',
+  'surge',
   'restart',
   'pause',
 ];
@@ -58,6 +61,7 @@ export const defaultBindings: Bindings = {
   dash: ['KeyQ', 'KeyE'],
   attack: ['Mouse0', 'KeyF'],
   sword: ['KeyX'],
+  surge: ['KeyV', 'KeyG'],
   restart: ['KeyR'],
   pause: ['KeyP'],
 };

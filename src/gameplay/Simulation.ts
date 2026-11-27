@@ -16,6 +16,8 @@ import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { bodyTouches, breakableCentre } from './breakables';
 import { GravityDirector } from './Gravity';
 import { Sword, SwordPhase, type SwordHit, type SwordTarget, type Slash } from './Sword';
+import { Evolution } from '../evolution/Evolution';
+import type { Slot } from '../evolution/slots';
 
 export interface RunStats {
   started: boolean;
@@ -93,6 +95,11 @@ export interface SimEvents {
 
 const RESPAWN_TICKS = 30; // 0.25 s
 
+export interface SimOptions {
+  /** Evolve mode: collectibles and upgrades (absent = Pure, the original game exactly). */
+  evolve?: { seed: number; slots: readonly Slot[] };
+}
+
 export class Simulation {
   readonly physics: PhysicsWorld;
   readonly player: MovementController;
@@ -118,10 +125,15 @@ export class Simulation {
   readonly broken: boolean[] = [];
   private targets: (SwordTarget | null)[] = [];
   private targetsLive: SwordTarget[] = [];
+  /** Evolve mode state (null in Pure). */
+  readonly evo: Evolution | null = null;
+  /** World clock step this tick (SIM_DT, or less while Timeslip / Reflex slow the world). */
+  dt = SIM_DT;
 
   constructor(
     readonly meta: LevelMeta,
     readonly data: LevelData,
+    opts: SimOptions = {},
   ) {
     this.physics = new PhysicsWorld();
     this.player = new MovementController(this.physics);
@@ -157,6 +169,7 @@ export class Simulation {
     for (const e of this.entities) if (e.def.id) this.byId.set(e.def.id, e);
     this.targetsLive = (data.breakables ?? []).map((b) => breakableCentre(b));
     this.wireStats();
+    if (opts.evolve) this.evo = new Evolution(this, opts.evolve.slots, opts.evolve.seed);
     this.physics.step();
     this.restart();
   }
@@ -199,6 +212,7 @@ export class Simulation {
     this.broken.length = 0;
     this.targets = this.targetsLive.slice();
     for (let i = 0; i < this.targets.length; i++) this.broken.push(false);
+    this.evo?.newRun();
     this.placeAtCheckpoint();
   }
 
@@ -224,11 +238,14 @@ export class Simulation {
     this.dead = false;
     this.deadTicks = 0;
     this.wallChain = 0;
+    this.dt = SIM_DT;
+    this.evo?.respawn();
     this.events.emit('respawn', { index: this.checkpoint });
   }
 
   kill(reason: string) {
     if (this.dead || this.stats.finished) return;
+    if (this.evo?.absorb(reason)) return;
     this.dead = true;
     this.deadTicks = RESPAWN_TICKS;
     this.stats.deaths++;
@@ -261,13 +278,23 @@ export class Simulation {
       st.started = true;
       this.events.emit('start', {});
     }
-    this.time += SIM_DT;
+    const evo = this.evo;
+    if (evo) {
+      // Timeslip / Reflex: the world's clock slows, the runner's does not
+      this.dt = SIM_DT * evo.worldScale;
+      this.time += this.dt;
+    } else this.time += SIM_DT;
     pl.gravityScale = 1;
     this.updateEntities();
     if (this.dead) return;
 
+    if (evo) evo.preTick(inp, SIM_DT);
     pl.tick(inp, SIM_DT);
     this.tickSword(inp);
+    if (evo) {
+      evo.postTick(SIM_DT);
+      if (this.dead) return;
+    }
 
     // standing on a dynamic entity?
     if (pl.grounded && pl.groundId !== -1) {
@@ -297,7 +324,31 @@ export class Simulation {
     this.checkVolumes();
   }
 
-  private onHit = (h: SwordHit) => this.breakObject(h.target, 'sword', h);
+  private onHit = (h: SwordHit) => {
+    const n = this.targetsLive.length;
+    if (h.target >= n) this.evo?.onGlyphCut(h.target - n);
+    else this.breakObject(h.target, 'sword', h);
+  };
+
+  /** Sword target of breakable `i` (null once broken). */
+  targetOf(i: number) {
+    return this.targets[i] ?? null;
+  }
+  /** Evolve: the run's glyphs became the sword targets after the breakables. */
+  resetGlyphTargets(t: (SwordTarget | null)[]) {
+    this.targets.length = this.targetsLive.length;
+    for (let i = 0; i < this.targetsLive.length; i++)
+      if (this.targets[i] === undefined) this.targets[i] = null;
+    this.targets.push(...t);
+  }
+  /** Evolve: a glyph target (index after the breakables) changes. */
+  setGlyphTarget(j: number, t: SwordTarget | null) {
+    this.targets[this.targetsLive.length + j] = t;
+  }
+  /** Break breakable `i` (Evolve area cuts use this as well as the blade and the body). */
+  cutObject(i: number, by: 'sword' | 'body', hit?: SwordHit) {
+    this.breakObject(i, by, hit);
+  }
 
   private tickSword(inp: InputFrame) {
     const sw = this.sword;
@@ -349,6 +400,7 @@ export class Simulation {
   private updateEntities() {
     const c = this.ctx;
     c.time = this.time;
+    c.dt = this.dt;
     this.gravity.begin();
     for (const e of this.entities) e.update(c, this.physics);
     this.physics.step();

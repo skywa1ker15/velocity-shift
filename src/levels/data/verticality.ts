@@ -2,7 +2,9 @@
  * LEVEL 2 — VERTICALITY
  * Dusk among violet spires. The route climbs: ledge grabs, a wall-jump canyon, a turning
  * carousel, a lift past sliding shutters, weightless leaps inside a hollow spire, a long drop
- * onto moving ground and a last wall chain to the summit.
+ * onto moving ground and a wall chain up to the first summit. Then the upper spires: a taller
+ * wall-jump shaft, giant steps, a second lift past shutters, weightless leaps higher still, and a
+ * last wall chain and launch to the true summit, fifty metres above the first.
  */
 import { LevelBuilder } from '../LevelBuilder';
 import type { LevelData } from '../types';
@@ -156,9 +158,86 @@ export function build(): LevelData {
   b.wall(3.0, 19, 293, 0.8, 12, 14); // 286..300
   b.plat(0, 21, 308, 9, 12); // 302..314
   b.entity({ type: 'jumppad', p: [0, 21.6, 310], s: [4, 1.2, 4], v: [0, 22, 5] });
-  b.plat(0, 28, 330, 14, 22); // 319..341
-  b.finish(0, 28, 335, 10);
+  b.plat(0, 28, 330, 14, 22); // 319..341: the first summit
+  b.checkpoint(0, 28, 330);
   b.collectible('v3', 0, 25.6, 291);
+  b.prompt([0, 29.5, 326], [14, 4, 8], 'jump', 'Not the top yet. The upper spires climb higher still');
+
+  // ===== I. The bell shaft (a taller wall-jump climb: six kicks) ======================================
+  b.wall(-2.1, 25, 364.5, 0.8, 20, 55); // 337..392 (starts on the summit), face x = -1.7
+  b.wall(2.1, 25, 364.5, 0.8, 20, 55);
+  b.plat(0, 41, 406, 8, 24, { h: 1 }); // exit ledge 394..418
+  b.checkpoint(0, 41, 400);
+
+  // ===== J. Giant steps ===============================================================================
+  b.plat(0, 43, 421, 10, 6, { h: 5, dress: false }); // 418..424
+  b.plat(0, 45, 427, 10, 6, { h: 7, dress: false }); // 424..430
+  b.plat(0, 47, 434, 10, 8, { h: 9 }); // 430..438
+  for (const [y, z] of [
+    [43, 418],
+    [45, 424],
+    [47, 430],
+  ])
+    b.strip([0, y - 0.02, z - 0.03], [9, 0.07, 0.07], 1);
+  b.checkpoint(0, 47, 434);
+
+  // ===== K. The second lift and its shutters ============================================================
+  b.entity({
+    type: 'mover',
+    id: 'lift2',
+    s: [6, 1, 6],
+    path: [
+      [0, 46.5, 441.1],
+      [0, 58.5, 441.1],
+    ],
+    speed: 4,
+    pause: 1.6,
+  }); // z 438.1..444.1
+  b.plat(0, 59, 459.1, 8, 29.8); // 444.2..474
+  b.entity({
+    type: 'mover',
+    s: [7, 6, 1],
+    path: [
+      [7.6, 62, 455],
+      [0, 62, 455],
+    ],
+    speed: 4.5,
+    pause: 1.1,
+    mat: 'alt',
+  });
+  b.entity({
+    type: 'mover',
+    s: [7, 6, 1],
+    path: [
+      [-7.6, 62, 464],
+      [0, 62, 464],
+    ],
+    speed: 4.5,
+    pause: 1.1,
+    phase: 1.4,
+    mat: 'alt',
+  });
+  b.decor('box', [12.5, 62, 455], [3, 7, 1.6], 'dark');
+  b.decor('box', [-12.5, 62, 464], [3, 7, 1.6], 'dark');
+  b.checkpoint(0, 59, 449);
+  b.checkpoint(0, 59, 470);
+
+  // ===== L. The upper spire (weightless leaps, higher) =====================================================
+  b.entity({ type: 'gravity', p: [0, 85, 510], s: [18, 60, 72], scale: 0.35 }); // z 474..546
+  b.plat(0, 62.5, 488, 7, 6, { h: 0.8 }); // 485..491
+  b.plat(0, 66, 505, 7, 6, { h: 0.8 }); // 502..508
+  b.plat(0, 69.5, 522, 7, 6, { h: 0.8 }); // 519..525
+  b.plat(0, 73, 542, 9, 12); // 536..548
+  b.checkpoint(0, 73, 540);
+
+  // ===== M. The true summit ==================================================================================
+  b.wall(-3.0, 71, 553.5, 0.8, 12, 21); // 543..564
+  b.wall(3.0, 71, 569, 0.8, 12, 14); // 562..576
+  b.plat(0, 73, 584, 9, 12); // 578..590
+  b.entity({ type: 'jumppad', p: [0, 73.6, 586], s: [4, 1.2, 4], v: [0, 22, 5] });
+  b.plat(0, 80, 606, 16, 24); // 594..618
+  b.finish(0, 80, 611, 12);
+  b.ring(0, 92, 612, 12, 0.6, [1.57, 0, 0], [0, 0, 0.1], 'accent', 0.9);
 
   scenery(b);
   b.bot(
@@ -209,7 +288,43 @@ export function build(): LevelData {
     [0, 21, 305],
     [0, 21, 310],
     [0, 28, 326],
-    [0, 28, 335],
+    [-0.9, 28, 337.5],
+    [-0.9, 28, 340.4, 'j', 0.6],
+    [-1.33, 30.2, 348.4, 'wj', 0.5],
+    [1.33, 32.2, 357, 'wj', 0.5],
+    [-1.33, 34.2, 365.4, 'wj', 0.5],
+    [1.33, 36.2, 373.5, 'wj', 0.5],
+    [-1.33, 38.2, 381.9, 'wj', 0.5],
+    [1.33, 40.2, 390, 'wj', 0.5],
+    [0, 41, 400],
+    [0, 41, 415.3, 'j', 0.6],
+    [0, 43, 421],
+    [0, 43, 421.4, 'j', 0.6],
+    [0, 45, 427],
+    [0, 45, 427.4, 'j', 0.6],
+    [0, 47, 434],
+    [0, 47, 436.5, 'w', 0.6],
+    [0, 47, 441.1, 'w', 1.2],
+    [0, 59, 441.3],
+    [0, 59, 449],
+    [0, 59, 473.5, 'j', 0.6],
+    [0, 62.5, 488],
+    [0, 62.5, 490.5, 'j', 0.6],
+    [0, 66, 505],
+    [0, 66, 507.5, 'j', 0.6],
+    [0, 69.5, 522],
+    [0, 69.5, 524.5, 'j', 0.6],
+    [0, 73, 540],
+    [-1.7, 73, 543],
+    [-1.7, 73, 547.2, 'j', 0.8],
+    [-2.2, 74, 554],
+    [-2.2, 74, 560, 'wj'],
+    [2.2, 74, 567],
+    [2.2, 74, 573, 'wj'],
+    [0, 73, 581],
+    [0, 73, 586],
+    [0, 80, 602],
+    [0, 80, 611],
   );
   // ----- destructibles (Phase B): suspended panels and neon signs hung along the climb, in
   // reach of a running, aerial or wall-run slash
@@ -221,6 +336,10 @@ export function build(): LevelData {
   b.breakable('panel', -1.5, 42.9, 236.7);
   b.breakable('sign', 1.6, 23.5, 268, { yaw: 0.19 });
   b.breakable('panel', -1.8, 22.9, 309.6, { yaw: 0.44 });
+  b.breakable('panel', 1.5, 42.9, 410);
+  b.breakable('sign', -1.5, 60.9, 465);
+  b.breakable('panel', 1.7, 64.4, 493);
+  b.breakable('panel', -1.5, 74.9, 545);
   return b.data;
 }
 
@@ -237,6 +356,12 @@ function scenery(b: LevelBuilder) {
     [36, 290, 12, 240],
     [-36, 330, 16, 280],
     [48, 360, 14, 220],
+    [-44, 410, 16, 260],
+    [40, 450, 12, 300],
+    [-38, 500, 18, 320],
+    [46, 550, 14, 340],
+    [-42, 600, 16, 360],
+    [36, 650, 12, 300],
   ];
   for (const [x, z, w, h] of spires) {
     b.monolith(x, -80, z, w, h, w, 'dark');
@@ -252,11 +377,11 @@ function scenery(b: LevelBuilder) {
   b.ring(0, 60, 340, 30, 0.8, [1.57, 0, 0], [0, 0, 0.1], 'accent', 0.9);
   b.ring(0, 60, 340, 42, 1.4, [1.2, 0.3, 0], [0, 0, -0.05], 'alt', 0.2);
   b.ring(-20, 30, 120, 60, 1.3, [1.3, 0, 0.4], [0, 0, 0.03], 'base', 0.15);
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 70; i++) {
     const side = i % 2 ? 1 : -1;
     b.shard(
       side * (9 + ((i * 11) % 20)),
-      4 + ((i * 9) % 44),
+      4 + ((i * 9) % 80),
       -6 + i * 9.4,
       0.8 + (i % 4) * 0.5,
       i % 5 === 0 ? 'accent' : i % 2 ? 'alt' : 'glass',
@@ -269,6 +394,9 @@ function scenery(b: LevelBuilder) {
     [12, 150],
     [-13, 230],
     [12, 320],
+    [-12, 420],
+    [13, 520],
+    [-12, 600],
   ])
     b.decor('box', [x, 40, z], [0.25, 240, 0.25], 'accent', { glow: 0.7 });
 }

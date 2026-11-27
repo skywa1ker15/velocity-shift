@@ -37,6 +37,28 @@ export interface HudState {
   sword: { phase: number; combo: number; idle: number; cuts: number; total: number };
   /** 0..1 while R is held toward a full level restart, -1 otherwise. */
   restartHold: number;
+  /** Dash charges available at most (Phase Dash raises it). */
+  dashMax: number;
+  /** Evolve mode HUD (null in Pure). */
+  evo: EvoHud | null;
+}
+
+export interface EvoHud {
+  flux: number;
+  tier: number;
+  /** 0..1 progress within the current Flow tier. */
+  flowFrac: number;
+  stage: number;
+  /** Seconds of Surge left (and its full length), Reflex time left, Aegis 0..1 (-1 = none). */
+  surge: number;
+  surgeMax: number;
+  reflex: number;
+  aegis: number;
+  chain: number;
+  chainLeft: number;
+  canSurge: boolean;
+  abilities: { id: string; glyph: string; name: string; level: number; max: number; category: string }[];
+  synergies: string[];
 }
 
 export interface Toast {
@@ -61,7 +83,7 @@ export interface Callout {
   id: number;
   text: string;
   sub?: string;
-  tone: 'flow' | 'close' | 'shift';
+  tone: 'flow' | 'close' | 'shift' | 'evolve' | 'synergy' | 'rare';
 }
 
 export interface Hit {
@@ -126,6 +148,8 @@ export const useUi = create<UiState>((set) => ({
     checkpoints: 0,
     sword: { phase: 0, combo: 0, idle: 0, cuts: 0, total: 0 },
     restartHold: -1,
+    dashMax: 2,
+    evo: null,
   },
   results: null,
   toasts: [],

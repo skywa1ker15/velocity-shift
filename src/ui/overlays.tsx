@@ -129,6 +129,8 @@ export function Results() {
   const fresh = r.newAchievements.length + r.newCosmetics.length;
   const medalNew = r.medal > r.previousMedal;
   const shiftHidden = top < 3;
+  const ev = r.mode === 'evolve' ? r.evolve : undefined;
+  const evBest = ev ? (ev.isRecord ? r.time : (ev.previousBest ?? r.time)) : 0;
   return (
     <div className="screen dim results" style={{ ['--lv' as any]: hex(getEnv(m.env).palette.accent) }}>
       <div className="res-card" ref={ref}>
@@ -141,56 +143,110 @@ export function Results() {
           </div>
           <div className="res-time">
             <div className="big-time mono-num">{formatTime(r.time)}</div>
-            {r.isRecord ? (
+            {ev ? (
+              <>
+                {ev.isRecord ? (
+                  <div className="record">
+                    {ev.previousBest === null ? 'FIRST EVOLVE CLEAR' : 'NEW EVOLVE RECORD'}
+                  </div>
+                ) : (
+                  <div className="vs">
+                    <Delta a={r.time} b={ev.previousBest} /> <span>vs Evolve best</span>
+                  </div>
+                )}
+                <div className="pb-line">
+                  <span>
+                    Evolve best <b className="mono-num">{formatTime(evBest)}</b>
+                  </span>
+                  {r.previousBest !== null && (
+                    <span>
+                      Pure best <b className="mono-num">{formatTime(r.previousBest)}</b>
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : r.isRecord ? (
               <div className="record">{r.previousBest === null ? 'FIRST CLEAR' : 'NEW RECORD'}</div>
             ) : (
               <div className="vs">
                 <Delta a={r.time} b={r.previousBest} /> <span>vs best</span>
               </div>
             )}
-            <div className="pb-line">
-              {r.isRecord && r.previousBest !== null && (
-                <span>
-                  Previous best <b className="mono-num">{formatTime(r.previousBest)}</b>
-                </span>
-              )}
-              <span>
-                Personal best <b className="mono-num">{formatTime(best)}</b>
-              </span>
-            </div>
-          </div>
-          <div className={'res-medal' + (stage >= 1 ? ' show' : '')}>
-            <div className={'badge m' + r.medal}>
-              <MedalIcon tier={r.medal} />
-              <div>
-                <strong>{r.medal ? MEDAL_LABELS[r.medal] + ' medal' : 'No medal yet'}</strong>
-                {medalNew && <em>New</em>}
-              </div>
-            </div>
-            <ol className="ladder" aria-label="Medal times">
-              {TIER_KEYS.map((k, i) => {
-                const tier = i + 1;
-                const got = top >= tier;
-                const hide = tier === 4 && shiftHidden;
-                return (
-                  <li key={k} className={'m' + tier + (got ? ' got' : '') + (r.medal === tier ? ' now' : '')}>
-                    <MedalIcon tier={got ? tier : 0} />
-                    <span>{MEDAL_LABELS[tier]}</span>
-                    <b className="mono-num">{hide ? '??:??.???' : formatTime(m.medals[k])}</b>
-                  </li>
-                );
-              })}
-            </ol>
-            {target && (target.tier < 4 || top >= 3) && (
-              <p className="next-medal">
-                Next: <b>{MEDAL_LABELS[target.tier]}</b> at{' '}
-                <span className="mono-num">{formatTime(target.time)}</span>
-                {r.time > target.time && (
-                  <span className="mono-num behind"> · {(r.time - target.time).toFixed(2)} s off</span>
+            {!ev && (
+              <div className="pb-line">
+                {r.isRecord && r.previousBest !== null && (
+                  <span>
+                    Previous best <b className="mono-num">{formatTime(r.previousBest)}</b>
+                  </span>
                 )}
-              </p>
+                <span>
+                  Personal best <b className="mono-num">{formatTime(best)}</b>
+                </span>
+              </div>
             )}
           </div>
+          {ev ? (
+            <div className={'res-medal evolve' + (stage >= 1 ? ' show' : '')}>
+              <div className="badge evo">
+                <i aria-hidden className={'evo-stage s' + ev.stage}>
+                  {ev.stage}
+                </i>
+                <div>
+                  <strong>Evolve run · stage {ev.stage}</strong>
+                  <span className="quiet">Medals and ghosts come from Pure runs</span>
+                </div>
+              </div>
+              <ul className="evo-sum">
+                {ev.abilities.length ? (
+                  ev.abilities.map((a) => (
+                    <li key={a.name}>
+                      {a.name} <b className="mono-num">{a.level}</b>
+                      <span>/{a.max}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li>No abilities this run</li>
+                )}
+              </ul>
+              {ev.synergies.length > 0 && <p className="evo-syn">Synergies: {ev.synergies.join(' · ')}</p>}
+            </div>
+          ) : (
+            <div className={'res-medal' + (stage >= 1 ? ' show' : '')}>
+              <div className={'badge m' + r.medal}>
+                <MedalIcon tier={r.medal} />
+                <div>
+                  <strong>{r.medal ? MEDAL_LABELS[r.medal] + ' medal' : 'No medal yet'}</strong>
+                  {medalNew && <em>New</em>}
+                </div>
+              </div>
+              <ol className="ladder" aria-label="Medal times">
+                {TIER_KEYS.map((k, i) => {
+                  const tier = i + 1;
+                  const got = top >= tier;
+                  const hide = tier === 4 && shiftHidden;
+                  return (
+                    <li
+                      key={k}
+                      className={'m' + tier + (got ? ' got' : '') + (r.medal === tier ? ' now' : '')}
+                    >
+                      <MedalIcon tier={got ? tier : 0} />
+                      <span>{MEDAL_LABELS[tier]}</span>
+                      <b className="mono-num">{hide ? '??:??.???' : formatTime(m.medals[k])}</b>
+                    </li>
+                  );
+                })}
+              </ol>
+              {target && (target.tier < 4 || top >= 3) && (
+                <p className="next-medal">
+                  Next: <b>{MEDAL_LABELS[target.tier]}</b> at{' '}
+                  <span className="mono-num">{formatTime(target.time)}</span>
+                  {r.time > target.time && (
+                    <span className="mono-num behind"> · {(r.time - target.time).toFixed(2)} s off</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
         </header>
 
         <div className={'res-body' + (stage >= 2 ? ' show' : '')}>
@@ -230,6 +286,8 @@ export function Results() {
               <Stat label="Double jumps" value={String(st.doubleJumps)} />
               <Stat label="Sword cuts" value={`${st.cuts ?? 0} · ${st.slashes ?? 0} swings`} />
               <Stat label="Deaths" value={String(st.deaths)} />
+              {ev && <Stat label="Pickups" value={String(ev.pickups)} />}
+              {ev && <Stat label="Peak Flow" value={'tier ' + ev.peakTier} />}
             </div>
           </section>
           <section>

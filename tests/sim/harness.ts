@@ -1,7 +1,7 @@
 /** Shared helpers for headless simulation tests: build a tiny world, feed scripted input. */
 import { LevelBuilder } from '../../src/levels/LevelBuilder';
 import type { LevelMeta } from '../../src/levels/types';
-import { Simulation } from '../../src/gameplay/Simulation';
+import { Simulation, type SimOptions } from '../../src/gameplay/Simulation';
 import { initPhysics } from '../../src/physics/PhysicsWorld';
 import { emptyInput, MoveState, type InputFrame } from '../../src/movement/types';
 
@@ -23,14 +23,22 @@ export const testMeta = (over: Partial<LevelMeta> = {}): LevelMeta => ({
   ...over,
 });
 
-export async function makeSim(build: (b: LevelBuilder) => void, spawn: [number, number, number] = [0, 0, 0]) {
+export async function makeSim(
+  build: (b: LevelBuilder) => void,
+  spawn: [number, number, number] = [0, 0, 0],
+  opts: SimOptions = {},
+) {
   await initPhysics();
   const b = new LevelBuilder();
   b.spawnCheckpoint(spawn[0], spawn[1], spawn[2], FWD);
   build(b);
-  const sim = new Simulation(testMeta({ spawn: { p: spawn, yaw: FWD } }), b.data);
+  const sim = new Simulation(testMeta({ spawn: { p: spawn, yaw: FWD } }), b.data, opts);
   return new Driver(sim);
 }
+
+/** The same, in Evolve mode (no seeded collectibles unless the builder hand-places some). */
+export const makeEvoSim = (build: (b: LevelBuilder) => void, spawn: [number, number, number] = [0, 0, 0]) =>
+  makeSim(build, spawn, { evolve: { seed: 7, slots: [] } });
 
 export type Keys = Partial<
   Pick<InputFrame, 'moveX' | 'moveZ' | 'sprint' | 'jumpHeld' | 'slideHeld' | 'yaw' | 'pitch'>
@@ -40,6 +48,7 @@ export type Keys = Partial<
   slide?: boolean; // press + hold
   attack?: boolean; // press this tick
   sword?: boolean;
+  surge?: boolean; // press this tick (Evolve)
 };
 
 export class Driver {
@@ -56,7 +65,17 @@ export class Driver {
     const n = Math.max(1, Math.round(seconds * 120));
     for (let i = 0; i < n; i++)
       this.tick(
-        i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined, attack: false, sword: false },
+        i === 0
+          ? keys
+          : {
+              ...keys,
+              jump: false,
+              dash: false,
+              slide: undefined,
+              attack: false,
+              sword: false,
+              surge: false,
+            },
       );
     return this;
   }
@@ -75,6 +94,7 @@ export class Driver {
     i.slidePressed = !!keys.slide;
     i.attackPressed = !!keys.attack;
     i.swordPressed = !!keys.sword;
+    i.surgePressed = !!keys.surge;
     if (keys.slide) i.slideHeld = true;
     this.sim.tick(i);
     const s = this.pl.state;
@@ -85,7 +105,17 @@ export class Driver {
     const n = Math.round(max * 120);
     for (let i = 0; i < n; i++) {
       this.tick(
-        i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined, attack: false, sword: false },
+        i === 0
+          ? keys
+          : {
+              ...keys,
+              jump: false,
+              dash: false,
+              slide: undefined,
+              attack: false,
+              sword: false,
+              surge: false,
+            },
       );
       if (pred()) return (i + 1) / 120;
     }

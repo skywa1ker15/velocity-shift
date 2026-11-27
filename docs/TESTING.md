@@ -70,3 +70,7 @@ Platform
 | Momentum | 166 | 11.4 k | ~40 MB |
 
 Frame-rate figures on the reference hardware have not been measured.
+
+## Evolve (expansion)
+
+`tests/sim/evolution.test.ts` covers slot freshness, the seeded spawner, each catch method, ability caps and diminishing returns, synergies, the run model and wall tunnelling at max speed. `GEN_SLOTS=1` enables `tests/sim/gen-slots.test.ts`, which regenerates slots. Three e2e tests drive Evolve with the real keyboard. Evolve balance is only bot-tested; manual playtesting is still on the checklist.

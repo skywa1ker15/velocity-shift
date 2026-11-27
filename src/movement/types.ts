@@ -15,6 +15,8 @@ export interface InputFrame {
   /** Sword: attack (draws it first if needed) and draw / sheathe. */
   attackPressed: boolean;
   swordPressed: boolean;
+  /** Evolve: Surge (Timeslip). Ignored in Pure. */
+  surgePressed: boolean;
 }
 
 export const emptyInput = (): InputFrame => ({
@@ -30,6 +32,7 @@ export const emptyInput = (): InputFrame => ({
   dashPressed: false,
   attackPressed: false,
   swordPressed: false,
+  surgePressed: false,
 });
 
 export const enum MoveState {

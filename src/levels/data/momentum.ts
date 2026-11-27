@@ -4,7 +4,9 @@
  * high-speed gaps, a laser run, a splitting chute that drops one lane, blinking platforms,
  * a crusher hall, then the canyon itself starts to move (the first Dynamic World course): a bridge
  * that swings into place ahead of you, a chute whose gravity tilts forward to pull you along, and
- * a channel that rolls a quarter turn while you sprint through it. Then the long final line.
+ * a channel that rolls a quarter turn while you sprint through it. Then the overdrive: the same
+ * ideas again, faster and lower — a second chute and speed gaps, a second laser run, a chute that
+ * splits, a bridge that swings the other way — and the long final line.
  * A narrow high rail skips a quarter of the course.
  */
 import { LevelBuilder } from '../LevelBuilder';
@@ -227,10 +229,80 @@ export function build(): LevelData {
   b.plat(0, K, 595, 8, 28); // 581..609, meets the channel's end
   b.checkpoint(0, K, 583);
 
+  // ===== I. The overdrive (the second half: every idea again, lower and faster) ===================
+  // I1. a second chute and speed gaps (section A/B moved 602 m on and 32.5 m down)
+  const Y2 = K - 10;
+  const F2 = Y2 - 0.5;
+  const G2 = F2 - 10;
+  b.ramp([0, K, 609], [0, Y2, 639], 9);
+  b.plat(0, Y2, 651, 9, 24); // 639..663
+  b.entity({ type: 'boost', p: [0, Y2 + 0.6, 647], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
+  b.checkpoint(0, Y2, 642, Math.PI, [9, 6, 2]);
+  b.prompt([0, K + 1.5, 600], [8, 4, 6], 'slide', 'Overdrive: everything again, lower and faster');
+  b.plat(0, Y2, 684, 9, 20); // 674..694
+  b.checkpoint(0, Y2, 680);
+  b.plat(2, F2, 712, 9, 18); // 703..721
+  // I2. a second laser run: low, high, low, high, then the sweeping beam
+  b.plat(0, F2, 752, 9, 62); // 721..783
+  b.checkpoint(0, F2, 725);
+  for (const z of [733, 757]) b.entity({ type: 'hazard', p: [0, F2 + 0.35, z], s: [9, 0.5, 0.35] });
+  for (const z of [745, 769]) b.entity({ type: 'hazard', p: [0, F2 + 1.75, z], s: [9, 1.4, 0.35] });
+  for (const z of [733, 745, 757, 769]) {
+    b.decor('box', [-4.7, F2 + 1.6, z], [0.4, 3.2, 0.6], 'dark');
+    b.decor('box', [4.7, F2 + 1.6, z], [0.4, 3.2, 0.6], 'dark');
+  }
+  b.entity({
+    type: 'mover',
+    s: [0.5, 4, 0.5],
+    path: [
+      [4, F2 + 2, 777],
+      [-4, F2 + 2, 777],
+    ],
+    speed: 6,
+    pause: 0.5,
+    lethal: true,
+    ghost: true,
+  });
+  // I3. the chute splits again (this time the right lane falls)
+  b.ramp([0, F2, 783], [0, G2, 813], 9);
+  b.checkpoint(0, F2, 780, Math.PI, [9, 6, 2]);
+  b.trigger([0, F2 - 3, 795], [9, 8, 4], 'split2');
+  for (let i = 0; i < 4; i++)
+    b.entity({
+      type: 'collapse',
+      on: 'split2',
+      p: [-2.6, G2 - 0.3, 818 + i * 10],
+      s: [4.6, 0.6, 9.8],
+      delay: 0.8,
+    });
+  b.plat(2.6, G2, 833, 4.6, 40, { dress: false }); // left lane 813..853
+  b.entity({ type: 'boost', p: [2.6, G2 + 0.6, 828], s: [3.6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 20 });
+  b.plat(0, G2, 864, 10, 22); // 853..875
+  b.checkpoint(0, G2, 858);
+  // I4. the second turntable: the span swings the other way
+  b.plat(0, G2, 892, 9, 34); // 875..909
+  b.trigger([0, G2 + 1.5, 871], [9, 6, 3], 'turntable2');
+  b.entity({
+    type: 'structure',
+    id: 'turntable2',
+    on: 'turntable2',
+    p: [0, G2, 918],
+    warn: 0.75,
+    steps: [{ t: 1.4, rot: [0, 1, 0, -90] }],
+    parts: [
+      { p: [0, -0.5, 0], s: [18, 1, 6] }, // across the gap → along it (z 909..927)
+      { p: [0, 0.03, 0], s: [17, 0.06, 0.25], mat: 'accent' },
+      { p: [0, -1.4, 0], s: [3, 0.8, 3], mat: 'dark' },
+    ],
+  });
+  b.plat(0, G2 - 2.2, 918, 2.4, 2.4, { h: 40, mat: 'dark', dress: false });
+  b.plat(0, G2, 935, 9, 16); // 927..943
+  b.checkpoint(0, G2, 931);
+
   // ===== H. The long line (finale) ===========================================================================
-  const Z0 = 609;
-  const H = K - 10;
-  b.ramp([0, K, Z0], [0, H, Z0 + 30], 9);
+  const Z0 = 943;
+  const H = G2 - 10;
+  b.ramp([0, G2, Z0], [0, H, Z0 + 30], 9);
   b.plat(0, H, Z0 + 38, 9, 16);
   b.entity({ type: 'boost', p: [0, H + 0.6, Z0 + 35], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
   b.checkpoint(0, H, Z0 + 32.5, Math.PI, [9, 6, 2]);
@@ -249,7 +321,7 @@ export function build(): LevelData {
   b.plat(0, H + 2, Z0 + 178, 16, 28);
   b.finish(0, H + 2, Z0 + 182, 12);
   b.prompt(
-    [0, K + 1.5, 604],
+    [0, G2 + 1.5, 938],
     [9, 4, 8],
     'slide',
     'Last line: chute, wall, sinking pads, launcher. Do not stop for anything',
@@ -295,21 +367,42 @@ export function build(): LevelData {
     [0, K + 3, 578, undefined, 3],
     [0, K, 588, undefined, 2],
     [0, K, 609.5, 's'],
-    [0, H, 641],
-    [0, H, 642.5, 'u'],
-    [-2.15, H, 647.5],
-    [-2.2, H, 654.3, 'j', 0.8],
-    [-2.2, H + 1, 673],
-    [-2.2, H + 1, 680, 'wj'],
-    [0, H, 698],
-    [0, H, 708.4, 'j', 0.6],
-    [0, H, 717.4, 'j', 0.6],
-    [0, H, 726.4, 'j', 0.6],
-    [0, H, 735.4, 'j', 0.6],
-    [0, H, 746],
-    [0, H, 757],
-    [0, H + 3, 766, 'j', 2.5],
-    [0, H + 2, 791],
+    [0, Y2, 642],
+    [0, Y2, 654, 'u'],
+    [0, Y2, 662.3, 'jj', 0.8],
+    [0, Y2, 682],
+    [0.3, Y2, 693.3, 'jj', 0.8],
+    [2, F2, 710],
+    [0, F2, 724],
+    [0, F2, 730.3, 'j', 0.6],
+    [0, F2, 741.5, 's', 0.8],
+    [0, F2, 748.5, 'u'],
+    [0, F2, 754.3, 'j', 0.6],
+    [0, F2, 765.5, 's', 0.8],
+    [0, F2, 772.5, 'u'],
+    [0, F2, 783.5, 's'],
+    [2.6, G2, 816],
+    [2.6, G2, 844, 'u'],
+    [0, G2, 864],
+    [0, G2, 894],
+    [0, G2, 924],
+    [0, G2, 942],
+    [0, G2, 943.5, 's'],
+    [0, H, 975],
+    [0, H, 976.5, 'u'],
+    [-2.15, H, 981.5],
+    [-2.2, H, 988.3, 'j', 0.8],
+    [-2.2, H + 1, 1007],
+    [-2.2, H + 1, 1014, 'wj'],
+    [0, H, 1032],
+    [0, H, 1042.4, 'j', 0.6],
+    [0, H, 1051.4, 'j', 0.6],
+    [0, H, 1060.4, 'j', 0.6],
+    [0, H, 1069.4, 'j', 0.6],
+    [0, H, 1080],
+    [0, H, 1091],
+    [0, H + 3, 1100, 'j', 2.5],
+    [0, H + 2, 1125],
   );
   // ----- destructibles (Phase B): neon pylons, energy barriers and cargo beside the high-speed
   // lines (none in the crusher hall)
@@ -319,9 +412,14 @@ export function build(): LevelData {
   b.breakable('energy', -3.2, -20.5, 248.7, { yaw: 0.13, scale: 0.7 });
   b.breakable('pylon', 1.45, -20.5, 266);
   b.breakable('crate', 3.6, -10.5, 115.5);
-  b.breakable('pylon', -0.7, H, 653.9);
-  b.breakable('energy', 1.6, H, 701.1, { yaw: -0.11, scale: 0.7 });
-  b.breakable('pylon', -1.55, H, 750.8);
+  b.breakable('pylon', -0.7, H, 987.9);
+  b.breakable('energy', 1.6, H, 1035.1, { yaw: -0.11, scale: 0.7 });
+  b.breakable('pylon', -1.55, H, 1084.8);
+  b.breakable('pylon', 1.6, Y2, 685.1);
+  b.breakable('energy', -2.2, F2, 714.5, { yaw: 0.15, scale: 0.7 });
+  b.breakable('pylon', 2.2, F2, 774.5);
+  b.breakable('energy', 3.2, G2, 850.7, { yaw: -0.13, scale: 0.7 });
+  b.breakable('pylon', -1.45, G2, 868);
   b.breakable('energy', 3.2, G, 446, { yaw: 0.1, scale: 0.7 });
   b.breakable('pylon', -3.0, K, 598);
   return b.data;
@@ -329,7 +427,7 @@ export function build(): LevelData {
 
 function scenery(b: LevelBuilder) {
   // canyon walls: huge chrome slabs either side, lit by flowing seams
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 30; i++) {
     const z = -30 + i * 44;
     const lean = (i % 3) * 0.04;
     b.monolith(-38 - (i % 4) * 6, -150, z, 20, 300 + (i % 3) * 40, 40, 'dark', [0, 0, lean]);
@@ -339,17 +437,17 @@ function scenery(b: LevelBuilder) {
   }
   // data rivers: long glowing ribbons far below
   for (let i = 0; i < 6; i++)
-    b.decor('box', [-18 + i * 7.2, -80 - (i % 2) * 6, 400], [0.8, 0.3, 1000], i % 2 ? 'accent' : 'glass', {
+    b.decor('box', [-18 + i * 7.2, -80 - (i % 2) * 6, 400], [0.8, 0.3, 1400], i % 2 ? 'accent' : 'glass', {
       glow: 0.8,
     });
   b.ring(0, -6, 60, 16, 0.5, [0, 0, 0], [0, 0, 0.2], 'accent', 1);
   b.ring(0, -18, 420, 20, 0.6, [0, 0, 0], [0, 0, -0.25], 'accent', 1);
   b.ring(0, -10, 250, 44, 1.2, [1.2, 0, 0.3], [0, 0, 0.04], 'alt', 0.2);
-  for (let i = 0; i < 66; i++) {
+  for (let i = 0; i < 96; i++) {
     const side = i % 2 ? 1 : -1;
     b.shard(
       side * (9 + ((i * 7) % 14)),
-      -24 + ((i * 11) % 30),
+      -24 - (i > 52 ? 30 : 0) + ((i * 11) % 30),
       -4 + i * 11.6,
       0.7 + (i % 3) * 0.5,
       i % 4 === 0 ? 'accent' : 'glass',
@@ -357,5 +455,6 @@ function scenery(b: LevelBuilder) {
     );
   }
   b.ring(0, -34, 549, 18, 0.6, [0, 0, 0], [0, 0, 0.3], 'accent', 1);
-  b.monolith(0, -170, 980, 120, 520, 40, 'dark');
+  b.monolith(0, -170, 1320, 120, 520, 40, 'dark');
+  b.ring(0, -48, 918, 20, 0.6, [0, 0, 0], [0, 0, 0.25], 'accent', 1);
 }

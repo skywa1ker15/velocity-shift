@@ -1,7 +1,9 @@
 /**
  * LEVEL 1 — THE AWAKENING
  * Dawn above a sea of clouds. Pale marble ruins teach every move in order:
- * run → jump → slide → double jump → moving ground → dash → wall-run → wall chain → descent → finale.
+ * run → jump → slide → double jump → moving ground → dash → wall-run → wall chain; then a second
+ * half practises them together at the same gentle pace (sunlit terraces, a colonnade of arches and
+ * rails, garden bridges, twin aqueducts and a halo stair) before the descent and the finale.
  * Main line heads +Z down the centre lane (x = 0). One hidden high route, one air shortcut.
  */
 import { LevelBuilder } from '../LevelBuilder';
@@ -107,49 +109,120 @@ export function build(): LevelData {
   b.checkpoint(0, 3.6, 258);
   b.prompt([0, 5.1, 220], [10, 4, 9], 'jump', 'Chain the walls: run, kick off, catch the next one');
 
+  // ===== K. Sunlit terraces (a breather, then three easy steps up) ==========================
+  b.plat(0, 3.6, 287, 16, 32); // 271..303, wide and open
+  b.plat(0, 4.2, 307, 8, 8); // 303..311
+  b.checkpoint(0, 4.2, 306);
+  b.plat(0, 4.8, 318, 8, 8); // 314..322
+  b.plat(0, 5.4, 329, 8, 8); // 325..333
+  b.prompt([0, 5.1, 280], [16, 4, 14], 'jump', 'A wide terrace: catch your breath, then step up');
+  // ===== L. The colonnade (slide the arches, jump the rails, in rhythm) =========================
+  const Y = 5.4;
+  b.plat(0, Y, 376, 8, 86); // 333..419
+  b.checkpoint(0, Y, 360);
+  for (const z of [366, 388, 408]) {
+    b.solid({ p: [0, Y + 1.05 + 0.7, z], s: [9, 1.4, 1.6], mat: 'alt' }); // an arch: slide under
+    b.strip([0, Y + 1.02, z - 0.82], [8, 0.05, 0.05], 0.9);
+  }
+  for (const z of [377, 398]) b.solid({ p: [0, Y + 0.4, z], s: [7.6, 0.8, 0.6], mat: 'alt' }); // a rail: jump it
+  for (let z = 336; z <= 416; z += 8) {
+    b.column(-5.4, Y, z, 7, 0.45);
+    b.column(5.4, Y, z, 7, 0.45);
+  }
+  b.prompt([0, Y + 1.5, 352], [8, 4, 8], 'slide', 'Find the rhythm: slide the arches, jump the rails');
+  b.checkpoint(0, Y, 416);
+  // ===== M. Garden bridges (drifting stones, then a double-jump gap) ==============================
+  b.entity({
+    type: 'mover',
+    s: [5, 1, 4.5],
+    path: [
+      [0, Y - 1.4, 424],
+      [0, Y - 0.4, 424],
+    ],
+    speed: 0.7,
+    pause: 0.4,
+  });
+  b.entity({
+    type: 'mover',
+    s: [5, 1, 4.5],
+    path: [
+      [0, Y - 0.2, 431],
+      [0, Y - 1.2, 431],
+    ],
+    speed: 0.7,
+    pause: 0.4,
+  });
+  b.plat(0, Y, 444, 10, 16); // 436..452
+  b.checkpoint(0, Y, 443);
+  b.plat(0, Y, 469, 10, 14); // 462..476: ten metres across
+  b.prompt([0, Y + 1.5, 448], [10, 4, 6], 'jump', 'Too far for one jump: jump again in mid-air');
+  // ===== N. Twin aqueducts (one wall each side, then three in a row) ================================
+  // each wall starts on the deck you leave and ends where the next deck begins, as at the aqueduct
+  b.wall(3.0, Y - 2, 483, 0.8, 8, 22); // 472..494, wall on the left
+  b.plat(0, Y, 503, 10, 18); // 494..512
+  b.checkpoint(0, Y, 503);
+  b.wall(-3.0, Y - 2, 519, 0.8, 8, 22); // 508..530, wall on the right
+  b.plat(0, Y, 539, 10, 18); // 530..548
+  b.checkpoint(0, Y, 539);
+  b.wall(3.0, Y - 2, 552, 0.8, 9, 16); // 544..560
+  b.wall(-3.0, Y - 2, 566, 0.8, 9, 16); // 558..574
+  b.wall(3.0, Y - 2, 580, 0.8, 9, 16); // 572..588
+  b.plat(0, Y, 600, 10, 24); // 588..612
+  b.checkpoint(0, Y, 599);
+  b.prompt([0, Y + 1.5, 470], [10, 4, 6], 'jump', 'One wall, then the other. Then three in a row');
+  // ===== O. The halo stair (dash a gap, then down to the descent) ====================================
+  b.ring(0, Y + 2.6, 617, 7.5, 0.5, [0, 0, 0], [0, 0, 0.12], 'alt', 0.25);
+  b.ring(0, Y + 2.6, 617, 9, 0.2, [0, 0, 0], [0, 0, -0.2], 'accent', 1);
+  b.plat(0, Y, 631, 10, 18); // 622..640 (ten metres across, as at the first halo)
+  b.plat(0, 4.8, 645, 10, 10); // 640..650
+  b.plat(0, 4.2, 655, 10, 10); // 650..660
+  b.plat(0, 3.6, 665.5, 10, 11); // 660..671
+  b.checkpoint(0, 3.6, 664);
+  b.prompt([0, Y + 1.5, 606], [10, 4, 6], 'dash', 'Jump, jump again, then dash through the halo');
+
   // ===== I. The descent (slide chute, door that opens ahead) ===========================================
-  b.ramp([0, 3.6, 271], [0, -4.4, 295], 8);
-  b.plat(0, -4.4, 309, 8, 28); // 295..323
-  b.trigger([0, -2.4, 298], [8, 6, 4], 'door');
+  b.ramp([0, 3.6, 671], [0, -4.4, 695], 8);
+  b.plat(0, -4.4, 709, 8, 28); // 695..723
+  b.trigger([0, -2.4, 698], [8, 6, 4], 'door');
   b.entity({
     type: 'mover',
     id: 'door',
     on: 'door',
     s: [7.6, 7, 1],
     path: [
-      [0, -0.9, 319],
-      [0, 6.3, 319],
+      [0, -0.9, 719],
+      [0, 6.3, 719],
     ],
     speed: 6.5,
     mode: 'once',
     mat: 'alt',
   });
-  b.gate(0, -4.4, 319, 8.6, 7.4);
+  b.gate(0, -4.4, 719, 8.6, 7.4);
   b.prompt(
-    [0, 5.1, 265],
+    [0, 3.6 + 1.5, 665],
     [10, 4, 10],
     'slide',
     'Slide down the slope to build speed — the gate opens as you come',
   );
-  b.shortcut('aw-air', [0, 3.5, 287], [10, 6, 10]);
-  b.checkpoint(0, -4.4, 321.6, Math.PI, [7, 6, 2]);
+  b.shortcut('aw-air', [0, 3.5, 687], [10, 6, 10]);
+  b.checkpoint(0, -4.4, 721.6, Math.PI, [7, 6, 2]);
 
   // ===== J. Finale: collapsing bridge, low beam, gap, last wall ==========================================
   for (let i = 0; i < 5; i++)
-    b.entity({ type: 'collapse', p: [0, -4.7, 326 + i * 6], s: [6, 0.6, 5.8], delay: 0.9 });
-  b.solid({ p: [0, -4.4 + 1.05 + 0.6, 341], s: [9, 1.2, 1.4], mat: 'alt' });
-  b.decor('box', [-4.6, 1.2, 341], [0.5, 9, 0.5], 'alt');
-  b.decor('box', [4.6, 1.2, 341], [0.5, 9, 0.5], 'alt');
-  b.decor('box', [0, 5.9, 341], [11, 0.8, 1.2], 'alt');
-  b.collectible('a3', 0, -1.2, 341);
-  b.prompt([0, -2.9, 322], [8, 4, 5], 'forward', 'The bridge is failing — do not stop');
-  b.plat(0, -4.4, 366, 8, 13); // 359.5..372.5
-  b.checkpoint(0, -4.4, 362);
-  b.wall(3.0, -6.4, 378.25, 0.8, 9, 22.5); // 367..389.5
-  b.plat(0, -2.4, 401, 16, 26); // 388..414
-  b.finish(0, -2.4, 408, 12);
-  b.gate(0, -2.4, 413.5, 10, 8);
-  for (let z = 392; z <= 412; z += 5) {
+    b.entity({ type: 'collapse', p: [0, -4.7, 726 + i * 6], s: [6, 0.6, 5.8], delay: 0.9 });
+  b.solid({ p: [0, -4.4 + 1.05 + 0.6, 741], s: [9, 1.2, 1.4], mat: 'alt' });
+  b.decor('box', [-4.6, 1.2, 741], [0.5, 9, 0.5], 'alt');
+  b.decor('box', [4.6, 1.2, 741], [0.5, 9, 0.5], 'alt');
+  b.decor('box', [0, 5.9, 741], [11, 0.8, 1.2], 'alt');
+  b.collectible('a3', 0, -1.2, 741);
+  b.prompt([0, -2.9, 722], [8, 4, 5], 'forward', 'The bridge is failing — do not stop');
+  b.plat(0, -4.4, 766, 8, 13); // 759.5..772.5
+  b.checkpoint(0, -4.4, 762);
+  b.wall(3.0, -6.4, 778.25, 0.8, 9, 22.5); // 767..789.5
+  b.plat(0, -2.4, 801, 16, 26); // 788..814
+  b.finish(0, -2.4, 808, 12);
+  b.gate(0, -2.4, 813.5, 10, 8);
+  for (let z = 792; z <= 812; z += 5) {
     b.column(-7.2, -2.4, z, 8, 0.5);
     b.column(7.2, -2.4, z, 8, 0.5);
   }
@@ -189,21 +262,65 @@ export function build(): LevelData {
     [2.2, 4.6, 244],
     [2.2, 4.6, 250, 'wj'],
     [0, 3.6, 260],
-    [0, 3.6, 271.5, 's'],
-    [0, -4.4, 297],
-    [0, -4.4, 314, 'u'],
-    [0, -4.4, 322],
-    [0, -4.4, 333],
-    [0, -4.4, 337.6, 's'],
-    [0, -4.4, 344, 'u'],
-    [0, -4.4, 352.2, 'jj', 0.8],
-    [0, -4.4, 364],
-    [1.7, -4.4, 368],
-    [1.7, -4.4, 371.4, 'j', 0.8],
-    [2.2, -3.4, 379],
-    [2.2, -3.4, 385, 'wj'],
-    [0, -2.4, 396],
-    [0, -2.4, 408],
+    [0, 3.6, 300],
+    [0, 3.6, 302.4, 'j', 0.8],
+    [0, 4.2, 310.6, 'j', 0.8],
+    [0, 4.8, 321.6, 'j', 0.8],
+    [0, 5.4, 340],
+    [0, 5.4, 363.4, 's'],
+    [0, 5.4, 370, 'u'],
+    [0, 5.4, 375.2, 'j', 0.6],
+    [0, 5.4, 385.4, 's'],
+    [0, 5.4, 392, 'u'],
+    [0, 5.4, 396.2, 'j', 0.6],
+    [0, 5.4, 405.4, 's'],
+    [0, 5.4, 412, 'u'],
+    [0, 5.4, 418.6, 'j', 0.8],
+    [0, 4.4, 424, 'j', 1.2],
+    [0, 4.6, 431, 'j', 1.2],
+    [0, 5.4, 446],
+    [0, 5.4, 451.4, 'jj', 0.8],
+    [0, 5.4, 466],
+    [1.7, 5.4, 472],
+    [1.7, 5.4, 474.9, 'j', 0.8],
+    [2.2, 6.4, 482],
+    [2.2, 6.4, 489.5, 'wj'],
+    [0, 5.4, 500],
+    [-1.7, 5.4, 508],
+    [-1.7, 5.4, 510.9, 'j', 0.8],
+    [-2.2, 6.4, 518],
+    [-2.2, 6.4, 525.5, 'wj'],
+    [0, 5.4, 536],
+    [1.7, 5.4, 544],
+    [1.7, 5.4, 546.9, 'j', 0.8],
+    [2.2, 6.4, 551],
+    [2.2, 6.4, 557, 'wj'],
+    [-2.2, 6.4, 565],
+    [-2.2, 6.4, 571, 'wj'],
+    [2.2, 6.4, 579],
+    [2.2, 6.4, 585, 'wj'],
+    [0, 5.4, 602],
+    [0, 5.4, 611.2, 'jj+d', 0.8],
+    [0, 5.4, 632],
+    [0, 5.4, 639.6],
+    [0, 4.8, 649.6],
+    [0, 4.2, 659.6],
+    [0, 3.6, 668],
+    [0, 3.6, 671.5, 's'],
+    [0, -4.4, 697],
+    [0, -4.4, 714, 'u'],
+    [0, -4.4, 722],
+    [0, -4.4, 733],
+    [0, -4.4, 737.6, 's'],
+    [0, -4.4, 744, 'u'],
+    [0, -4.4, 752.2, 'jj', 0.8],
+    [0, -4.4, 764],
+    [1.7, -4.4, 768],
+    [1.7, -4.4, 771.4, 'j', 0.8],
+    [2.2, -3.4, 779],
+    [2.2, -3.4, 785, 'wj'],
+    [0, -2.4, 796],
+    [0, -2.4, 808],
   );
   // ----- destructibles (Phase B): fragile marble columns that slide apart, and floating relics
   // that answer the blade
@@ -214,9 +331,13 @@ export function build(): LevelData {
   b.breakable('column', -1.5, 2.2, 134.4);
   b.breakable('relic', 1.5, 3.6, 162.9);
   b.breakable('column', 0.36, 3.6, 189.7, { yaw: 0.45 });
-  b.breakable('column', -1.5, -4.4, 332.7);
-  b.breakable('column', 1.5, -4.4, 350.9);
-  b.breakable('relic', 1.56, -2.4, 396, { yaw: 0.3 });
+  b.breakable('column', -1.5, -4.4, 732.7);
+  b.breakable('column', 1.5, -4.4, 750.9);
+  b.breakable('relic', 1.56, -2.4, 796, { yaw: 0.3 });
+  b.breakable('column', 1.5, 3.6, 290);
+  b.breakable('relic', -1.5, 5.4, 346);
+  b.breakable('column', 1.5, 5.4, 449);
+  b.breakable('relic', -1.5, 5.4, 609);
   return b.data;
 }
 
@@ -234,6 +355,12 @@ function scenery(b: LevelBuilder) {
     [46, 370, 16, 160, 20],
     [-44, 420, 22, 220, 22],
     [58, 450, 18, 180, 16],
+    [-52, 500, 20, 200, 18],
+    [50, 560, 22, 220, 20],
+    [-60, 620, 18, 180, 16],
+    [56, 690, 24, 240, 22],
+    [-46, 760, 20, 200, 18],
+    [52, 830, 16, 170, 16],
   ];
   for (const [x, z, w, h, d] of mono) {
     b.monolith(x, -90, z, w, h, d, 'alt');
@@ -252,7 +379,7 @@ function scenery(b: LevelBuilder) {
   b.ring(0, 70, 620, 110, 2.4, [1.5, 0, 0.5], [0, 0, 0.02], 'alt', 0.1);
 
   // floating fragments of the ruin
-  for (let i = 0; i < 44; i++) {
+  for (let i = 0; i < 82; i++) {
     const side = i % 2 ? 1 : -1;
     const x = side * (10 + ((i * 13) % 22));
     const y = -6 + ((i * 7) % 22);
@@ -274,6 +401,10 @@ function scenery(b: LevelBuilder) {
     [18, 0, 235, 9],
     [-16, -8, 300, 10],
     [17, -6, 350, 8],
+    [-17, 2, 430, 9],
+    [16, -4, 520, 10],
+    [-18, 0, 610, 8],
+    [17, -6, 700, 9],
   ];
   for (const [x, y, z, s] of isles) {
     b.decor('box', [x, y - 1, z], [s, 2, s * 0.8], 'base');

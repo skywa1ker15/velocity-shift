@@ -17,6 +17,26 @@ import {
 } from '../../src/save/SaveSystem';
 import { defaultSettings, motionProfile, sanitizeSettings } from '../../src/settings/settings';
 
+describe('Evolve / Pure', () => {
+  test('Evolve is the default mode; a broken value falls back to it', () => {
+    expect(defaultSettings.gameMode).toBe('evolve');
+    expect(sanitizeSettings({ gameMode: 'pure' }).gameMode).toBe('pure');
+    expect(sanitizeSettings({ gameMode: 'cheat' }).gameMode).toBe('evolve');
+  });
+  test('Evolve bests load, repair and reset with the course layout', () => {
+    const s = sanitizeSave({
+      version: SAVE_VERSION,
+      levels: { awakening: { best: 50, evolveBest: 30 }, x: { evolveBest: -4 } },
+    });
+    expect(s.levels.awakening.evolveBest).toBe(30);
+    expect(s.levels.x.evolveBest).toBeNull();
+    s.levels.awakening.layout = 1;
+    applyLayouts(s, { awakening: 2 });
+    expect(s.levels.awakening.evolveBest).toBeNull();
+    expect(emptyRecord().evolveBest).toBeNull();
+  });
+});
+
 describe('settings', () => {
   test('unknown keys are dropped and out-of-range values are clamped', () => {
     const s = sanitizeSettings({
@@ -170,6 +190,7 @@ describe('save data', () => {
       objectives: [],
       completions: 0,
       layout: 1,
+      evolveBest: null,
     });
   });
 });

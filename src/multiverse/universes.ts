@@ -32,8 +32,6 @@ export interface ScreenLook {
   posterize: number;
   /** Paper fibre texture multiply. */
   paper: number;
-  /** Rolling digital block glitches. */
-  glitch: number;
   /** Slow hue drift. */
   hueDrift: number;
   /** Rain streaks across the lens. */
@@ -48,7 +46,6 @@ export const NO_SCREEN: ScreenLook = {
   grain: 0,
   posterize: 0,
   paper: 0,
-  glitch: 0,
   hueDrift: 0,
   rain: 0,
 };
@@ -66,7 +63,7 @@ export interface UniverseDef {
 
 /** How movement feedback is drawn in a universe. */
 export interface FxLook {
-  /** Speed lines: 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush, 5 glitch bars. */
+  /** Speed lines: 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush. */
   lines: number;
   /** Decal / puff sprites: 0 inked, 1 glowing, 2 black-and-paper, 3 pixel, 4 corrupted. */
   sprites: number;
@@ -169,7 +166,7 @@ export const FX: Record<UniverseId, FxLook> = {
     debris: { shape: 'cube', amount: 0.8, push: 4 },
   },
   corrupt: {
-    lines: 5,
+    lines: 1,
     sprites: 4,
     dust: 0x16ff73,
     darkStreaks: false,
@@ -628,7 +625,7 @@ const defs: UniverseDef[] = [
       hands: { sleeve: 0x4a5058, glove: 0x9aa2ad, trim: 0x16ff73 },
       streak: 0x16ff73,
     }),
-    screen: { ...NO_SCREEN, glitch: 0.45, fringe: 0.7, scan: 0.35, grain: 0.3 },
+    screen: { ...NO_SCREEN, fringe: 0.7, scan: 0.35, grain: 0.3 },
   },
 ];
 

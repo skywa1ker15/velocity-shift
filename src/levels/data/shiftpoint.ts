@@ -5,6 +5,7 @@
  *   C  the Wall Run: sideways gravity — the wall becomes the floor
  *   D  the Falling Bridge: sections drop behind you while a tower topples across the chasm
  *   E  Gravity Chaos: a slingshot ring through low gravity, then reverse gravity — run the ceiling
+ *   E2 the reprise: down a chute to a second Falling Bridge and a second round of Gravity Chaos
  *   F  the carousel: a calm beat before the end
  *   G  the finale (everything the game has taught, at its biggest): the Barrel Roll, a tube that
  *      turns a full 360° while you sprint; the Grand Climb, a floor that curls up a 20 m face and
@@ -139,11 +140,52 @@ export function build(): LevelData {
   b.plat(0, H, 440, 12, 28); // 426..454
   b.checkpoint(0, H, 430);
 
+  // ===== E2. The reprise (the bridge and the chaos again, further out) ==========================
+  // down a chute to the bridge deck, then a second Falling Bridge (section D, 260 m on) and a second
+  // slingshot, low-gravity gap and ceiling run (section E, 260 m on)
+  b.ramp([0, H, 454], [0, D, 470], 8);
+  b.plat(0, D, 478.5, 12, 17); // 470..487
+  b.checkpoint(0, D, 475);
+  b.trigger([0, D + 1.5, 486], [12, 4, 2], 'bridge2');
+  for (let i = 0; i < 7; i++)
+    b.entity({
+      type: 'collapse',
+      on: 'bridge2',
+      p: [0, D - 0.3, 490 + i * 6],
+      s: [6, 0.6, 5.8],
+      delay: 1.4 + 0.86 * i,
+    });
+  b.entity({
+    type: 'structure',
+    id: 'tower2',
+    on: 'bridge2',
+    p: [0, D - 2, 532],
+    warn: 1.0,
+    delay: 0.6,
+    steps: [{ t: 1.6, rot: [1, 0, 0, 90], ease: 'in' }],
+    parts: [
+      { p: [0, 10, 0], s: [4, 20, 4] },
+      { p: [0, 20.4, 0], s: [5, 0.8, 5], mat: 'accent' },
+    ],
+  });
+  b.plat(0, D - 3, 532, 6, 6, { h: 30, mat: 'dark', dress: false });
+  b.prompt([0, H + 1.5, 446], [12, 4, 6], 'slide', 'Not over yet. The bridge and the chaos, once more');
+  b.plat(0, D, 565, 12, 22); // 554..576
+  b.checkpoint(0, D, 558);
+  b.entity({ type: 'impulse', p: [0, D + 2, 584], s: [6, 6, 3], dir: [0, 1, 1], add: 4, min: 22 });
+  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, D, 597], s: [14, 16, 40] }); // z 577..617
+  b.plat(0, E, 626, 12, 24); // 614..638
+  b.checkpoint(0, E, 618);
+  b.solid({ p: [0, 14.5, 661], s: [10, 1, 42], mat: 'alt' }); // underside y = 14, z 640..682
+  b.entity({ type: 'field', mode: 'dir', dir: [0, 1, 0], p: [0, 4, 661], s: [12, 22, 42] });
+  b.plat(0, H, 700, 12, 28); // 686..714
+  b.checkpoint(0, H, 690);
+
   // ===== F. Carousel and finish (calm control after the chaos) =======================================
-  b.plat(0, H, 468.5, 8, 8, { h: 20, mat: 'dark', dress: false }); // hub 464.5..472.5
+  b.plat(0, H, 728.5, 8, 8, { h: 20, mat: 'dark', dress: false }); // hub 724.5..732.5
   b.entity({
     type: 'rotator',
-    p: [0, H - 0.5, 468.5],
+    p: [0, H - 0.5, 728.5],
     axis: [0, 1, 0],
     speed: 0.3,
     parts: [
@@ -155,43 +197,43 @@ export function build(): LevelData {
       { p: [0, -0.25, 0], s: [0.6, 0.3, 20], mat: 'accent' },
     ],
   });
-  b.plat(0, H, 493.5, 16, 22); // 482.5..504.5
-  b.checkpoint(0, H, 486);
+  b.plat(0, H, 753.5, 16, 22); // 742.5..764.5
+  b.checkpoint(0, H, 746);
 
   // ===== G. The finale =====================================================================
   // (1) the Barrel Roll: a full turn while you sprint, in two halves at a steady rate (each half
   // finishes well inside its tube even at a dash), upside down for a moment in between
-  tube(b, H, 'barrel1', 504.5, 554.5, { steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
-  b.trigger([0, H + 2, 506], [4, 4, 2], 'barrel1');
-  b.prompt([0, H + 1.5, 496], [16, 4, 8], 'forward', 'One full turn. Do not stop running');
+  tube(b, H, 'barrel1', 764.5, 814.5, { steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
+  b.trigger([0, H + 2, 766], [4, 4, 2], 'barrel1');
+  b.prompt([0, H + 1.5, 756], [16, 4, 8], 'forward', 'One full turn. Do not stop running');
   // the upside-down stretch between the halves: the same square section, gravity pulling up
-  b.solid({ p: [0, H - 0.5, 562.25], s: [6, 1, 15.5], mat: 'base' });
-  b.solid({ p: [0, H + 4.5, 562.25], s: [6, 1, 15.5], mat: 'base' });
-  for (const x of [-2.5, 2.5]) b.solid({ p: [x, H + 2, 562.25], s: [1, 4, 15.5], mat: 'alt' });
-  b.strip([0, H + 3.97, 562.25], [0.3, 0.06, 15], 1);
-  b.entity({ type: 'field', mode: 'dir', dir: [0, 1, 0], p: [0, H + 2, 562.25], s: [4, 4, 15.5] }); // z 554.5..570
-  b.checkpoint(0, H, 558);
-  tube(b, H, 'barrel2', 570, 620, { r0: 180, steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
-  b.trigger([0, H + 2, 571.5], [4, 4, 2], 'barrel2');
+  b.solid({ p: [0, H - 0.5, 822.25], s: [6, 1, 15.5], mat: 'base' });
+  b.solid({ p: [0, H + 4.5, 822.25], s: [6, 1, 15.5], mat: 'base' });
+  for (const x of [-2.5, 2.5]) b.solid({ p: [x, H + 2, 822.25], s: [1, 4, 15.5], mat: 'alt' });
+  b.strip([0, H + 3.97, 822.25], [0.3, 0.06, 15], 1);
+  b.entity({ type: 'field', mode: 'dir', dir: [0, 1, 0], p: [0, H + 2, 822.25], s: [4, 4, 15.5] }); // z 814.5..830
+  b.checkpoint(0, H, 818);
+  tube(b, H, 'barrel2', 830, 880, { r0: 180, steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
+  b.trigger([0, H + 2, 831.5], [4, 4, 2], 'barrel2');
   // (2) the Grand Climb: the floor curls up a 20 m face and over the summit
   const L: Lane = [-3, 3];
-  floorAt(b, L, H, 620, 625.5);
-  b.checkpoint(0, H, 622.5);
-  arc(b, L, H + 5, 625.5, 5, 0, 90, 'inside');
-  faceAt(b, L, 630.5, H + 5, H + 25, -1);
-  arc(b, L, H + 25, 635.5, 5, -90, -180, 'outside');
-  b.plat(0, SU, 640.5, 6, 10, { h: 32, mat: 'base' }); // the summit, z 635.5..645.5
-  b.checkpoint(0, SU, 638.5);
+  floorAt(b, L, H, 880, 885.5);
+  b.checkpoint(0, H, 882.5);
+  arc(b, L, H + 5, 885.5, 5, 0, 90, 'inside');
+  faceAt(b, L, 890.5, H + 5, H + 25, -1);
+  arc(b, L, H + 25, 895.5, 5, -90, -180, 'outside');
+  b.plat(0, SU, 900.5, 6, 10, { h: 32, mat: 'base' }); // the summit, z 895.5..905.5
+  b.checkpoint(0, SU, 898.5);
   // (3) the Falling Summit: six slabs out from the summit all drop at once, far ones first, as you
   // top out, so the bridge becomes a stair falling away under you (every hop is down)
-  b.trigger([0, SU + 1.5, 637], [6, 4, 2], 'summit'); // as you top out
+  b.trigger([0, SU + 1.5, 897], [6, 4, 2], 'summit'); // as you top out
   for (let i = 0; i < 6; i++) {
     const drop = 5 + 3 * i;
     b.entity({
       type: 'structure',
       id: `summit${i}`,
       on: 'summit',
-      p: [0, SU, 649.5 + 8 * i],
+      p: [0, SU, 909.5 + 8 * i],
       warn: 0.75,
       delay: 0.9 - 0.15 * i,
       steps: [{ t: drop / 6, move: [0, -drop, 0], ease: 'linear' }],
@@ -201,17 +243,17 @@ export function build(): LevelData {
       ],
     });
   }
-  b.prompt([0, SU + 1.5, 639.5], [6, 4, 4], 'forward', 'The summit is coming down. Run');
+  b.prompt([0, SU + 1.5, 899.5], [6, 4, 4], 'forward', 'The summit is coming down. Run');
   // (4) the Last Slingshot: through the ring into low gravity and down to the finish
-  b.plat(0, LP, 706.5, 12, 24); // 694.5..718.5
-  b.checkpoint(0, LP, 698.5);
-  b.entity({ type: 'impulse', p: [0, LP + 2, 714.5], s: [6, 6, 3], dir: [0, 1, 1], add: 4, min: 24 });
-  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, 20, 745.5], s: [16, 40, 60] }); // z 715.5..775.5
-  b.prompt([0, LP + 1.5, 703.5], [12, 4, 6], 'jump', 'Through the ring, and fly');
-  b.plat(0, H, 775.5, 20, 40); // 755.5..795.5
-  b.finish(0, H, 773.5, 14);
-  b.gate(0, H, 794.5, 10, 8);
-  b.ring(0, H + 14, 773.5, 16, 0.8, [0, 0, 0], [0, 0, 0.25], 'accent', 1);
+  b.plat(0, LP, 966.5, 12, 24); // 954.5..978.5
+  b.checkpoint(0, LP, 958.5);
+  b.entity({ type: 'impulse', p: [0, LP + 2, 974.5], s: [6, 6, 3], dir: [0, 1, 1], add: 4, min: 24 });
+  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, 20, 1005.5], s: [16, 40, 60] }); // z 975.5..1035.5
+  b.prompt([0, LP + 1.5, 963.5], [12, 4, 6], 'jump', 'Through the ring, and fly');
+  b.plat(0, H, 1035.5, 20, 40); // 1015.5..1055.5
+  b.finish(0, H, 1033.5, 14);
+  b.gate(0, H, 1054.5, 10, 8);
+  b.ring(0, H + 14, 1033.5, 16, 0.8, [0, 0, 0], [0, 0, 0.25], 'accent', 1);
 
   scenery(b);
 
@@ -238,33 +280,48 @@ export function build(): LevelData {
     [0, 14, 400, undefined, 3],
     [0, 14, 421],
     [0, H, 436, undefined, 3],
-    [0, H, 448.5, 'w2', 0.6],
-    [0, H, 453, 'j', 0.6],
-    [0, H, 459, undefined, 1.6],
-    [0, H, 461.3, 'j', 1],
-    [0, H, 468, 'w2', 0.6],
-    [0, H, 472, 'j', 0.6],
-    [0, H, 478, undefined, 1.6],
-    [0, H, 480.3, 'j', 1],
-    [0, H, 490],
-    [0, H, 503],
+    [0, H, 453],
+    [0, H, 454.5, 's'],
+    [0, D, 474, 'u'],
+    [0, D, 482],
+    [0, D, 492],
+    [0, D, 522],
+    [0, D, 540],
+    [0, D, 560],
+    [0, D, 575.2, 'j', 0.8],
+    [0, E, 620, undefined, 3],
+    [0, E, 636],
+    [0, E, 639, undefined, 1.5],
+    [0, 14, 660, undefined, 3],
+    [0, 14, 681],
+    [0, H, 696, undefined, 3],
+    [0, H, 708.5, 'w2', 0.6],
+    [0, H, 713, 'j', 0.6],
+    [0, H, 719, undefined, 1.6],
+    [0, H, 721.3, 'j', 1],
+    [0, H, 728, 'w2', 0.6],
+    [0, H, 732, 'j', 0.6],
+    [0, H, 738, undefined, 1.6],
+    [0, H, 740.3, 'j', 1],
+    [0, H, 750],
+    [0, H, 763],
     // inside the tubes: points on the axis do not move as they turn
-    [0, H + 2, 520, undefined, 2.5],
-    [0, H + 2, 568, undefined, 2.5],
-    [0, H + 2, 617, undefined, 2.5],
-    [0, H, 622.5, undefined, 2.5],
-    [0, H + 1.5, 629, undefined, 2.5],
-    [0, H + 15, 630.5, undefined, 2.5],
-    [0, H + 28.5, 632, undefined, 2.5],
-    [0, SU, 640.5, undefined, 2.5],
-    [0, SU, 645.5],
-    [0, SU - 6, 657.5, undefined, 30],
-    [0, SU - 12, 673.5, undefined, 30],
-    [0, SU - 18, 687.5, undefined, 30],
-    [0, LP, 700.5, undefined, 3],
-    [0, LP, 712.5],
-    [0, H, 767.5, undefined, 5],
-    [0, H, 773.5],
+    [0, H + 2, 780, undefined, 2.5],
+    [0, H + 2, 828, undefined, 2.5],
+    [0, H + 2, 877, undefined, 2.5],
+    [0, H, 882.5, undefined, 2.5],
+    [0, H + 1.5, 889, undefined, 2.5],
+    [0, H + 15, 890.5, undefined, 2.5],
+    [0, H + 28.5, 892, undefined, 2.5],
+    [0, SU, 900.5, undefined, 2.5],
+    [0, SU, 905.5],
+    [0, SU - 6, 917.5, undefined, 30],
+    [0, SU - 12, 933.5, undefined, 30],
+    [0, SU - 18, 947.5, undefined, 30],
+    [0, LP, 960.5, undefined, 3],
+    [0, LP, 972.5],
+    [0, H, 1027.5, undefined, 5],
+    [0, H, 1033.5],
   );
   // destructibles beside the line
   b.breakable('relic', 2.6, 0, 8);
@@ -276,25 +333,29 @@ export function build(): LevelData {
   b.breakable('relic', 3, D, 312);
   b.breakable('column', -3, E, 370);
   b.breakable('relic', 3, H, 446);
-  b.breakable('column', 4, H, 500);
-  b.breakable('relic', -1.5, SU, 643);
-  b.breakable('column', 1.5, LP, 705.5);
-  b.breakable('relic', -3, H, 783.5);
+  b.breakable('column', -3, D, 480);
+  b.breakable('relic', 3, D, 572);
+  b.breakable('column', -3, E, 630);
+  b.breakable('relic', 3, H, 706);
+  b.breakable('column', 4, H, 760);
+  b.breakable('relic', -1.5, SU, 903);
+  b.breakable('column', 1.5, LP, 965.5);
+  b.breakable('relic', -3, H, 1043.5);
   return b.data;
 }
 
 function scenery(b: LevelBuilder) {
   // impossible architecture: towers hanging at angles, rings, floating slabs
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 37; i++) {
     const side = i % 2 ? 1 : -1;
     const z = -10 + i * 30;
     b.decor('box', [side * (34 + (i % 3) * 10), 10 + (i % 4) * 8, z], [12, 50, 12], i % 3 ? 'base' : 'alt', {
       r: [0.4 * side, i * 0.3, 0.6 * side],
     });
   }
-  for (let i = 0; i < 9; i++)
+  for (let i = 0; i < 12; i++)
     b.ring(i % 2 ? 40 : -40, 30, 40 + i * 85, 26, 1, [1.2, i * 0.5, 0.3], [0.02, 0.03, 0], 'accent', 0.6);
-  for (let i = 0; i < 62; i++)
+  for (let i = 0; i < 82; i++)
     b.shard(
       ((i * 37) % 70) - 35,
       ((i * 11) % 40) - 10,
@@ -305,4 +366,5 @@ function scenery(b: LevelBuilder) {
     );
   b.monolith(-150, -120, 300, 50, 400, 50, 'dark');
   b.monolith(160, -120, 420, 50, 400, 50, 'dark');
+  b.monolith(-160, -120, 820, 50, 400, 50, 'dark');
 }

@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests --max-warnings 0",
     "test": "vitest run",
+    "gen:slots": "GEN_SLOTS=1 vitest run tests/sim/gen-slots.test.ts",
     "test:e2e": "playwright test",
     "format": "prettier --write ."
   },

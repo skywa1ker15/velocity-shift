@@ -202,7 +202,8 @@ function CalloutLine() {
   useEffect(() => {
     if (!c) return;
     setShown(c.id);
-    const t = setTimeout(() => setShown(null), c.tone === 'shift' ? 2400 : 1100);
+    const ms = { shift: 2400, synergy: 2400, evolve: 1700, rare: 1500, flow: 1100, close: 1100 }[c.tone];
+    const t = setTimeout(() => setShown(null), ms);
     return () => clearTimeout(t);
   }, [c]);
   if (!c || shown !== c.id) return null;
@@ -233,6 +234,96 @@ function HitMarker() {
           </em>
         )}
       </span>
+    </div>
+  );
+}
+
+// --- Evolve: ability rail (left edge), Flux and Flow (top-right), timers ---------------------
+const CAT_CLASS: Record<string, string> = {
+  movement: 'mv',
+  combat: 'cb',
+  survival: 'sv',
+  special: 'sp',
+  mythic: 'my',
+};
+
+/** Compact rail of owned abilities with level pips, then active synergies. Left edge, mid-height. */
+function EvoRail() {
+  const evo = useUi((s) => s.hud.evo);
+  if (!evo || (!evo.abilities.length && !evo.synergies.length)) return null;
+  return (
+    <div className={'evo-rail stage-' + evo.stage} aria-label="Abilities">
+      {evo.abilities.map((a) => (
+        <div
+          key={a.id}
+          className={'ab ' + (CAT_CLASS[a.category] ?? '')}
+          title={`${a.name} ${a.level}/${a.max}`}
+        >
+          <b>{a.glyph}</b>
+          <span className="lv" aria-label={`${a.name} level ${a.level} of ${a.max}`}>
+            {Array.from({ length: a.max }, (_, i) => (
+              <i key={i} className={i < a.level ? 'on' : ''} />
+            ))}
+          </span>
+        </div>
+      ))}
+      {evo.synergies.map((s) => (
+        <div key={s} className="syn">
+          {s}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Flux meter (with the Surge cost marked), Flow gauge and any running timers. */
+function EvoMeters() {
+  const evo = useUi((s) => s.hud.evo);
+  const game = useGame();
+  if (!evo) return null;
+  const cost = 30;
+  return (
+    <div className="evo-meters">
+      <div className={'flux' + (evo.canSurge ? ' ready' : '')} aria-label={`Flux ${evo.flux} of 100`}>
+        <span>FLUX</span>
+        <div className="bar">
+          <i style={{ transform: `scaleX(${evo.flux / 100})` }} />
+          <u style={{ left: `${cost}%` }} />
+        </div>
+        {evo.canSurge && (
+          <kbd className="surge-key" title="Surge">
+            {keyFor(game, 'surge')}
+          </kbd>
+        )}
+      </div>
+      <div className={'flow t' + evo.tier} aria-label={`Flow tier ${evo.tier}`}>
+        <span>FLOW</span>
+        <div className="segs">
+          {[1, 2, 3, 4].map((t) => (
+            <i key={t} className={t <= evo.tier ? 'on' : t === evo.tier + 1 ? 'next' : ''}>
+              {t === evo.tier + 1 && <em style={{ transform: `scaleX(${evo.flowFrac})` }} />}
+            </i>
+          ))}
+        </div>
+      </div>
+      <div className="timers">
+        {evo.surge > 0 && (
+          <span className="tm surge">
+            SURGE <b className="mono-num">{evo.surge.toFixed(1)}</b>
+          </span>
+        )}
+        {evo.reflex > 0 && <span className="tm reflex">REFLEX</span>}
+        {evo.aegis >= 0 && (
+          <span className={'tm aegis' + (evo.aegis >= 1 ? ' ready' : '')} title="Aegis">
+            AEGIS {evo.aegis >= 1 ? '●' : <b className="mono-num">{Math.round(evo.aegis * 100)}%</b>}
+          </span>
+        )}
+        {evo.chain > 0 && evo.chain < 4 && (
+          <span className="tm chain">
+            ECHO {evo.chain}/4 <b className="mono-num">{evo.chainLeft.toFixed(1)}</b>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -281,7 +372,7 @@ export function Hud({ frozen }: { frozen?: boolean }) {
   const meta = levelId ? levelById(levelId)?.meta : null;
   const rec = levelId ? game.save.data.levels[levelId] : undefined;
   const speed = hud.speed;
-  const charges = [0, 1].map((i) => Math.min(1, Math.max(0, hud.dash - i)));
+  const charges = Array.from({ length: hud.dashMax }, (_, i) => Math.min(1, Math.max(0, hud.dash - i)));
   const fast = speed > 18;
   const cpNow = Math.min(hud.checkpoint, hud.checkpoints);
   return (
@@ -312,7 +403,15 @@ export function Hud({ frozen }: { frozen?: boolean }) {
 
       <div className="hud-tc">
         <div className={'timer mono-num' + (hud.started ? '' : ' idle')}>{formatTime(hud.time)}</div>
-        {rec?.best ? <div className="pb mono-num">PB {formatTime(rec.best)}</div> : null}
+        {hud.evo ? (
+          rec?.evolveBest ? (
+            <div className="pb mono-num">EVOLVE PB {formatTime(rec.evolveBest)}</div>
+          ) : (
+            <div className="pb mono-num">EVOLVE</div>
+          )
+        ) : rec?.best ? (
+          <div className="pb mono-num">PB {formatTime(rec.best)}</div>
+        ) : null}
       </div>
 
       <div className="hud-tr">
@@ -355,7 +454,9 @@ export function Hud({ frozen }: { frozen?: boolean }) {
             <SwordChip />
           </>
         )}
+        <EvoMeters />
       </div>
+      <EvoRail />
 
       {s.crosshair !== 'off' && <div className={'crosshair ' + s.crosshair} aria-hidden />}
       {!frozen && <HitMarker />}

@@ -24,7 +24,8 @@ export class InputManager {
   onAction: (a: Action, down: boolean) => void = () => {};
 
   private down = new Set<string>();
-  private pressed: Record<'jump' | 'dash' | 'slide' | 'attack' | 'sword', boolean> = {
+  private pressed: Record<'jump' | 'dash' | 'slide' | 'attack' | 'sword' | 'surge', boolean> = {
+    surge: false,
     jump: false,
     dash: false,
     slide: false,
@@ -47,6 +48,7 @@ export class InputManager {
     dashPressed: false,
     attackPressed: false,
     swordPressed: false,
+    surgePressed: false,
   };
 
   constructor(
@@ -130,6 +132,7 @@ export class InputManager {
       else if (a === 'dash') this.pressed.dash = true;
       else if (a === 'attack') this.pressed.attack = true;
       else if (a === 'sword') this.pressed.sword = true;
+      else if (a === 'surge') this.pressed.surge = true;
       else if (a === 'slide') {
         this.pressed.slide = true;
         if (this.settings.slideMode === 'toggle') this.slideLatch = !this.slideLatch;
@@ -178,6 +181,7 @@ export class InputManager {
       this.pressed.slide =
       this.pressed.attack =
       this.pressed.sword =
+      this.pressed.surge =
         false;
     this.slideLatch = false;
   };
@@ -195,7 +199,7 @@ export class InputManager {
     if (!this.enabled) {
       f.moveX = f.moveZ = 0;
       f.jumpHeld = f.jumpPressed = f.sprint = f.slideHeld = f.slidePressed = f.dashPressed = false;
-      f.attackPressed = f.swordPressed = false;
+      f.attackPressed = f.swordPressed = f.surgePressed = false;
       f.yaw = this.yaw;
       f.pitch = this.pitch;
       return f;
@@ -210,6 +214,7 @@ export class InputManager {
     f.slidePressed = this.pressed.slide;
     f.attackPressed = this.pressed.attack;
     f.swordPressed = this.pressed.sword;
+    f.surgePressed = this.pressed.surge;
     const mode = this.settings.sprintMode;
     f.sprint = mode === 'auto' ? true : mode === 'hold' ? this.isDown('sprint') : this.sprintLatch;
     f.slideHeld = this.settings.slideMode === 'hold' ? this.isDown('slide') : this.slideLatch;
@@ -218,6 +223,7 @@ export class InputManager {
       this.pressed.slide =
       this.pressed.attack =
       this.pressed.sword =
+      this.pressed.surge =
         false;
     return f;
   }

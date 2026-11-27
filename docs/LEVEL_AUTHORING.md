@@ -152,3 +152,9 @@ lane is a wall-run, a kick-off, then a double jump (a kick-off alone gains only 
 4. Set medal times in the registry: gold just above the bot's time, the hidden tier ~12 % below
    it, silver ×1.4, bronze ×2 (the test checks that a clean bot run earns exactly gold).
 5. Play it.
+
+## Evolve tools
+
+- Evolve collectibles are not authored per course: `npm run gen:slots` records slots along the autopilot reference line into `src/evolution/slots/<level>.json`, and `placeCollectibles(slots, seed)` places them at run start. Re-run it and commit the JSON whenever geometry or the reference line changes (a test checks freshness).
+- For hand-placed items (the Training gym) use `LevelData.evoItems` with `evoItem()` from the builder.
+- Courses must still keep exactly 3 collectibles of the old kind, checkpoint spacing under 85 m and a hidden route; Pure reference times set the medals.

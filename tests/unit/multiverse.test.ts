@@ -4,7 +4,7 @@ import { getEnv } from '../../src/environment/presets';
 import { Director, FRONT_DONE, frontRadius } from '../../src/multiverse/Director';
 import { planRun } from '../../src/multiverse/plan';
 import { mv } from '../../src/multiverse/uniforms';
-import { getUniverse, UNIVERSE_IDS, type UniverseId } from '../../src/multiverse/universes';
+import { FX, getUniverse, UNIVERSE_IDS, type UniverseId } from '../../src/multiverse/universes';
 
 const LIB: UniverseId[] = [
   'anime',
@@ -285,5 +285,40 @@ describe('transitions', () => {
       }
     }
     expect(used.size).toBe(TRANSITIONS.length);
+  });
+});
+
+describe('the Corrupt universe holds still (no flickering blocks)', () => {
+  /** The body of a GLSL function in a shader source string. */
+  const body = (src: string, name: string) => {
+    const i = src.indexOf(name + '(');
+    expect(i).toBeGreaterThan(-1);
+    let depth = 0,
+      j = src.indexOf('{', i);
+    const start = j;
+    for (; j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}' && --depth === 0) break;
+    }
+    return src.slice(start, j + 1);
+  };
+  it('its surfaces and sky do not depend on time', async () => {
+    const surface = await import('../../src/multiverse/surface');
+    const sky = await import('../../src/multiverse/sky');
+    const surf = Object.values(surface)
+      .filter((v) => typeof v === 'string')
+      .join('\n');
+    const skies = Object.values(sky)
+      .filter((v) => typeof v === 'string')
+      .join('\n');
+    expect(body(surf, 'vec3 mvCorruptStyle')).not.toMatch(/uTime/);
+    expect(body(skies, 'vec3 skyCorrupt')).not.toMatch(/uTime/);
+  });
+  it('no universe has a screen glitch, and Corrupt draws a single speed line style', () => {
+    for (const id of UNIVERSE_IDS) {
+      const u = getUniverse(id) as unknown as { screen: Record<string, number> };
+      expect(Object.keys(u.screen)).not.toContain('glitch');
+    }
+    expect(FX.corrupt.lines).toBe(1);
   });
 });

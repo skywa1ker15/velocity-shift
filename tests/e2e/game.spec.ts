@@ -24,10 +24,12 @@ test.afterEach(() => {
   expect(errors, 'console errors:\n' + errors.join('\n')).toEqual([]);
 });
 
-async function boot(page: Page) {
+async function boot(page: Page, mode: 'pure' | 'evolve' = 'pure') {
   await page.goto('/');
   await page.waitForSelector('.title', { timeout: 90_000 });
-  await page.evaluate(() => (window as any).__vs.updateSettings({ preset: 'low' })); // keep software rendering quick
+  // keep software rendering quick; the course tests below were written for Pure (the original
+  // game), the Evolve tests at the end ask for Evolve
+  await page.evaluate((m) => (window as any).__vs.updateSettings({ preset: 'low', gameMode: m }), mode);
   await page.click('.title');
   await page.waitForSelector('.menu');
 }
@@ -56,7 +58,7 @@ test('boots to the title, then every menu screen opens and returns', async ({ pa
   await page.keyboard.press('Escape');
 
   await page.click('nav >> text=Controls');
-  await expect(page.locator('.bind-row')).toHaveCount(14); // 12 movement / system actions + sword slash + draw/sheathe
+  await expect(page.locator('.bind-row')).toHaveCount(15); // 12 movement / system actions + sword slash + draw/sheathe + Surge
   await page.keyboard.press('Escape');
 
   await page.click('text=Achievements');
@@ -111,7 +113,7 @@ test('play flow: load, move, pause, resume, restart, finish, results, retry', as
   // put the player just before the finish line and walk through it
   await page.evaluate(() => {
     const g = (window as any).__vs;
-    g.sim.player.reset(0, -6.9, 351, Math.PI);
+    g.sim.player.reset(0, -12.9, 691, Math.PI);
     g.input.setLook(Math.PI, 0);
   });
   await page.keyboard.down('KeyW');
@@ -144,7 +146,7 @@ test('progress and settings persist across a reload', async ({ page }) => {
   await page.evaluate(() => {
     const g = (window as any).__vs;
     g.debugAdvance(0.5, { moveZ: 1 });
-    g.sim.player.reset(0, -6.9, 351, Math.PI);
+    g.sim.player.reset(0, -12.9, 691, Math.PI);
     g.input.setLook(Math.PI, 0);
   });
   await page.keyboard.down('KeyW');
@@ -522,7 +524,7 @@ test("Level 9: holding W through Shift Point's Barrel Roll and Grand Climb (real
   await startLevel(page, 'shiftpoint');
   await page.evaluate(() => {
     const sim = (window as any).__vs.sim;
-    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 486) < 0.6);
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 746) < 0.6);
     sim.restartFromCheckpoint();
   });
   const pl = () =>
@@ -542,15 +544,124 @@ test("Level 9: holding W through Shift Point's Barrel Roll and Grand Climb (real
   let s = await pl();
   let inverted = false,
     face = false;
-  for (let i = 0; i < 4000 && s.z < 640 && s.deaths === 0; i++) {
+  for (let i = 0; i < 4000 && s.z < 900 && s.deaths === 0; i++) {
     s = await pl();
-    if (s.grounded && s.uy < -0.99 && s.z > 506 && s.z < 620) inverted = true; // upside down in the roll
+    if (s.grounded && s.uy < -0.99 && s.z > 766 && s.z < 880) inverted = true; // upside down in the roll
     if (s.grounded && s.uz < -0.99 && s.y > 20) face = true; // high on the 20 m face
   }
   await page.keyboard.up('KeyW');
   expect(s.deaths).toBe(0);
   expect(inverted).toBe(true);
   expect(face).toBe(true);
-  expect(s.z).toBeGreaterThanOrEqual(640);
+  expect(s.z).toBeGreaterThanOrEqual(900);
   expect(s.y).toBeCloseTo(34, 0);
+});
+
+// ----- Evolve ------------------------------------------------------------------------------
+async function evolveTraining(page: Page, cpZ: number) {
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'training');
+  await page.evaluate((z) => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - z) < 0.6);
+    sim.restartFromCheckpoint();
+  }, cpZ);
+}
+const evoState = (page: Page) =>
+  page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    const e = sim.evo;
+    return {
+      z: sim.player.pos.z,
+      deaths: sim.stats.deaths,
+      taken: e.items.map((i: { kind: string; taken: boolean }) => i.kind + (i.taken ? '+' : '-')),
+      flux: e.flux,
+      levels: e.totalLevels,
+      world: e.worldScale,
+      surge: e.surgeLeft,
+    };
+  });
+
+test('Evolve (real keyboard): in the Training gym, running catches Glints, C under the arch catches the Undertow and Space over the gap catches the Skyknot', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await boot(page, 'evolve');
+  await evolveTraining(page, 362);
+  expect(await page.evaluate(() => (window as any).__vs.sim.evo !== null)).toBe(true);
+  // a person presses each key a little before the obstacle; the page tells us when we get there
+  const reach = (z: number) =>
+    page.waitForFunction((zz) => (window as any).__vs.sim.player.pos.z > zz, z, {
+      timeout: 60_000,
+      polling: 'raf',
+    });
+  await page.keyboard.down('KeyW');
+  await reach(387);
+  await page.keyboard.down('KeyC'); // slide under the arch
+  await reach(394);
+  await page.keyboard.up('KeyC');
+  await reach(396.5);
+  await page.keyboard.press('Space'); // jump the gap
+  await reach(406);
+  const s = await evoState(page);
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  const taken = s.taken as string[];
+  expect(taken.filter((t) => t === 'glint+')).toHaveLength(5);
+  expect(taken).toContain('undertow+');
+  expect(taken).toContain('skyknot+');
+  expect(s.flux).toBeGreaterThan(15);
+  expect(s.levels).toBe(2);
+  await expect(page.locator('.evo-meters .flux')).toBeVisible();
+  await expect(page.locator('.evo-rail .ab')).toHaveCount(2);
+});
+
+test('Evolve (real keyboard): V triggers Surge, which spends Flux and slows the world while the HUD counts it down', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await boot(page, 'evolve');
+  await evolveTraining(page, 546);
+  // setup through the debug handle: the Timeslip ability and enough Flux to spend
+  await page.evaluate(() => {
+    const e = (window as any).__vs.sim.evo;
+    e.grant('timeslip');
+    e.addFlux(40);
+  });
+  const before = await evoState(page);
+  await page.keyboard.press('KeyV');
+  await page.waitForTimeout(400);
+  const s = await evoState(page);
+  expect(s.surge).toBeGreaterThan(0);
+  expect(s.world).toBeLessThan(0.6);
+  expect(s.flux).toBeLessThan(before.flux - 25);
+  await expect(page.locator('.evo-meters .tm.surge')).toBeVisible();
+  await page.waitForTimeout(3000);
+  expect((await evoState(page)).world).toBe(1);
+});
+
+test('the ready card switches between Evolve and Pure: a Pure run has no collectibles and no Evolve HUD', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await boot(page, 'evolve');
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await page.evaluate(() => (window as any).__vs.loadLevel('awakening'));
+  await page.waitForSelector('.ready-card', { timeout: 90_000 });
+  await expect(page.locator('.mode-pick .mode.on')).toContainText('Evolve');
+  expect(await page.evaluate(() => (window as any).__vs.sim.evo.items.length)).toBeGreaterThan(10);
+  await page.click('.mode-pick >> text=Pure');
+  await page.waitForFunction(
+    () => (window as any).__vs.mode === 'ready' && (window as any).__vs.sim?.evo === null,
+    null,
+    {
+      timeout: 90_000,
+    },
+  );
+  await expect(page.locator('.mode-pick .mode.on')).toContainText('Pure');
+  expect(await page.evaluate(() => (window as any).__vs.settings.gameMode)).toBe('pure');
+  await page.click('.ready-card .primary');
+  await page.waitForSelector('.hud');
+  await expect(page.locator('.evo-meters')).toHaveCount(0);
+  await expect(page.locator('.evo-rail')).toHaveCount(0);
 });

@@ -29,6 +29,7 @@ const fakeSaveSystem = (data: SaveData) =>
         objectives: [],
         completions: 0,
         layout: 1,
+        evolveBest: null,
       }),
     flush() {},
     save() {},
@@ -93,6 +94,26 @@ describe('finishing a run', () => {
     expect(save.levels.awakening.completions).toBe(1);
     expect(r.newAchievements.map((a) => a.id)).toContain('awakened');
     expect(r.nextLevelId).toBe('verticality');
+  });
+
+  test('an Evolve run never sets the medal, the Pure best or splits, and keeps its own best', () => {
+    const save = defaultSave();
+    const sys = fakeSaveSystem(save);
+    finishRun(sys, awakening, data(), run(60, { splits: [0, 30] }));
+    const evo = { pickups: 9, byKind: { glint: 7 }, peakTier: 3, stage: 2, abilities: [], synergies: [] };
+    const r = finishRun(sys, awakening, data(), run(20, { splits: [0, 5] }), evo);
+    expect(r.mode).toBe('evolve');
+    expect(r.medal).toBe(0);
+    expect(r.isRecord).toBe(false);
+    expect(save.levels.awakening.best).toBe(60);
+    expect(save.levels.awakening.splits).toEqual([0, 30]);
+    expect(save.levels.awakening.medal).toBe(medalFor(60, awakening.medals));
+    expect(save.levels.awakening.evolveBest).toBe(20);
+    expect(r.evolve?.isRecord).toBe(true);
+    const r2 = finishRun(sys, awakening, data(), run(25), evo);
+    expect(r2.evolve?.isRecord).toBe(false);
+    expect(r2.evolve?.previousBest).toBe(20);
+    expect(save.levels.awakening.completions).toBe(3); // Evolve clears still unlock the next course
   });
 
   test('a slower run never overwrites the record or lowers the medal', () => {
@@ -204,6 +225,7 @@ describe('level unlocks', () => {
       objectives: [],
       completions: 1,
       layout: 1,
+      evolveBest: null,
     };
     expect(isUnlocked(s, 'verticality')).toBe(true);
     expect(isUnlocked(s, 'momentum')).toBe(false);
@@ -221,6 +243,7 @@ describe('course achievements (Phase F)', () => {
     objectives: [],
     completions: 1,
     layout: 1,
+    evolveBest: null,
   });
   test('the shard total counts every level, so "Every Last One" means every last one', () => {
     expect(SHARD_COUNT).toBe(levels.length * 3);

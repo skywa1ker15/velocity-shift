@@ -57,6 +57,11 @@ export interface Settings {
   multiverse: 'dynamic' | 'home' | 'classic';
   /** 0 .. 1: strength of flashes, glitches, colour fringes and hue drift. */
   shiftIntensity: number;
+  /**
+   * evolve: collectibles and upgrades during each run. pure: the course alone — medals, ghosts and
+   * personal bests come from Pure runs only, so times stay comparable.
+   */
+  gameMode: 'evolve' | 'pure';
 }
 
 export const defaultSettings: Settings = {
@@ -99,6 +104,7 @@ export const defaultSettings: Settings = {
   unlockAll: false,
   multiverse: 'dynamic',
   shiftIntensity: 1,
+  gameMode: 'evolve',
 };
 
 /** Effective motion multipliers after applying the Reduce Motion master toggle. */
@@ -184,6 +190,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('hudOpacity', 0.2, 1);
   num('shiftIntensity', 0, 1);
   if (!['dynamic', 'home', 'classic'].includes(out.multiverse)) out.multiverse = 'dynamic';
+  if (!['evolve', 'pure'].includes(out.gameMode)) out.gameMode = 'evolve';
   if (!['low', 'medium', 'high', 'ultra', 'auto'].includes(out.preset)) out.preset = 'auto';
   if (!['auto', 'hold', 'toggle'].includes(out.sprintMode)) out.sprintMode = 'auto';
   if (!['hold', 'toggle'].includes(out.slideMode)) out.slideMode = 'hold';
