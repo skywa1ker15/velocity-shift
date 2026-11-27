@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 3: Phase C, UI and game presentation
+
+- **Main menu:** a stacked logo, one prominent Play entry (Continue or Play, with the level name and best time) over a quiet list, and a legibility gradient in place of the old halftone wash. The live attract runner is larger, carries the Shift Edge drawn in hand, and follows the real sword state. The hero camera keeps clear of columns and walls.
+- **HUD:** speed, dash charge and state icons moved to the top-right, level and checkpoint to the top-left, and the timer with personal best to the top-centre. Nothing sits in the bottom-centre where the first-person hands are. A top scrim and outlined type keep it readable on bright and dark skies. The death caption is non-blocking (retry speed is unchanged), a ring shows progress when R is held for a full restart, and checkpoint banners are clearer.
+- **Sword interface:** a chip showing stowed, drawing, drawn or sheathing, with an auto-sheathe ring, combo pips, key hints for the first few draws and a cut tally. A hit marker confirms cuts, smashes and bullseyes. A one-time contextual hint teaches the sword, using the player's own key bindings.
+- **Level select and intro:** cards use real in-game preview renders, the level name and description, best time, medal and the time for the next medal. Locked cards name the level that unlocks them. Arrow keys move between cards. The intro card lists medal times, objectives and controls, and states that the sword is optional.
+- **Results:** time, medal, personal best, comparison with the previous best (or the delta on a non-record run), a medal ladder with the next target, per-split deltas, movement stats, objectives, a "New this run" list, and Retry, Next, Level Select and Main Menu actions. No toast is ever drawn over the card.
+- **Notifications:** major (achievement, unlock) and ordinary (shard, info) toasts with icons and entrance and exit animations, on the left rail during play.
+- **Design system:** the UI is split into `hud.css`, `menu.css` and `results.css` on shared tokens. Panels are flat inked plates. Layouts were checked at 1920×1080, 1280×720, 1024×600, 844×390 and 390×844.
+- **Tests:** `tests/e2e/ui.spec.ts` covers HUD placement, sword feedback, the results card, level-select locking and keyboard navigation, and small-screen layout.
+- No gameplay, level, physics, control or sword-mechanic changes. The results screen has no performance score because the game does not record one.
+
 ## Phase 3: Phase B, environment, sword combat and destructibles
 
 - **Environment and lighting:**

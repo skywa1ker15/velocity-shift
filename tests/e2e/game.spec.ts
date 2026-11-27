@@ -44,8 +44,8 @@ test('boots to the title, then every menu screen opens and returns', async ({ pa
   await expect(page.locator('.logo').first()).toBeVisible();
 
   await page.click('text=Level Select');
-  await expect(page.locator('.level-card')).toHaveCount(4);
-  await expect(page.locator('.level-card.locked')).toHaveCount(2); // levels 2 and 3 start locked
+  await expect(page.locator('.lv-card')).toHaveCount(4);
+  await expect(page.locator('.lv-card.locked')).toHaveCount(2); // levels 2 and 3 start locked
   await page.keyboard.press('Escape');
 
   await page.click('nav >> text=Settings');

@@ -14,12 +14,14 @@ import {
   type CosmeticCategory,
 } from '../progression/Progression';
 import { Btn, Panel, useGame, useMenuNav } from './App';
+import { Arrow, LockIcon, MedalIcon } from './parts';
+import { previewFor } from './previews';
 
 const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
 
-export function Logo({ small }: { small?: boolean }) {
+export function Logo({ small, stack }: { small?: boolean; stack?: boolean }) {
   return (
-    <h1 className={'logo' + (small ? ' small' : '')} aria-label="Velocity: Shift">
+    <h1 className={'logo' + (small ? ' small' : '') + (stack ? ' stack' : '')} aria-label="Velocity: Shift">
       <span className="logo-a">VELOCITY</span>
       <span className="logo-sep" aria-hidden>
         <i />
@@ -59,22 +61,38 @@ export function MainMenu() {
   useUi((s) => s.saveRev);
   const ref = useMenuNav();
   const next = levelById(game.nextUnfinished())!;
+  const rec = game.save.data.levels[next.meta.id];
   const anyProgress = Object.keys(game.save.data.levels).length > 0;
+  const total = achievements.length;
+  const got = achievements.filter((a) => game.save.data.achievements[a.id]).length;
   return (
     <div className="screen menu">
+      <i className="streaks" aria-hidden />
       <div className="menu-col" ref={ref}>
-        <Logo small />
-        <nav>
-          <Btn className="primary" data-autofocus onClick={() => void game.loadLevel(next.meta.id)}>
-            <span>{anyProgress ? 'Continue' : 'Play'}</span>
-            <em>{next.meta.name}</em>
+        <Logo stack />
+        <p className="menu-tag">A first-person movement game</p>
+        <nav aria-label="Main menu">
+          <Btn className="play" data-autofocus onClick={() => void game.loadLevel(next.meta.id)}>
+            <span className="play-top">{anyProgress ? 'Continue' : 'Play'}</span>
+            <span className="play-sub">
+              {next.meta.name}
+              {rec?.best ? <em className="mono-num">Best {formatTime(rec.best)}</em> : null}
+            </span>
+            <Arrow />
           </Btn>
-          <Btn onClick={() => set({ screen: 'levels' })}>Level Select</Btn>
-          <Btn onClick={() => void game.loadLevel('training')}>Training</Btn>
-          <Btn onClick={() => set({ overlay: 'settings' })}>Settings</Btn>
-          <Btn onClick={() => set({ overlay: 'controls' })}>Controls</Btn>
-          <Btn onClick={() => set({ screen: 'collection' })}>Achievements &amp; Collection</Btn>
-          <Btn onClick={() => set({ screen: 'credits' })}>Credits</Btn>
+          <div className="menu-list">
+            <Btn onClick={() => set({ screen: 'levels' })}>Level Select</Btn>
+            <Btn onClick={() => void game.loadLevel('training')}>Training</Btn>
+            <Btn onClick={() => set({ screen: 'collection' })}>
+              Achievements{' '}
+              <em>
+                {got}/{total}
+              </em>
+            </Btn>
+            <Btn onClick={() => set({ overlay: 'settings' })}>Settings</Btn>
+            <Btn onClick={() => set({ overlay: 'controls' })}>Controls</Btn>
+            <Btn onClick={() => set({ screen: 'credits' })}>Credits</Btn>
+          </div>
         </nav>
       </div>
       <p className="version">v1.0 · progress saves in this browser</p>
@@ -89,53 +107,74 @@ export function LevelSelect() {
   const back = useCallback(() => set({ screen: 'menu' }), [set]);
   const save = game.save.data;
   return (
-    <Panel title="Level Select" kicker="Choose a course" wide onBack={back}>
-      <div className="levels">
-        {levels.map((l) => {
+    <Panel title="Level Select" kicker="Choose a course" wide grid onBack={back}>
+      <div className="lv-grid">
+        {levels.map((l, i) => {
           const m = l.meta;
           const rec = save.levels[m.id];
           const open = isUnlocked(save, m.id);
           const env = getEnv(m.env);
           const medal = rec?.medal ?? 0;
           const target = nextTarget(medal, m.medals);
+          const prev = i > 0 ? levels[i - 1].meta : null;
+          const img = previewFor(m.id);
+          const objDone = rec?.objectives.length ?? 0;
           return (
             <Btn
               key={m.id}
-              className={'level-card' + (open ? '' : ' locked')}
+              className={'lv-card' + (open ? '' : ' locked') + (medal >= 4 ? ' mastered' : '')}
               disabled={!open}
               onClick={() => void game.loadLevel(m.id)}
+              aria-label={`${m.name}${open ? '' : ', locked'}`}
               style={{
                 ['--c1' as any]: hex(env.sky.top),
                 ['--c2' as any]: hex(env.sky.horizon),
-                ['--c3' as any]: hex(env.palette.accent),
+                ['--lv' as any]: hex(env.palette.accent),
                 ['--c4' as any]: hex(env.palette.base),
               }}
             >
-              <div className="art" aria-hidden>
-                <i className="sun" />
-                <i className="mono m1" />
-                <i className="mono m2" />
-                <i className="mono m3" />
+              <div className="lv-art" aria-hidden>
+                {img && <img src={img} alt="" loading="lazy" draggable={false} />}
                 <span className="num">{m.training ? 'T' : String(m.index).padStart(2, '0')}</span>
+                {!open && (
+                  <span className="lock">
+                    <LockIcon />
+                  </span>
+                )}
               </div>
-              <div className="info">
+              <div className="lv-info">
                 <span className="kicker">{m.subtitle}</span>
                 <strong>{m.name}</strong>
-                <p>{open ? m.description : 'Finish the previous course to unlock.'}</p>
-                <div className="row">
-                  <span className="mono-num">{rec?.best ? formatTime(rec.best) : '--:--.---'}</span>
-                  <span className={'medal m' + medal}>{MEDAL_LABELS[medal]}</span>
+                <p>{open ? m.description : prev ? `Finish ${prev.name} to unlock.` : ''}</p>
+                <div className="lv-best">
+                  <div>
+                    <span>Best</span>
+                    <b className="mono-num">{rec?.best ? formatTime(rec.best) : '--:--.---'}</b>
+                  </div>
+                  <div className={'lv-medal m' + medal}>
+                    <MedalIcon tier={medal} />
+                    <span>{medal ? MEDAL_LABELS[medal] : 'No medal'}</span>
+                  </div>
                 </div>
-                <div className="row small">
+                <div className="lv-meta">
                   <span>
-                    Shards {rec?.collectibles.length ?? 0}/3 · Objectives {rec?.objectives.length ?? 0}/
-                    {m.objectives.length}
+                    Shards <b>{rec?.collectibles.length ?? 0}/3</b>
                   </span>
-                  {target && medal < 3 && <span>Next: {formatTime(target.time)}</span>}
-                  {target && medal === 3 && (
-                    <span className="shift-hint">Shift: {formatTime(target.time)}</span>
-                  )}
+                  <span>
+                    Objectives{' '}
+                    <b>
+                      {objDone}/{m.objectives.length}
+                    </b>
+                  </span>
                 </div>
+                {open && target && (
+                  <div className="lv-next">
+                    <span>
+                      Next medal · <b>{MEDAL_LABELS[target.tier]}</b>
+                    </span>
+                    <b className="mono-num">{formatTime(target.time)}</b>
+                  </div>
+                )}
               </div>
             </Btn>
           );
@@ -288,9 +327,21 @@ export function Loading() {
   const label = useUi((s) => s.loadLabel);
   const id = useUi((s) => s.levelId);
   const meta = id ? levelById(id)?.meta : null;
+  const env = meta ? getEnv(meta.env) : null;
   return (
-    <div className="screen loading">
-      <div>
+    <div
+      className="screen loading"
+      style={
+        env
+          ? {
+              ['--lv' as any]: hex(env.palette.accent),
+              ['--c1' as any]: hex(env.sky.top),
+              ['--c2' as any]: hex(env.sky.horizon),
+            }
+          : undefined
+      }
+    >
+      <div className="loading-card">
         {meta && <span className="kicker">{meta.subtitle}</span>}
         <h2>{meta?.name ?? 'Loading'}</h2>
         <div
@@ -322,29 +373,27 @@ export function Ready() {
   const rec = game.save.data.levels[m.id];
   const b = game.save.data.bindings;
   const medal = rec?.medal ?? 0;
+  const atk = (b.attack ?? []).find((c) => !c.startsWith('Mouse')) ?? b.attack?.[0];
+  const tiers = [
+    { t: 1, label: 'BRONZE', time: m.medals.bronze },
+    { t: 2, label: 'SILVER', time: m.medals.silver },
+    { t: 3, label: 'GOLD', time: m.medals.gold },
+    { t: 4, label: 'SHIFT', time: m.medals.platinum },
+  ];
   return (
-    <div className="screen ready">
+    <div className="screen ready" style={{ ['--lv' as any]: hex(getEnv(m.env).palette.accent) }}>
       <div className="ready-card" ref={ref}>
         <span className="kicker">{m.subtitle}</span>
         <h2>{m.name}</h2>
         <p className="desc">{m.description}</p>
-        <div className="targets">
-          <div className={'t' + (medal >= 1 ? ' got' : '')}>
-            <span className="medal m1">BRONZE</span>
-            <b className="mono-num">{formatTime(m.medals.bronze)}</b>
-          </div>
-          <div className={'t' + (medal >= 2 ? ' got' : '')}>
-            <span className="medal m2">SILVER</span>
-            <b className="mono-num">{formatTime(m.medals.silver)}</b>
-          </div>
-          <div className={'t' + (medal >= 3 ? ' got' : '')}>
-            <span className="medal m3">GOLD</span>
-            <b className="mono-num">{formatTime(m.medals.gold)}</b>
-          </div>
-          <div className={'t' + (medal >= 4 ? ' got' : '')}>
-            <span className="medal m4">SHIFT</span>
-            <b className="mono-num">{medal >= 3 ? formatTime(m.medals.platinum) : '??:??.???'}</b>
-          </div>
+        <div className="targets" aria-label="Medal times">
+          {tiers.map((x) => (
+            <div key={x.t} className={'t m' + x.t + (medal >= x.t ? ' got' : '')}>
+              <MedalIcon tier={x.t} />
+              <span>{x.label}</span>
+              <b className="mono-num">{x.t === 4 && medal < 3 ? '??:??.???' : formatTime(x.time)}</b>
+            </div>
+          ))}
         </div>
         <ul className="objectives">
           {m.objectives.map((o) => (
@@ -353,11 +402,27 @@ export function Ready() {
             </li>
           ))}
         </ul>
-        <p className="keys">
-          <kbd>{keyLabel(b.jump[0])}</kbd> jump <kbd>{keyLabel(b.slide[0])}</kbd> slide{' '}
-          <kbd>{keyLabel(b.dash[0])}</kbd> dash <kbd>{keyLabel(b.restart[0])}</kbd> restart <kbd>ESC</kbd>{' '}
-          pause
-        </p>
+        <div className="keys" aria-label="Controls">
+          <span>
+            <kbd>{keyLabel(b.jump[0])}</kbd> jump
+          </span>
+          <span>
+            <kbd>{keyLabel(b.slide[0])}</kbd> slide
+          </span>
+          <span>
+            <kbd>{keyLabel(b.dash[0])}</kbd> dash
+          </span>
+          <span className="sw">
+            <kbd>{keyLabel(atk)}</kbd>
+            <kbd>LMB</kbd> sword
+          </span>
+          <span>
+            <kbd>{keyLabel(b.restart[0])}</kbd> restart
+          </span>
+          <span>
+            <kbd>ESC</kbd> pause
+          </span>
+        </div>
         <div className="row">
           <Btn className="primary" data-autofocus onClick={begin}>
             {rec?.best ? `Start · best ${formatTime(rec.best)}` : 'Start'}
@@ -367,7 +432,9 @@ export function Ready() {
           </Btn>
         </div>
         {lockHint && <p className="fine warn">The browser did not capture the mouse — click Start again.</p>}
-        <p className="fine">The timer starts when you first move.</p>
+        <p className="fine">
+          The timer starts when you first move. Sword is optional — cutting never changes your run.
+        </p>
       </div>
     </div>
   );

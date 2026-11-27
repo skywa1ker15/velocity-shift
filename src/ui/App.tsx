@@ -6,11 +6,12 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
 import type { Game } from '../app/Game';
-import { useUi } from '../app/store';
+import { useUi, type Toast } from '../app/store';
 import { Hud } from './Hud';
 import {
   Collection,
@@ -58,7 +59,7 @@ export function Btn({
  * Keyboard navigation for a menu container: arrows / W-S move focus, Escape goes back.
  * (Enter and Space activate the focused button natively.)
  */
-export function useMenuNav(onBack?: () => void, autoFocus = true) {
+export function useMenuNav(onBack?: () => void, autoFocus = true, horizontal = false) {
   const ref = useRef<HTMLDivElement>(null);
   const focused = useRef(false);
   useEffect(() => {
@@ -77,8 +78,16 @@ export function useMenuNav(onBack?: () => void, autoFocus = true) {
         onBack();
         return;
       }
-      const down = e.key === 'ArrowDown' || (e.key === 's' && tag !== 'input');
-      const up = e.key === 'ArrowUp' || (e.key === 'w' && tag !== 'input');
+      // grids (level cards) also move with left/right and A/D
+      const h = horizontal && tag !== 'input' && tag !== 'select';
+      const down =
+        e.key === 'ArrowDown' ||
+        (e.key === 's' && tag !== 'input') ||
+        (h && (e.key === 'ArrowRight' || e.key === 'd'));
+      const up =
+        e.key === 'ArrowUp' ||
+        (e.key === 'w' && tag !== 'input') ||
+        (h && (e.key === 'ArrowLeft' || e.key === 'a'));
       if (!down && !up) return;
       if (tag === 'select') return;
       const list = items();
@@ -90,7 +99,7 @@ export function useMenuNav(onBack?: () => void, autoFocus = true) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onBack, autoFocus]);
+  }, [onBack, autoFocus, horizontal]);
   return ref;
 }
 
@@ -100,14 +109,17 @@ export function Panel({
   children,
   wide,
   onBack,
+  grid,
 }: {
   title: string;
   kicker?: string;
   children: ReactNode;
   wide?: boolean;
   onBack?: () => void;
+  /** Cards laid out in a row/grid: left/right move focus too. */
+  grid?: boolean;
 }) {
-  const ref = useMenuNav(onBack);
+  const ref = useMenuNav(onBack, true, !!grid);
   return (
     <div className="screen dim">
       <div className={'panel' + (wide ? ' wide' : '')} ref={ref}>
@@ -128,30 +140,82 @@ export function Panel({
   );
 }
 
+const TOAST_LABEL: Record<Toast['kind'], string> = {
+  achievement: 'Achievement unlocked',
+  unlock: 'Unlocked',
+  collect: 'Shard',
+  info: 'Note',
+};
+
+/** Major (achievement, unlock) cards are large and linger; minor chips (shard, note) are small and quick. */
+function ToastIcon({ kind }: { kind: Toast['kind'] }) {
+  if (kind === 'achievement')
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path
+          d="M12 1.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 16.6l-5.8 3.1 1.1-6.5L2.6 8.6l6.5-.9z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  if (kind === 'unlock')
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d="M12 2l8 10-8 10L4 12z M12 8l3.5 4-3.5 4-3.5-4z" fill="currentColor" fillRule="evenodd" />
+      </svg>
+    );
+  if (kind === 'collect')
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d="M12 3l6 9-6 9-6-9z" fill="currentColor" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ToastItem({ t, hidden }: { t: Toast; hidden: boolean }) {
+  const dismiss = useUi((s) => s.dismissToast);
+  const [leaving, setLeaving] = useState(false);
+  const major = t.kind === 'achievement' || t.kind === 'unlock';
+  useEffect(() => {
+    const out = setTimeout(() => setLeaving(true), major ? 5200 : 2600);
+    const gone = setTimeout(() => dismiss(t.id), (major ? 5200 : 2600) + 320);
+    return () => {
+      clearTimeout(out);
+      clearTimeout(gone);
+    };
+  }, [t.id, major, dismiss]);
+  return (
+    <div
+      className={'toast ' + t.kind + (major ? ' major' : ' minor') + (leaving ? ' leaving' : '')}
+      hidden={hidden}
+    >
+      <span className="toast-ico">
+        <ToastIcon kind={t.kind} />
+      </span>
+      <span className="toast-body">
+        {major && <span className="toast-kind">{TOAST_LABEL[t.kind]}</span>}
+        <strong>{t.title}</strong>
+        <span className="toast-text">{t.text}</span>
+      </span>
+    </div>
+  );
+}
+
 function Toasts() {
   const toasts = useUi((s) => s.toasts);
-  const dismiss = useUi((s) => s.dismissToast);
-  useEffect(() => {
-    if (!toasts.length) return;
-    const t = setTimeout(() => dismiss(toasts[0].id), 4200);
-    return () => clearTimeout(t);
-  }, [toasts, dismiss]);
+  const screen = useUi((s) => s.screen);
+  const playing = screen === 'playing' || screen === 'paused';
   return (
-    <div className="toasts" aria-live="polite">
+    <div className={'toasts ' + (playing ? 'play' : 'ui')} aria-live="polite">
       {toasts.map((t) => (
-        <div key={t.id} className={'toast ' + t.kind}>
-          <span className="toast-kind">
-            {t.kind === 'achievement'
-              ? 'ACHIEVEMENT'
-              : t.kind === 'unlock'
-                ? 'UNLOCKED'
-                : t.kind === 'collect'
-                  ? 'SHARD'
-                  : 'NOTE'}
-          </span>
-          <strong>{t.title}</strong>
-          <span>{t.text}</span>
-        </div>
+        // the results card lists everything new (achievements, unlocks, shards) itself, so no
+        // toast is ever drawn over its statistics
+        <ToastItem key={t.id} t={t} hidden={screen === 'results'} />
       ))}
     </div>
   );

@@ -8,7 +8,7 @@
  */
 import { BreakableView, type BreakInfo } from '../render/BreakableView';
 import { SlashFx } from '../fx/SlashFx';
-import { SwordPhase } from '../gameplay/Sword';
+import { SLASHES, SwordPhase } from '../gameplay/Sword';
 import * as THREE from 'three';
 import { AudioEngine } from '../audio/AudioEngine';
 import { CameraRig } from '../camera/CameraRig';
@@ -36,6 +36,7 @@ import { LevelView } from '../render/LevelView';
 import { AutoQuality, guessTier, type TierName } from '../render/quality';
 import { Renderer } from '../render/Renderer';
 import { GhostPlayer, GhostRecorder } from '../replay/Ghost';
+import { breakableCentre } from '../gameplay/breakables';
 import { Bot } from '../gameplay/Bot';
 import { Runner } from '../character/Runner';
 import { moveStateNames } from '../movement/types';
@@ -109,6 +110,9 @@ export class Game {
   private menuYaw = Math.PI;
   private menuCam = new THREE.Vector3();
   private menuSeeded = false;
+  private menuSide = 1.05; // which shoulder the hero camera sits over (+right / -left)
+  private menuSideV = 1.05;
+  private menuRay = { dist: 0, nx: 0, ny: 0, nz: 0, id: 0, wallrun: false };
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
@@ -279,6 +283,10 @@ export class Game {
 
   private setEnv(id: string) {
     this.env = getEnv(id);
+    document.documentElement.style.setProperty(
+      '--lv',
+      '#' + this.env.palette.accent.toString(16).padStart(6, '0'),
+    );
     this.renderer.applyEnv(this.env);
     this.body.setPalette(this.env.hands);
     this.menuRunner.setPalette(this.env.hands);
@@ -300,6 +308,7 @@ export class Game {
     if (this.menuData) {
       this.menuSim = new Simulation(levelById('awakening')!.meta, this.menuData);
       this.menuBot = new Bot(this.menuSim);
+      this.menuBot.autoSlash = true;
       this.menuSeeded = false;
       this.view = new LevelView(this.menuData, this.env, this.menuSim);
       this.breaks = new BreakableView(this.menuData.breakables, this.env.palette, this.menuSim);
@@ -730,7 +739,12 @@ export class Game {
     });
     sim.events.on('death', () => {
       audio.death();
-      ui.getState().fire('death');
+      ui.getState().fire(
+        'death',
+        sim.checkpoint > 0 ? `Checkpoint ${sim.checkpoint}` : 'Start',
+        null,
+        sim.stats.deaths,
+      );
     });
     sim.events.on('respawn', () => {
       audio.respawn();
@@ -796,6 +810,10 @@ export class Game {
         this.rig.onCut(info.power);
         if (info.bullseye) audio.bullseye();
       } else audio.smash(info.mat);
+      ui.getState().fireHit(
+        by === 'body' ? 'smash' : info.bullseye ? 'bullseye' : 'cut',
+        sim.stats.cuts + sim.stats.smashes,
+      );
     });
     sim.events.on('finish', () => {
       this.finishDelay = 0.9; // let the moment land before the results screen
@@ -1216,6 +1234,58 @@ export class Game {
     }
   }
 
+  /** Is the straight line from the runner's chest to a camera spot blocked by level geometry or an intact breakable? */
+  private menuBlocked(sim: Simulation, px: number, py: number, pz: number, cam: THREE.Vector3): boolean {
+    const dx = cam.x - px,
+      dy = cam.y - py,
+      dz = cam.z - pz;
+    const len = Math.hypot(dx, dy, dz);
+    if (sim.physics.raycast(px, py, pz, dx / len, dy / len, dz / len, len, this.menuRay)) return true;
+    const bs = sim.data.breakables;
+    for (let i = 0; i < bs.length; i++) {
+      if (sim.broken[i]) continue;
+      const c = breakableCentre(bs[i]);
+      // closest point on the chest→camera segment to the object's centre
+      const t = Math.max(0, Math.min(1, ((c.x - px) * dx + (c.y - py) * dy + (c.z - pz) * dz) / (len * len)));
+      const ex = px + dx * t - c.x,
+        ey = py + dy * t - c.y,
+        ez = pz + dz * t - c.z;
+      if (ex * ex + ey * ey + ez * ez < (c.r + 0.35) * (c.r + 0.35)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * After smoothing: the camera may never sit inside a wall or right beside an intact column.
+   * Pull it in along the line to the runner if something is in the way, and nudge it off any
+   * breakable it is crowding.
+   */
+  private keepMenuCamClear(sim: Simulation, px: number, py: number, pz: number) {
+    const cam = this.menuCam;
+    const bs = sim.data.breakables;
+    for (let i = 0; i < bs.length; i++) {
+      if (sim.broken[i]) continue;
+      const c = breakableCentre(bs[i]);
+      const dx = cam.x - c.x,
+        dz = cam.z - c.z;
+      const min = c.r + 0.7;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < min * min && Math.abs(cam.y - c.y) < c.r + 1.2) {
+        const d = Math.sqrt(d2) || 0.001;
+        cam.x = c.x + (dx / d) * min;
+        cam.z = c.z + (dz / d) * min;
+      }
+    }
+    const dx = cam.x - px,
+      dy = cam.y - py,
+      dz = cam.z - pz;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    if (sim.physics.raycast(px, py, pz, dx / len, dy / len, dz / len, len, this.menuRay)) {
+      const k = Math.max(1.6, this.menuRay.dist - 0.45) / len;
+      cam.set(px + dx * k, py + dy * k, pz + dz * k);
+    }
+  }
+
   private frameMenu(dt: number) {
     // attract mode: the autopilot runs the level for real; a chase camera shows the runner
     this.menuT += dt;
@@ -1231,6 +1301,7 @@ export class Game {
       if (sim.stats.finished || this.menuBot.stuckTicks > 120 * 15 || sim.stats.deaths > 3) {
         sim.restart();
         this.menuBot = new Bot(sim);
+        this.menuBot.autoSlash = true;
         this.menuSeeded = false;
       }
       const pl = sim.player;
@@ -1247,6 +1318,16 @@ export class Game {
       }
       runner.group.position.set(px, py, pz);
       runner.group.rotation.y = this.menuYaw;
+      // the figure shows the real sword state: drawn from the back, carried, swung, sheathed
+      const sw = sim.sword;
+      const sp = SLASHES[sw.pose.kind];
+      runner.setSword(
+        sw.phase,
+        sw.phase === SwordPhase.Attack
+          ? Math.min(1, (sw.t + a * SIM_DT) / (sp.windup + sp.active + sp.recover))
+          : -1,
+        sw.pose.kind,
+      );
       const st = pl.state;
       runner.update(
         dt,
@@ -1260,21 +1341,41 @@ export class Game {
               : 'wallL'
             : 'run',
       );
-      // chase camera: behind and to one side, drifting slowly from shoulder to shoulder
-      const side = Math.sin(this.menuT * 0.13) * 3.4 + 1.2;
+      // hero camera: close behind and just off the runner's shoulder, low and looking slightly up,
+      // framed so the runner fills the right-hand side of the screen and the menu owns the left.
+      // It picks whichever shoulder has a clear line to the runner (walls and breakable columns
+      // can be in the way) and, if neither does, pulls in closer.
       const bx = Math.sin(this.menuYaw),
         bz = Math.cos(this.menuYaw);
-      _v.set(
-        px + bx * 6.2 + bz * side,
-        py + 2.7 + Math.sin(this.menuT * 0.21) * 0.5,
-        pz + bz * 6.2 - bx * side,
-      );
+      const rx = bz,
+        rz = -bx; // the runner's right
+      const wide = cam.aspect > 1.25;
+      const baseDist = wide ? 3.5 : 4.6;
+      const drift = Math.sin(this.menuT * 0.13) * 0.4;
+      const camAt = (side: number, dist: number) =>
+        _v.set(
+          px + bx * dist + rx * side,
+          py + 1.3 + Math.sin(this.menuT * 0.21) * 0.15,
+          pz + bz * dist + rz * side,
+        );
+      let want = this.menuSide;
+      let dist = baseDist;
+      if (this.menuBlocked(sim, px, py + 1.1, pz, camAt(want + drift * Math.sign(want), dist))) {
+        const alt = -want;
+        if (!this.menuBlocked(sim, px, py + 1.1, pz, camAt(alt + drift * Math.sign(alt), dist))) want = alt;
+        else dist = baseDist * 0.55;
+      }
+      this.menuSide = want;
+      this.menuSideV += (want - this.menuSideV) * Math.min(1, dt * 2.2);
+      camAt(this.menuSideV + drift * Math.sign(this.menuSideV), dist);
       if (!this.menuSeeded) {
         this.menuSeeded = true;
         this.menuCam.copy(_v);
       } else this.menuCam.lerp(_v, Math.min(1, dt * 2.6));
+      this.keepMenuCamClear(sim, px, py + 1.1, pz);
       cam.position.copy(this.menuCam);
-      cam.lookAt(px - bx * 2.5, py + 1.25, pz - bz * 2.5);
+      const off = wide ? 1.45 : 0;
+      cam.lookAt(px - bx * 1.2 - rx * off, py + 1.05, pz - bz * 1.2 - rz * off);
       this.rig.feet.set(px, py, pz);
       worldUniforms.uPlayer.value.set(px, py + 1, pz);
     } else {
@@ -1298,12 +1399,27 @@ export class Game {
     const prev = ui.getState().hud;
     const wall = pl.state === MoveState.WallRun ? Math.max(0, 1 - pl.wallTime / pl.wallMax) : 0;
     const time = sim.runTime;
+    const sw = sim.sword;
+    const swordHud = {
+      phase: sw.phase,
+      combo: sw.combo,
+      idle: Math.round(sw.idleFrac * 20) / 20,
+      cuts: sim.stats.cuts + sim.stats.smashes,
+      total: sim.data.breakables.length,
+    };
+    const hold = this.restartHold >= 0 ? Math.min(1, this.restartHold / 0.6) : -1;
+    const ps = prev.sword;
     if (
       !force &&
       prev.time === time &&
       prev.speed === pl.speed &&
       prev.dash === pl.dashEnergy &&
-      prev.fps === this.fps
+      prev.fps === this.fps &&
+      prev.restartHold === hold &&
+      ps.phase === swordHud.phase &&
+      ps.combo === swordHud.combo &&
+      ps.idle === swordHud.idle &&
+      ps.cuts === swordHud.cuts
     )
       return;
     ui.getState().set({
@@ -1318,8 +1434,37 @@ export class Game {
         fps: this.fps,
         checkpoint: sim.checkpoint,
         checkpoints: Math.max(0, sim.data.checkpoints.length - 1),
+        sword: swordHud,
+        restartHold: hold,
       },
     });
+    this.maybeSwordHint(sim);
+  }
+
+  /**
+   * One contextual hint per session: the first time something breakable is close ahead and the
+   * blade is still stowed. Never repeats once the player has swung, and respects the tutorials
+   * setting. (Display only — nothing here touches the simulation.)
+   */
+  private swordHintShown = false;
+  private maybeSwordHint(sim: Simulation) {
+    if (this.swordHintShown || !this.settings.tutorials) return;
+    if (sim.sword.drawn || sim.stats.slashes > 0 || !sim.stats.started) return;
+    const pl = sim.player;
+    const bs = sim.data.breakables;
+    for (let i = 0; i < bs.length; i++) {
+      if (sim.broken[i]) continue;
+      const c = breakableCentre(bs[i]);
+      const dx = c.x - pl.pos.x,
+        dz = c.z - pl.pos.z;
+      if (dx * dx + dz * dz < 14 * 14 && Math.abs(c.y - pl.pos.y) < 4) {
+        this.swordHintShown = true;
+        ui.getState().set({
+          hint: { id: Date.now(), action: 'attack', text: 'Draw the Shift Edge and cut' },
+        });
+        return;
+      }
+    }
   }
 
   /** Read-only snapshot used by the end-to-end tests and the dev panel. */

@@ -1,0 +1,388 @@
+/* =====================================================================================
+   Results: one card that fits a 1280×720 window without clipping, revealed in stages
+   (time → medal → details). New achievements and unlocks live inside the card, so nothing
+   floats over the statistics.
+   ===================================================================================== */
+.results {
+  padding: 14px;
+}
+.res-card {
+  width: min(1120px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, rgba(21, 26, 46, 0.97) 0%, rgba(11, 13, 24, 0.97) 75%);
+  border: 2.5px solid var(--inkline);
+  box-shadow:
+    inset 5px 0 0 var(--lv, var(--accent)),
+    8px 10px 0 rgba(6, 7, 12, 0.55),
+    0 30px 70px rgba(0, 0, 0, 0.5);
+  animation: panelIn 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+  position: relative;
+}
+.res-card::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 34%;
+  height: 7px;
+  background: var(--lv, var(--accent));
+  border: 3px solid var(--inkline);
+  transform: skewX(-30deg);
+  transform-origin: left top;
+}
+.res-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.05fr);
+  gap: 18px 30px;
+  align-items: start;
+  padding: 22px 26px 14px 30px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.res-id .kicker {
+  color: var(--lv, var(--accent));
+}
+.res-id h2 {
+  font-size: clamp(22px, 3.2vw, 38px);
+  margin-top: 4px;
+}
+.res-time {
+  text-align: left;
+}
+.big-time {
+  font-size: clamp(40px, 5.6vw, 76px);
+  line-height: 1;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--paper);
+  text-shadow:
+    3px 3px 0 var(--inkline),
+    0 0 0 var(--inkline);
+  animation: timeIn 0.5s cubic-bezier(0.2, 0.9, 0.2, 1.2) both;
+}
+@keyframes timeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+  }
+}
+.record {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 14px 3px 12px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #06140d;
+  background: var(--good);
+  border: 2.5px solid var(--inkline);
+  transform: skewX(-10deg);
+  animation: recordPop 0.5s cubic-bezier(0.2, 1.4, 0.3, 1) 0.35s both;
+}
+@keyframes recordPop {
+  from {
+    opacity: 0;
+    transform: skewX(-10deg) scale(0.6);
+  }
+}
+.vs {
+  margin-top: 10px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.delta {
+  font-weight: 500;
+}
+.pb-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.pb-line b {
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  margin-left: 4px;
+}
+
+/* medal block */
+.res-medal {
+  display: grid;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.35s,
+    transform 0.35s;
+}
+.res-medal.show {
+  opacity: 1;
+  transform: none;
+}
+.res-medal .badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  --mc: var(--dim);
+}
+.res-medal .badge.m1 {
+  --mc: var(--m1);
+}
+.res-medal .badge.m2 {
+  --mc: var(--m2);
+}
+.res-medal .badge.m3 {
+  --mc: var(--m3);
+}
+.res-medal .badge.m4 {
+  --mc: var(--m4);
+}
+.res-medal .badge .medal-ico {
+  width: 54px;
+  height: 54px;
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--mc) 55%, transparent));
+}
+.res-medal.show .badge .medal-ico {
+  animation: medalPop 0.7s cubic-bezier(0.2, 1.3, 0.3, 1) both;
+}
+@keyframes medalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-25deg);
+  }
+}
+.badge strong {
+  display: block;
+  font-family: var(--display);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mc);
+}
+.badge em {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 8px;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #14110c;
+  background: var(--mc);
+}
+.ladder {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.ladder li {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 2px 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.72;
+}
+.ladder li .medal-ico {
+  width: 22px;
+  height: 22px;
+}
+.ladder li span {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+}
+.ladder li b {
+  font-size: 12px;
+  font-weight: 500;
+}
+.ladder li.got {
+  opacity: 1;
+}
+.ladder li.now {
+  border-color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+.ladder li.m1.got span {
+  color: var(--m1);
+}
+.ladder li.m2.got span {
+  color: var(--m2);
+}
+.ladder li.m3.got span {
+  color: var(--m3);
+}
+.ladder li.m4.got span {
+  color: var(--m4);
+}
+.next-medal {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+.next-medal b {
+  color: var(--ink);
+}
+.next-medal .behind {
+  color: var(--bad);
+}
+
+/* body */
+.res-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 8px 28px;
+  padding: 6px 26px 4px 30px;
+  min-height: 0;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+}
+.res-body.show {
+  opacity: 1;
+  transform: none;
+}
+.res-body h3 {
+  margin: 12px 0 8px;
+}
+.res-card table.splits {
+  font-size: 13px;
+}
+.res-card table.splits td {
+  padding: 3px 8px 3px 0;
+}
+.res-card .stats-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.res-card .stat {
+  padding: 6px 10px;
+}
+.res-card .stat span {
+  font-size: 10.5px;
+}
+.res-card .stat strong {
+  font-size: 14px;
+}
+.fresh {
+  margin-top: 4px;
+}
+.fresh-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  background: rgba(255, 211, 77, 0.09);
+  border-left: 4px solid var(--m3);
+  animation: rise 0.4s ease-out both;
+}
+.fresh-item.cos {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left-color: var(--accent);
+}
+.fresh-item i {
+  font-style: normal;
+  font-size: 18px;
+  color: var(--m3);
+  width: 22px;
+  text-align: center;
+}
+.fresh-item.cos i {
+  color: var(--accent);
+}
+.fresh-item strong {
+  display: block;
+  font-size: 14px;
+}
+.fresh-item span {
+  display: block;
+  font-size: 12px;
+  color: var(--dim);
+}
+.res-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 26px 20px 30px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 8px;
+}
+.res-foot .btn kbd {
+  margin-left: 10px;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+.res-foot .btn.next {
+  background: color-mix(in srgb, var(--accent) 22%, var(--plate));
+}
+.res-foot .btn .arrow-ico {
+  width: 16px;
+  height: 16px;
+  margin-left: 10px;
+  vertical-align: -3px;
+}
+
+@media (max-width: 980px) {
+  .res-head {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .res-body {
+    grid-template-columns: 1fr 1fr;
+  }
+  .res-body > section:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
+  .res-body {
+    grid-template-columns: 1fr;
+  }
+  .res-head,
+  .res-body,
+  .res-foot {
+    padding-left: 18px;
+    padding-right: 14px;
+  }
+  .res-foot .btn {
+    flex: 1 1 140px;
+  }
+}
+@media (max-height: 640px) {
+  .res-card {
+    overflow-y: auto;
+  }
+  .res-head {
+    padding-top: 14px;
+    padding-bottom: 10px;
+  }
+  .big-time {
+    font-size: clamp(34px, 9vh, 56px);
+  }
+  .res-body {
+    overflow: visible;
+  }
+}

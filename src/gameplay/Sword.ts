@@ -256,6 +256,10 @@ export class Sword {
     this.hitSet.clear();
   }
 
+  /** Auto-sheathe progress 0..1 while the blade idles in the ready pose (display only). */
+  get idleFrac() {
+    return this.phase === SwordPhase.Ready ? Math.min(1, this.idle / AUTO_SHEATHE) : 0;
+  }
   get drawn() {
     return this.phase !== SwordPhase.Sheathed;
   }

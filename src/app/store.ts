@@ -33,6 +33,10 @@ export interface HudState {
   fps: number;
   checkpoint: number;
   checkpoints: number;
+  /** Sword: phase (0 stowed … 4 sheathing), ground-combo count, auto-sheathe progress 0..1. */
+  sword: { phase: number; combo: number; idle: number; cuts: number; total: number };
+  /** 0..1 while R is held toward a full level restart, -1 otherwise. */
+  restartHold: number;
 }
 
 export interface Toast {
@@ -47,6 +51,23 @@ export interface Flash {
   kind: 'checkpoint' | 'death' | 'respawn' | 'record' | 'impact';
   text?: string;
   delta?: number | null;
+  /** Death flash: how many falls this run (for the retry caption). */
+  deaths?: number;
+}
+
+/** Combat confirmation near the crosshair: a clean cut, a body smash or a training bullseye. */
+export interface Hit {
+  id: number;
+  kind: 'cut' | 'smash' | 'bullseye';
+  /** How many objects this run so far (the running tally the HUD shows). */
+  n: number;
+}
+
+/** A one-off contextual control hint (shown at most once per session per hint). */
+export interface Hint {
+  id: number;
+  action: string;
+  text: string;
 }
 
 export interface UiState {
@@ -60,6 +81,8 @@ export interface UiState {
   toasts: Toast[];
   flash: Flash | null;
   prompt: { action: string; text: string } | null;
+  hit: Hit | null;
+  hint: Hint | null;
   /** Bumped whenever save data changes so menus re-read it. */
   saveRev: number;
   storageOk: boolean;
@@ -68,7 +91,8 @@ export interface UiState {
   set(p: Partial<UiState>): void;
   toast(kind: Toast['kind'], title: string, text: string): void;
   dismissToast(id: number): void;
-  fire(kind: Flash['kind'], text?: string, delta?: number | null): void;
+  fire(kind: Flash['kind'], text?: string, delta?: number | null, deaths?: number): void;
+  fireHit(kind: Hit['kind'], n: number): void;
 }
 
 let nextId = 1;
@@ -90,11 +114,15 @@ export const useUi = create<UiState>((set) => ({
     fps: 0,
     checkpoint: 0,
     checkpoints: 0,
+    sword: { phase: 0, combo: 0, idle: 0, cuts: 0, total: 0 },
+    restartHold: -1,
   },
   results: null,
   toasts: [],
   flash: null,
   prompt: null,
+  hit: null,
+  hint: null,
   saveRev: 0,
   storageOk: true,
   contextLost: false,
@@ -103,7 +131,8 @@ export const useUi = create<UiState>((set) => ({
   toast: (kind, title, text) =>
     set((s) => ({ toasts: [...s.toasts.slice(-3), { id: nextId++, kind, title, text }] })),
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  fire: (kind, text, delta) => set({ flash: { id: nextId++, kind, text, delta } }),
+  fire: (kind, text, delta, deaths) => set({ flash: { id: nextId++, kind, text, delta, deaths } }),
+  fireHit: (kind, n) => set({ hit: { id: nextId++, kind, n } }),
 }));
 
 export const ui = useUi;
