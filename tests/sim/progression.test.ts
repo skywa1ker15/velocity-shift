@@ -387,3 +387,94 @@ describe('Level 6, Faceted: the folds (left and right rotation)', () => {
     expect(sim.stats.finished).toBe(true);
   });
 });
+
+describe('Level 7, Blockfall: the blocks turn (up/down rotation)', () => {
+  const S = 5,
+    U = 21,
+    Y0 = -1,
+    C = 15;
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(1) the Climb: %s runs up the curve, straight up the face and over the top', async (_n, keys) => {
+    const { d, deaths } = await at('blockfall', 240);
+    const s = hold(d, keys, 290, 20);
+    expect(deaths()).toBe(0);
+    const onFace = s.filter((p) => p.grounded && p.z > 274.9 && p.z < 275.1 && p.y > S + 6 && p.y < S + 10);
+    expect(onFace.length).toBeGreaterThan(0);
+    for (const p of onFace) expect(p.up.z).toBeLessThan(-0.99); // the face is the floor
+    expect(s[s.length - 1].y).toBeCloseTo(U, 0);
+    // the climb costs no speed
+    if (keys.sprint) expect(Math.min(...onFace.map((p) => p.speed))).toBeGreaterThan(10.5);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(2) the Drop: %s runs over the edge and straight down the face', async (_n, keys) => {
+    const { d, deaths } = await at('blockfall', 284);
+    const s = hold(d, keys, 320, 20);
+    expect(deaths()).toBe(0);
+    const onFace = s.filter((p) => p.grounded && Math.abs(p.z - 305) < 0.1 && p.y < U - 6 && p.y > Y0 + 6);
+    expect(onFace.length).toBeGreaterThan(0);
+    for (const p of onFace) expect(p.up.z).toBeGreaterThan(0.99);
+    expect(s[s.length - 1].y).toBeCloseTo(Y0, 0);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])(
+    '(3) the Turnover: %s goes up, onto the ceiling upside down, crosses lanes and comes out below',
+    async (_n, keys) => {
+      const { sim, d, deaths } = await at('blockfall', 314);
+      // the main line's own route from the runway, driven at this pace
+      const { Bot } = await import('../../src/gameplay/Bot');
+      const bot = new Bot(sim);
+      while (bot.index < sim.data.bot.length && sim.data.bot[bot.index].p[2] < 355) bot.index++;
+      const s: Sample[] = [];
+      for (let i = 0; i < 120 * 30 && !(d.pl.pos.x > 4.5 && d.pl.pos.z > 330 && d.pl.pos.y < Y0 + 0.2); i++) {
+        const inp = bot.step();
+        inp.sprint = !!keys.sprint;
+        sim.tick(inp);
+        const u = d.pl.upAxis();
+        s.push({
+          x: d.pl.pos.x,
+          y: d.pl.pos.y,
+          z: d.pl.pos.z,
+          up: { x: u.x, y: u.y, z: u.z },
+          speed: d.pl.speed,
+          grounded: d.pl.grounded,
+        });
+      }
+      expect(deaths()).toBe(0);
+      const inverted = s.filter((p) => p.grounded && p.up.y < -0.99);
+      expect(inverted.length / 120).toBeGreaterThan(2); // seconds running upside down
+      for (const p of inverted) expect(p.y).toBeCloseTo(C, 0);
+      expect(inverted.some((p) => p.x < 1.5) && inverted.some((p) => p.x > 4.5)).toBe(true); // crossed lanes up there
+      expect(d.pl.pos.x).toBeGreaterThan(4.5); // out in lane B
+    },
+  );
+
+  test('(3) the wall between the lanes: no way into lane B but over the top', async () => {
+    const { d } = await at('blockfall', 314);
+    hold(d, { moveZ: 1, moveX: 1, sprint: true }, 340, 6);
+    hold(d, { moveZ: 1, moveX: -1, sprint: true }, 340, 2);
+    expect(d.pl.pos.x).toBeLessThan(2.6);
+  });
+
+  test.each([
+    ['a plain run with the double jump', RUN, true],
+    ['a sprint', SPRINT, false],
+  ])('(4) climb, jump, drop: %s reaches the finish', async (_n, keys, dbl) => {
+    const { sim, d, deaths } = await at('blockfall', 368);
+    let j = 0;
+    hold(d, keys, 470, 30, (p) => {
+      if (j === 0 && p.grounded && p.z > 414.4 && p.y > 14) return (j++, { jump: true });
+      if (dbl && j === 1 && !p.grounded && d.pl.vel.y < 0) return (j++, { jump: true });
+    });
+    expect(deaths()).toBe(0);
+    expect(sim.stats.finished).toBe(true);
+  });
+});

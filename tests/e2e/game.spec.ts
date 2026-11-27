@@ -431,3 +431,44 @@ test("Level 6: Faceted's Crossing with the real keyboard (W held, Space at each 
   expect(backOnRight).toBe(true);
   expect(s.z).toBeGreaterThanOrEqual(465);
 });
+
+test("Level 7: holding W through Blockfall's Climb and Drop (real keyboard, real-time) runs up a face and down another", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'blockfall');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 240) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        y: p.pos.y,
+        z: p.pos.z,
+        uz: u.z,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let s = await pl();
+  let up = false,
+    down = false;
+  for (let i = 0; i < 3000 && s.z < 316 && s.deaths === 0; i++) {
+    s = await pl();
+    if (s.grounded && s.uz < -0.99 && s.y > 8 && s.y < 18) up = true; // running up the Climb's face
+    if (s.grounded && s.uz > 0.99 && s.y > 2 && s.y < 18) down = true; // running down the Drop's face
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(up).toBe(true);
+  expect(down).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(316);
+});

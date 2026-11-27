@@ -174,12 +174,18 @@ export const levels: LevelEntry[] = [
       index: 7,
       name: 'BLOCKFALL',
       subtitle: 'Level 7',
-      description: 'Blocks hanging in an open sky. Precision over speed: every landing counts.',
+      description:
+        'Blocks hanging in an open sky. Precision first, then the blocks turn: up their faces, over their edges, across their ceilings.',
       env: 'blockfall',
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
+      layout: 2, // rebuilt with the turning blocks (bests reset)
       killY: -35,
-      medals: { bronze: 46, silver: 32.5, gold: 25, platinum: 21.5 },
+      bounds: [
+        [-60, -35, -30],
+        [60, 60, 520],
+      ],
+      medals: { bronze: 112, silver: 79, gold: 61, platinum: 52.5 },
       objectives: [
         { id: 'bf-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'bf-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

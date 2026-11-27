@@ -706,6 +706,25 @@ export class GravityField extends Entity {
         this.dir.x = cx / l;
         this.dir.y = cy / l;
         this.dir.z = cz / l;
+      } else if (d.mode === 'pipe') {
+        // away from (or toward) the axis line: the component of (body centre − centre) across it
+        const c = d.center ?? d.p,
+          a = d.axis ?? [1, 0, 0];
+        const al = Math.hypot(a[0], a[1], a[2]) || 1;
+        const up = pl.upAxis(tmp);
+        const vx = pl.pos.x + up.x * pl.height * 0.5 - c[0],
+          vy = pl.pos.y + up.y * pl.height * 0.5 - c[1],
+          vz = pl.pos.z + up.z * pl.height * 0.5 - c[2];
+        const along = (vx * a[0] + vy * a[1] + vz * a[2]) / al;
+        const px = vx - (a[0] / al) * along,
+          py = vy - (a[1] / al) * along,
+          pz = vz - (a[2] / al) * along;
+        const l = Math.hypot(px, py, pz);
+        if (l < 0.3) return;
+        const k = d.inward ? -1 / l : 1 / l;
+        this.dir.x = px * k;
+        this.dir.y = py * k;
+        this.dir.z = pz * k;
       } else if (d.mode === 'spin' && d.axis) {
         const base = d.dir ?? [0, -1, 0];
         quatFromAxisAngle(d.axis[0], d.axis[1], d.axis[2], (d.speed ?? 0.5) * ctx.time, _sq);

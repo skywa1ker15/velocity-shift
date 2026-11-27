@@ -148,12 +148,21 @@ export interface FieldDef extends EntityBase {
   type: 'field';
   p: Vec3Tuple;
   s: Vec3Tuple;
-  mode: 'dir' | 'well' | 'spin' | 'structure';
+  /**
+   * `pipe`: gravity points straight away from the line through `center` along `axis` (standing on
+   * the inside of a curve, where a floor curls up into a wall), or toward it with `inward` (going
+   * over a convex edge). The pull turns continuously as you move round the curve.
+   */
+  mode: 'dir' | 'well' | 'spin' | 'structure' | 'pipe';
   dir?: Vec3Tuple;
   scale?: number;
   center?: Vec3Tuple;
   axis?: Vec3Tuple;
   speed?: number;
+  /** `pipe` mode: pull toward the axis instead of away from it. */
+  inward?: boolean;
+  /** Draw nothing for it (the surface itself shows the way, as on curved pitch courses). */
+  quiet?: boolean;
   /** `structure` mode: id of the structure; `p`/`s` are then in its local frame. */
   link?: string;
   /** Overlapping fields: the highest priority wins (default 1). */

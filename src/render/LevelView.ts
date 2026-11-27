@@ -386,6 +386,7 @@ export class LevelView {
   /** Field volume: corner posts, and chevrons pointing the way gravity will pull. */
   private fieldGeometry(b: GeoBuilder, e: GravityField) {
     const d = e.def;
+    if (d.quiet) return;
     const hx = d.s[0] / 2,
       hy = d.s[1] / 2,
       hz = d.s[2] / 2;
@@ -398,6 +399,7 @@ export class LevelView {
       b.addBox(-hx, sy * hy, 0, 0.08, 0.08, d.s[2], null, c, [0, 1.6, 0]);
       b.addBox(hx, sy * hy, 0, 0.08, 0.08, d.s[2], null, c, [0, 1.6, 0]);
     }
+    if (d.mode === 'pipe') return; // the curved surface itself shows the way
     if (d.mode === 'well') {
       // rings around the well's centre
       const cen = d.center ?? d.p;
