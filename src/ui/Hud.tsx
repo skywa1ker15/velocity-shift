@@ -96,6 +96,11 @@ export function Hud({ frozen }: { frozen?: boolean }) {
         </div>
         {s.showSpeed && (
           <div className={'speed' + (fast ? ' fast' : '')}>
+            <div className="gear" aria-hidden>
+              {[8, 12, 17, 23].map((t) => (
+                <i key={t} className={speed >= t ? 'on' : ''} />
+              ))}
+            </div>
             <b className="mono-num">{speed.toFixed(1)}</b>
             <span>m/s</span>
             <div className="speed-bar">
@@ -106,13 +111,26 @@ export function Hud({ frozen }: { frozen?: boolean }) {
         {s.showIndicators && (
           <div className="indicators">
             <span className={'ind' + (hud.doubleJump ? ' on' : '')} title="Double jump">
-              ▲▲
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path d="M12 3l7 8h-4.2v3H9.2v-3H5z M12 13l5.5 6h-11z" fill="currentColor" />
+              </svg>
             </span>
             <span className={'ind wall' + (hud.wall > 0 ? ' on' : '')} title="Wall-run">
               <i style={{ transform: `scaleX(${hud.wall})` }} />
-              WALL
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path
+                  d="M3 2h4v20H3z M10 17l4-9 3 1.3-2.2 4.2 5.2 1.2-.6 2.6-7.4-1.6-1 2.2z"
+                  fill="currentColor"
+                />
+                <circle cx="17.2" cy="5.2" r="2.3" fill="currentColor" />
+              </svg>
+              <b>WALL</b>
             </span>
             <span className={'ind' + (hud.sliding ? ' on' : '')} title="Slide">
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path d="M2 19h20v2.5H2z M5 16l9-6.5 2 2-4.5 3.2 8.5.3v2.6H6z" fill="currentColor" />
+                <circle cx="17.5" cy="7" r="2.3" fill="currentColor" />
+              </svg>
               SLIDE
             </span>
           </div>

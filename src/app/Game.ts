@@ -12,7 +12,8 @@ import { CameraRig } from '../camera/CameraRig';
 import { Body } from '../character/Body';
 import { FixedLoop, SIM_DT } from '../core/loop';
 import { getEnv, type EnvPreset } from '../environment/presets';
-import { Bursts, Motes, Sparks, SpeedLines } from '../fx/Fx';
+import { Motes, Sparks, SpeedLines, Sprite, Stickers } from '../fx/Fx';
+import { worldUniforms } from '../render/WorldMaterial';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -32,6 +33,9 @@ import { LevelView } from '../render/LevelView';
 import { AutoQuality, guessTier, type TierName } from '../render/quality';
 import { Renderer } from '../render/Renderer';
 import { GhostPlayer, GhostRecorder } from '../replay/Ghost';
+import { Bot } from '../gameplay/Bot';
+import { Runner } from '../character/Runner';
+import { moveStateNames } from '../movement/types';
 import { loadGhost, saveGhost, SaveSystem } from '../save/SaveSystem';
 import { motionProfile, type MotionProfile, type Settings } from '../settings/settings';
 import { ui } from './store';
@@ -41,6 +45,10 @@ type Mode = 'idle' | 'menu' | 'loading' | 'ready' | 'playing' | 'paused' | 'resu
 const UP = new THREE.Vector3(0, 1, 0);
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
+const _w = new THREE.Vector3();
+const _p0 = new THREE.Vector3();
+const DOWN = new THREE.Vector3(0, -1, 0);
+const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
 export class Game {
   readonly save = new SaveSystem();
@@ -55,8 +63,13 @@ export class Game {
   private rig: CameraRig;
   private body: Body;
   private lines: SpeedLines;
-  private bursts = new Bursts(28);
+  private stickers!: Stickers;
   private sparks = new Sparks(420);
+  private dust = new THREE.Color(0xf6f2e6);
+  private trailT = 0;
+  /** Share of the player's velocity that new dust inherits (so it is seen from first person). */
+  private carry = new THREE.Vector3();
+  private impactFx = 0;
   private motes: Motes | null = null;
   private view: LevelView | null = null;
   private data: LevelData | null = null;
@@ -80,6 +93,14 @@ export class Game {
   private loadToken = 0;
   private slideSparkT = 0;
   private menuData: LevelData | null = null;
+  // the menu backdrop: the autopilot really runs Level 1 and a chase camera follows the runner
+  private menuSim: Simulation | null = null;
+  private menuBot: Bot | null = null;
+  private menuRunner = new Runner(false);
+  private menuAcc = 0;
+  private menuYaw = Math.PI;
+  private menuCam = new THREE.Vector3();
+  private menuSeeded = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
@@ -88,9 +109,10 @@ export class Game {
     this.input = new InputManager(canvas, this.save.data.bindings, s);
     this.rig = new CameraRig(this.renderer.camera, this.renderer.viewCamera);
     this.body = new Body(this.renderer.viewScene, this.renderer.scene);
-    this.lines = new SpeedLines(160);
+    this.lines = new SpeedLines();
+    this.stickers = new Stickers(200);
     this.renderer.viewScene.add(this.lines.mesh);
-    this.renderer.scene.add(this.bursts.group, this.sparks.points);
+    this.renderer.scene.add(this.stickers.mesh, this.sparks.points);
     this.ghost = new GhostPlayer(0xffffff);
     this.renderer.scene.add(this.ghost.group);
     this.body.setVisible(false);
@@ -198,6 +220,7 @@ export class Game {
     const w = window.innerWidth,
       h = window.innerHeight;
     this.renderer.resize(w, h);
+    this.lines.setAspect(w / Math.max(1, h));
     this.sparks.setViewportHeight(h);
     this.motes?.setViewportHeight(h);
   }
@@ -228,6 +251,10 @@ export class Game {
   private clearLevel() {
     this.view?.dispose();
     this.view = null;
+    this.menuSim?.dispose();
+    this.menuSim = null;
+    this.menuBot = null;
+    this.menuRunner.group.removeFromParent();
     this.sim?.dispose();
     this.sim = null;
     this.motes?.dispose();
@@ -256,8 +283,12 @@ export class Game {
     this.clearLevel();
     this.setEnv('awakening');
     if (this.menuData) {
-      this.view = new LevelView(this.menuData, this.env, null);
-      this.renderer.scene.add(this.view.group);
+      this.menuSim = new Simulation(levelById('awakening')!.meta, this.menuData);
+      this.menuBot = new Bot(this.menuSim);
+      this.menuSeeded = false;
+      this.view = new LevelView(this.menuData, this.env, this.menuSim);
+      this.renderer.scene.add(this.view.group, this.menuRunner.group);
+      this.menuRunner.group.visible = true;
     }
     this.body.setVisible(false);
     this.input.enabled = false;
@@ -286,6 +317,7 @@ export class Game {
   }
 
   async loadLevel(id: string) {
+    this.debugFrozen = false;
     const entry = levelById(id);
     if (!entry || !isUnlocked(this.save.data, id)) return;
     const token = ++this.loadToken;
@@ -446,21 +478,43 @@ export class Game {
       ev = pl.events,
       audio = this.audio;
     const feet = () => _v.set(pl.pos.x, pl.pos.y + 0.04, pl.pos.z);
+    // a spot on the ground a moment ahead: where a first-person player actually sees a decal
+    const ahead = (t: number) => _v.set(pl.pos.x + pl.vel.x * t, pl.pos.y + 0.04, pl.pos.z + pl.vel.z * t);
     ev.on('jump', () => {
       audio.jump();
       this.rig.onJump();
       this.body.onJump();
+      // take-off: a kick of dust and a quick pen ring where the feet were
+      this.puffs(feet(), 3, 1.5, 0.3);
+      this.stickers.spawn(feet(), this.dust, {
+        sprite: Sprite.ring + 1,
+        size: 0.5,
+        grow: 2.2,
+        life: 0.25,
+        normal: UP,
+        alpha: 0.9,
+      });
     });
     ev.on('doubleJump', () => {
       audio.doubleJump();
       this.rig.onDoubleJump();
       this.body.onDoubleJump();
-      this.bursts.spawn(feet(), UP, this.accent, 2.6, 0.45, Math.max(1, this.trailStyle));
-      this.sparks.emit(_v, UP, this.count(14), this.accent, {
-        speed: 3.5,
-        spread: 1.6,
-        life: 0.45,
-        size: 0.05,
+      // an "air step": a plate of light to push off, with glints thrown down
+      this.stickers.spawn(feet(), this.accent, {
+        sprite: this.trailStyle === 2 ? Sprite.star : Sprite.ring,
+        frames: this.trailStyle === 2 ? 4 : 2,
+        size: 0.8,
+        grow: 2.4,
+        life: 0.38,
+        normal: UP,
+      });
+      this.impactFx = Math.max(this.impactFx, 0.5);
+      this.glints(_v, 6, 3.5, 0.24, this.accent, -1);
+      this.sparks.emit(_v, DOWN, this.count(8), this.accent, {
+        speed: 3,
+        spread: 1.4,
+        life: 0.35,
+        size: 0.045,
         gravity: 6,
       });
     });
@@ -472,36 +526,135 @@ export class Game {
       const fx = -Math.sin(pl.yaw),
         fz = -Math.cos(pl.yaw);
       _n.set(fx, 0, fz);
-      _v.set(pl.pos.x + fx * 1.2, pl.pos.y + 1.1, pl.pos.z + fz * 1.2);
-      this.bursts.spawn(_v, _n, this.accent, 3.4, 0.4, this.trailStyle);
+      // punch a ring through the air ahead and leave one behind
+      _v.set(pl.pos.x + fx * 6, pl.pos.y + 1.2, pl.pos.z + fz * 6);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: this.trailStyle === 2 ? Sprite.star + 2 : Sprite.ring,
+        frames: 2,
+        size: 1.2,
+        grow: 2.6,
+        life: 0.32,
+        normal: _n,
+      });
+      _v.set(pl.pos.x + fx * 10, pl.pos.y + 1.2, pl.pos.z + fz * 10);
+      this.stickers.spawn(_v, this.dust, {
+        sprite: Sprite.ring + 1,
+        size: 0.7,
+        grow: 2.2,
+        life: 0.3,
+        normal: _n,
+        alpha: 0.8,
+      });
     });
     ev.on('land', ({ speed }) => {
       audio.land(speed);
       this.rig.onLand(speed);
       this.body.onLand(speed);
-      if (speed > 7) {
-        this.bursts.spawn(feet(), UP, this.streak, 1.6 + Math.min(3, speed * 0.1), 0.4, 0);
-        this.sparks.emit(_v, UP, this.count(6 + Math.min(16, speed * 0.6)), this.streak, {
-          speed: 2.2,
-          spread: 2.4,
-          life: 0.5,
-          size: 0.06,
-          gravity: 5,
+      if (speed > 4) {
+        const k = Math.min(1, speed / 22);
+        this.impactFx = Math.max(this.impactFx, 0.35 + k * 0.65);
+        this.puffs(feet(), 4 + Math.round(k * 6), 4 + k * 5, 0.4 + k * 0.35);
+        this.stickers.spawn(ahead(0.24), this.dust, {
+          sprite: Sprite.ring,
+          frames: 2,
+          size: 0.7 + k * 0.6,
+          grow: 2 + k * 1.5,
+          life: 0.3 + k * 0.15,
+          normal: UP,
+          alpha: 0.9,
         });
+        // the ground answers: a ring of light runs out through nearby surfaces
+        if (speed > 7 && this.settings.particles > 0.05) {
+          worldUniforms.uPulse.value.set(pl.pos.x, pl.pos.y, pl.pos.z, this.time);
+          worldUniforms.uPulseAmt.value = 0.35 + k * 0.65;
+        }
+      }
+      if (speed > 13) {
+        // hard landing: an impact star and action lines thrown outward along the ground
+        const k = Math.min(1, speed / 26);
+        this.stickers.spawn(ahead(0.26), this.accent, {
+          sprite: Sprite.star,
+          frames: 4,
+          size: 1.1 + k,
+          grow: 1.7,
+          life: 0.34,
+          normal: UP,
+          rot: this.time * 3,
+        });
+        const n = 6 + Math.round(k * 4);
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + this.time;
+          _n.set(Math.cos(a), 0, Math.sin(a));
+          _v.set(
+            pl.pos.x + pl.vel.x * 0.26 + _n.x * (0.9 + k),
+            pl.pos.y + 0.04,
+            pl.pos.z + pl.vel.z * 0.26 + _n.z * (0.9 + k),
+          );
+          _w.copy(_n).multiplyScalar(5 + k * 5);
+          this.stickers.spawn(_v, this.dust, {
+            sprite: Sprite.tick,
+            size: 0.7 + k * 0.5,
+            life: 0.25,
+            normal: UP,
+            along: _n,
+            vel: _w,
+            drag: 5,
+          });
+        }
       }
       if (speed > 24) ui.getState().fire('impact');
     });
-    ev.on('slideStart', () => audio.slideStart());
+    ev.on('slideStart', () => {
+      audio.slideStart();
+      // drop into the slide: a burst of dust thrown forward along the ground
+      const sp = Math.max(1, pl.speed);
+      _n.set(pl.vel.x / sp, 0, pl.vel.z / sp);
+      this.puffs(feet(), 4, 2.4, 0.42, _n);
+    });
     ev.on('slideEnd', () => this.input.clearSlideLatch());
-    ev.on('wallRunStart', () => audio.wallStart());
+    ev.on('wallRunStart', () => {
+      audio.wallStart();
+      this.wallPoint(1.3, 0.3);
+      _n.set(pl.wallNormal.x, 0, pl.wallNormal.z);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: Sprite.star,
+        frames: 4,
+        size: 0.7,
+        grow: 1.8,
+        life: 0.28,
+        normal: _n,
+      });
+    });
     ev.on('wallJump', () => {
       audio.wallJump();
       this.body.onWallJump();
+      // kick off: an impact star stamped on the wall and dust thrown along it
       _n.set(pl.wallNormal.x, 0, pl.wallNormal.z);
-      _v.set(pl.pos.x - pl.wallNormal.x * 0.4, pl.pos.y + 0.9, pl.pos.z - pl.wallNormal.z * 0.4);
-      this.bursts.spawn(_v, _n, this.accent, 2.2, 0.35, this.trailStyle);
+      this.wallPoint(1.1, 0.22);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: this.trailStyle === 1 ? Sprite.ring : Sprite.star,
+        frames: this.trailStyle === 1 ? 2 : 4,
+        size: 1,
+        grow: 2,
+        life: 0.36,
+        normal: _n,
+      });
+      this.puffs(_v, 3, 1.8, 0.32, _n);
     });
-    ev.on('vault', () => audio.vault());
+    ev.on('vault', () => {
+      audio.vault();
+      // hands slap the ledge: two small puffs and action ticks where they plant
+      const fx = -Math.sin(pl.yaw),
+        fz = -Math.cos(pl.yaw);
+      for (const side of [-1, 1]) {
+        _v.set(
+          pl.pos.x + fx * 0.55 - fz * side * 0.2,
+          pl.pos.y + 1.05,
+          pl.pos.z + fz * 0.55 + fx * side * 0.2,
+        );
+        this.puffs(_v, 1, 0.8, 0.26);
+      }
+    });
     ev.on('bump', () => {
       audio.bump();
       this.body.onBump();
@@ -509,14 +662,19 @@ export class Game {
     ev.on('footstep', ({ wall, speed }) => {
       audio.footstep(speed, wall);
       if (wall) {
-        _v.set(pl.pos.x - pl.wallNormal.x * 0.35, pl.pos.y + 0.2, pl.pos.z - pl.wallNormal.z * 0.35);
+        this.wallPoint(0.15);
         _n.set(pl.wallNormal.x, 0.4, pl.wallNormal.z);
-        this.sparks.emit(_v, _n, this.count(5), this.accent, {
+        this.puffs(_v, 1, 1.2, 0.26, _n);
+        this.sparks.emit(_v, _n, this.count(3), this.accent, {
           speed: 2.5,
           spread: 1.2,
           life: 0.3,
           size: 0.04,
         });
+      } else if (speed > 9.5) {
+        // sprinting kicks up a little dust behind each footfall
+        _n.set(-pl.vel.x / speed, 0.3, -pl.vel.z / speed);
+        this.puffs(feet(), 1, 1.4, 0.2 + Math.min(0.14, (speed - 9.5) * 0.02), _n);
       }
     });
 
@@ -528,8 +686,17 @@ export class Game {
         `CHECKPOINT ${index}/${sim.data.checkpoints.length - 1}`,
         best ? time - best : null,
       );
-      _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
-      this.bursts.spawn(_v, UP, this.accent, 7, 0.7, 1);
+      _v.set(pl.pos.x, pl.pos.y + 0.05, pl.pos.z);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: Sprite.ring,
+        frames: 2,
+        size: 2,
+        grow: 3.4,
+        life: 0.6,
+        normal: UP,
+      });
+      _v.y += 1;
+      this.glints(_v, 6, 3, 0.3, this.accent, 1);
     });
     sim.events.on('death', () => {
       audio.death();
@@ -583,9 +750,75 @@ export class Game {
     sim.events.on('finish', () => {
       this.finishDelay = 0.9; // let the moment land before the results screen
       audio.finish(0);
-      _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
-      this.bursts.spawn(_v, UP, this.accent, 12, 0.9, 2);
+      _v.set(pl.pos.x, pl.pos.y + 0.05, pl.pos.z);
+      this.stickers.spawn(_v, this.accent, {
+        sprite: Sprite.star,
+        frames: 4,
+        size: 3,
+        grow: 3,
+        life: 0.8,
+        normal: UP,
+      });
+      _v.y += 1.2;
+      this.glints(_v, 12, 5, 0.4, this.accent, 1);
     });
+  }
+
+  /** Dust puffs thrown outward from a point (optionally biased along `dir`). */
+  private puffs(at: THREE.Vector3, n: number, speed: number, size: number, dir?: THREE.Vector3) {
+    n = Math.max(
+      1,
+      Math.round(n * Math.min(1, this.settings.particles * this.renderer.tier.particles + 0.25)),
+    );
+    _p0.copy(at);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + this.time * 7.3 + i * 1.7;
+      _w.set(Math.cos(a) * speed, 0.5 + (i % 3) * 0.35, Math.sin(a) * speed);
+      if (dir) _w.multiplyScalar(0.45).addScaledVector(dir, speed);
+      _w.x += this.carry.x;
+      _w.z += this.carry.z;
+      this.stickers.spawn(_p0, this.dust, {
+        sprite: Sprite.puff,
+        frames: 4,
+        size: size * (0.75 + (i % 3) * 0.2),
+        grow: 2,
+        life: 0.36 + (i % 2) * 0.1,
+        vel: _w,
+        drag: 4,
+        gravity: -0.6,
+        rot: a,
+      });
+    }
+  }
+
+  /** Four-point glints flung from a point (`up` = 1 rising, -1 thrown down). */
+  private glints(at: THREE.Vector3, n: number, speed: number, size: number, color: THREE.Color, up: number) {
+    _p0.copy(at);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + this.time * 3.1;
+      _w.set(Math.cos(a) * speed + this.carry.x, up * (1.5 + (i % 3)), Math.sin(a) * speed + this.carry.z);
+      this.stickers.spawn(_p0, color, {
+        sprite: Sprite.glint,
+        size: size * (0.7 + (i % 3) * 0.25),
+        grow: 0.3,
+        life: 0.4 + (i % 2) * 0.12,
+        vel: _w,
+        drag: 3,
+        gravity: 4,
+        rot: a,
+      });
+    }
+  }
+
+  /** Point on the wall beside the player at `height` above the feet (result in _v). */
+  private wallPoint(height: number, lead = 0) {
+    const pl = this.sim!.player;
+    _v.set(
+      pl.pos.x - pl.wallNormal.x * 0.36 + pl.vel.x * lead,
+      pl.pos.y + height,
+      pl.pos.z - pl.wallNormal.z * 0.36 + pl.vel.z * lead,
+    );
+    return _v;
   }
 
   private count(n: number) {
@@ -617,7 +850,15 @@ export class Game {
   private tick() {
     if (this.mode !== 'playing' || !this.sim) return;
     const sim = this.sim;
-    const inp = this.input.sample();
+    if (this.debugFrozen) return;
+    let inp = this.input.sample();
+    if (this.debugAuto) {
+      // visual tests: the autopilot plays through the real game loop
+      if (!this.dbgBot || (this.dbgBot as unknown as { sim: Simulation }).sim !== sim)
+        this.dbgBot = new Bot(sim);
+      inp = this.dbgBot.step();
+      this.input.setLook(inp.yaw, inp.pitch);
+    }
     if (this.finishDelay >= 0) {
       // run is over: let the player coast, ignore input
       inp.moveX = inp.moveZ = 0;
@@ -645,7 +886,7 @@ export class Game {
     } else {
       this.frameMenu(dt);
     }
-    this.bursts.update(playing || this.mode === 'menu' ? dt : 0);
+    this.stickers.update(playing ? dt : 0, this.renderer.camera);
     this.sparks.update(playing ? dt : 0);
     this.renderer.dashFx = this.motion.screenFx ? this.dashFx : 0;
     this.renderer.render(this.time, dt, this.rig.feet);
@@ -681,28 +922,122 @@ export class Game {
 
     const speed = pl.speed;
     this.dashFx = Math.max(0, this.dashFx - dt * 3.2);
-    this.lines.update(this.time, dt, speed, this.dashFx, this.motion.speedLines);
+    // speed lines converge on where the motion is heading on screen
+    const cp = Math.cos(pitch),
+      sp_ = Math.sin(pitch);
+    const fwdX = -Math.sin(yaw) * cp,
+      fwdY = sp_,
+      fwdZ = -Math.cos(yaw) * cp;
+    const rtX = Math.cos(yaw),
+      rtZ = -Math.sin(yaw);
+    const vf = pl.vel.x * fwdX + pl.vel.y * fwdY + pl.vel.z * fwdZ;
+    const vr = pl.vel.x * rtX + pl.vel.z * rtZ;
+    const vu = pl.vel.y * cp - (pl.vel.x * -Math.sin(yaw) + pl.vel.z * -Math.cos(yaw)) * sp_;
+    const speed3 = Math.hypot(speed, pl.vel.y);
+    const den = Math.max(vf, speed3 * 0.45, 1);
+    this.impactFx = Math.max(0, this.impactFx - dt * 4.5);
+    const impact = this.impactFx > this.dashFx;
+    // a landing throws a short burst of lines up from the ground; a dash pulls them in from ahead
+    this.lines.update(
+      this.time,
+      dt,
+      Math.max(speed, speed3 * 0.9),
+      Math.max(this.dashFx, this.impactFx * 0.8),
+      this.motion.speedLines,
+      impact ? 0 : clamp((vr / den) * 0.55, -0.6, 0.6),
+      impact ? -1.15 : clamp((vu / den) * 0.75, -0.85, 0.85),
+      impact,
+    );
+    this.carry.set(pl.vel.x * 0.8, 0, pl.vel.z * 0.8);
+    worldUniforms.uPlayer.value.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
     this.ghost.update(
       sim.runTime,
       this.settings.ghost && sim.stats.started && !sim.stats.finished,
       this.rig.eye,
+      dt,
     );
 
     // continuous contact effects
     if (dt > 0) {
       const st = pl.state;
+      this.trailT -= dt;
       if (st === MoveState.Slide && speed > 4) {
+        _n.set(pl.vel.x / speed, 0, pl.vel.z / speed);
+        if (this.trailT <= 0) {
+          this.trailT = 0.05;
+          // skid lines flick past on the ground either side, and dust peels off the dragging hand
+          const k = Math.sin(this.time * 83.1);
+          const side = (k > 0 ? 1 : -1) * (0.55 + Math.abs(k) * 0.9);
+          const lead = 0.28 + Math.abs(Math.sin(this.time * 47.3)) * 0.2;
+          _v.set(
+            pl.pos.x + pl.vel.x * lead - _n.z * side,
+            pl.pos.y + 0.03,
+            pl.pos.z + pl.vel.z * lead + _n.x * side,
+          );
+          this.stickers.spawn(_v, this.dust, {
+            sprite: Sprite.scuff,
+            size: 1.1,
+            stretch: 1.6 + speed * 0.08,
+            life: 0.5,
+            normal: UP,
+            along: _n,
+            alpha: 0.8,
+          });
+          _w.set(pl.vel.x * 0.86 - _n.z * 0.6, 1.1, pl.vel.z * 0.86 + _n.x * 0.6);
+          _p0.copy(this.body.contact).addScaledVector(_n, 0.5);
+          this.stickers.spawn(_p0, this.dust, {
+            sprite: Sprite.puff,
+            frames: 4,
+            size: 0.26,
+            grow: 2.4,
+            life: 0.42,
+            vel: _w,
+            drag: 1.2,
+          });
+        }
         this.slideSparkT -= dt;
         if (this.slideSparkT <= 0) {
-          this.slideSparkT = 0.03;
-          _n.set(-pl.vel.x / speed, 0.5, -pl.vel.z / speed);
-          this.sparks.emit(this.body.contact, _n, this.count(2), this.accent, {
+          this.slideSparkT = 0.045;
+          _w.set(-_n.x, 0.5, -_n.z);
+          this.sparks.emit(this.body.contact, _w, this.count(2), this.accent, {
             speed: 3 + speed * 0.15,
             spread: 0.7,
-            life: 0.35,
+            life: 0.3,
             size: 0.035,
           });
         }
+      } else if (st === MoveState.WallRun && this.trailT <= 0 && speed > 3) {
+        this.trailT = 0.06;
+        // brush streaks whip along the wall toward the dragging hand
+        _n.set(pl.vel.x / speed, 0, pl.vel.z / speed);
+        _w.set(pl.wallNormal.x, 0, pl.wallNormal.z);
+        this.wallPoint(
+          1.0 + Math.abs(Math.sin(this.time * 61.7)) * 0.9,
+          0.3 + Math.abs(Math.sin(this.time * 39.1)) * 0.25,
+        );
+        this.stickers.spawn(_v, this.accent, {
+          sprite: Sprite.streak,
+          size: 0.9,
+          stretch: 2 + speed * 0.08,
+          life: 0.45,
+          normal: _w,
+          along: _n,
+          alpha: 0.9,
+        });
+      } else if (st === MoveState.Dash && this.trailT <= 0) {
+        this.trailT = 0.03;
+        // a dash tears action lines out of the air behind it
+        _n.set(pl.vel.x / Math.max(1, speed), 0, pl.vel.z / Math.max(1, speed));
+        const side = Math.sin(this.time * 91) * 0.5;
+        _v.set(pl.pos.x - _n.z * side * 3 + _n.x * 7, pl.pos.y + 0.04, pl.pos.z + _n.x * side * 3 + _n.z * 7);
+        this.stickers.spawn(_v, this.accent, {
+          sprite: Sprite.tick,
+          size: 1.3,
+          stretch: 3,
+          life: 0.22,
+          normal: UP,
+          along: _n,
+        });
       }
       const moving = this.mode === 'playing';
       this.audio.update(
@@ -716,33 +1051,76 @@ export class Game {
   }
 
   private frameMenu(dt: number) {
-    // gentle fly-through along the level's main line
+    // attract mode: the autopilot runs the level for real; a chase camera shows the runner
     this.menuT += dt;
-    const pts = this.menuData?.bot;
     const cam = this.renderer.camera;
-    if (pts && pts.length > 2) {
-      const span = 70; // seconds for one pass
-      const f = ((this.menuT % span) / span) * (pts.length - 1);
-      const i = Math.floor(f),
-        k = f - i;
-      const a = pts[i].p,
-        b = pts[Math.min(pts.length - 1, i + 1)].p;
-      const c = pts[Math.min(pts.length - 1, i + 3)].p;
-      const x = a[0] + (b[0] - a[0]) * k,
-        y = a[1] + (b[1] - a[1]) * k,
-        z = a[2] + (b[2] - a[2]) * k;
-      const sway = Math.sin(this.menuT * 0.11) * 9;
-      cam.position.set(x + 13 + sway, y + 8.5 + Math.sin(this.menuT * 0.17) * 2, z - 16);
-      cam.lookAt(c[0], c[1] + 2.5, c[2] + 6);
+    const sim = this.menuSim,
+      runner = this.menuRunner;
+    if (sim && this.menuBot) {
+      this.menuAcc = Math.min(this.menuAcc + dt, 0.05);
+      while (this.menuAcc >= SIM_DT) {
+        sim.tick(this.menuBot.step());
+        this.menuAcc -= SIM_DT;
+      }
+      if (sim.stats.finished || this.menuBot.stuckTicks > 120 * 15 || sim.stats.deaths > 3) {
+        sim.restart();
+        this.menuBot = new Bot(sim);
+        this.menuSeeded = false;
+      }
+      const pl = sim.player;
+      const a = Math.min(1, this.menuAcc / SIM_DT);
+      const px = pl.prevPos.x + (pl.pos.x - pl.prevPos.x) * a,
+        py = pl.prevPos.y + (pl.pos.y - pl.prevPos.y) * a,
+        pz = pl.prevPos.z + (pl.pos.z - pl.prevPos.z) * a;
+      // face the way it is actually moving
+      if (pl.speed > 1.5) {
+        let d = Math.atan2(-pl.vel.x, -pl.vel.z) - this.menuYaw;
+        if (d > Math.PI) d -= Math.PI * 2;
+        else if (d < -Math.PI) d += Math.PI * 2;
+        this.menuYaw += d * Math.min(1, dt * 10);
+      }
+      runner.group.position.set(px, py, pz);
+      runner.group.rotation.y = this.menuYaw;
+      const st = pl.state;
+      runner.update(
+        dt,
+        pl.speed,
+        pl.grounded || st === MoveState.WallRun ? 0 : pl.vel.y,
+        st === MoveState.Slide
+          ? 'slide'
+          : st === MoveState.WallRun
+            ? pl.wallSide > 0
+              ? 'wallR'
+              : 'wallL'
+            : 'run',
+      );
+      // chase camera: behind and to one side, drifting slowly from shoulder to shoulder
+      const side = Math.sin(this.menuT * 0.13) * 3.4 + 1.2;
+      const bx = Math.sin(this.menuYaw),
+        bz = Math.cos(this.menuYaw);
+      _v.set(
+        px + bx * 6.2 + bz * side,
+        py + 2.7 + Math.sin(this.menuT * 0.21) * 0.5,
+        pz + bz * 6.2 - bx * side,
+      );
+      if (!this.menuSeeded) {
+        this.menuSeeded = true;
+        this.menuCam.copy(_v);
+      } else this.menuCam.lerp(_v, Math.min(1, dt * 2.6));
+      cam.position.copy(this.menuCam);
+      cam.lookAt(px - bx * 2.5, py + 1.25, pz - bz * 2.5);
+      this.rig.feet.set(px, py, pz);
+      worldUniforms.uPlayer.value.set(px, py + 1, pz);
     } else {
       cam.position.set(Math.sin(this.menuT * 0.05) * 30, 12, Math.cos(this.menuT * 0.05) * 30);
       cam.lookAt(0, 4, 0);
+      this.rig.feet.copy(cam.position);
+      worldUniforms.uPlayer.value.set(0, -9999, 0);
     }
-    if (cam.fov !== 62) {
-      cam.fov = 62;
+    if (cam.fov !== 58) {
+      cam.fov = 58;
       cam.updateProjectionMatrix();
     }
-    this.rig.feet.copy(cam.position);
     this.view?.update(1, this.time, dt);
     this.lines.update(this.time, dt, 0, 0, 0);
   }
@@ -815,6 +1193,33 @@ export class Game {
         dashPressed: !!keys.dash && i === 0,
       });
     }
+  }
+
+  private dbgBot: Bot | null = null;
+  /** Visual tests: hold the simulation still while rendering and animation keep running. */
+  debugFrozen = false;
+  /** Visual tests: hand the controls to the autopilot. */
+  debugAuto = false;
+  /**
+   * Automated visual tests: let the autopilot play until the player is in the named movement
+   * state (held for `hold` seconds) or `maxSeconds` pass. Returns the state reached.
+   */
+  debugBot(until: string | null, maxSeconds = 60, hold = 0.06) {
+    const sim = this.sim;
+    if (!sim) return null;
+    if (!this.dbgBot || (this.dbgBot as unknown as { sim: Simulation }).sim !== sim)
+      this.dbgBot = new Bot(sim);
+    const bot = this.dbgBot;
+    let held = 0;
+    for (let i = 0; i < Math.round(maxSeconds / SIM_DT) && !sim.stats.finished; i++) {
+      const inp = bot.step();
+      this.input.setLook(inp.yaw, inp.pitch);
+      sim.tick(inp);
+      held = until && moveStateNames[sim.player.state] === until ? held + SIM_DT : 0;
+      if (until && held >= hold) break;
+    }
+    this.debugFrozen = until !== null;
+    return moveStateNames[sim.player.state];
   }
 }
 

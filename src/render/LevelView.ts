@@ -41,7 +41,7 @@ const _s = new THREE.Vector3();
 
 export class LevelView {
   readonly group = new THREE.Group();
-  private material: THREE.MeshStandardMaterial;
+  private material: THREE.MeshToonMaterial;
   private animated: Animated[] = [];
   private visuals: EntityVisual[] = [];
   private collectibles: THREE.Mesh[] = [];
@@ -49,6 +49,7 @@ export class LevelView {
   private palette: Record<MatId, THREE.Color>;
   private shardGeo = new THREE.OctahedronGeometry(1, 0);
   private gemMat: THREE.MeshBasicMaterial;
+  private inkMat = new THREE.MeshBasicMaterial({ color: 0x0b0d14, side: THREE.BackSide, fog: false });
   private gemMatDim: THREE.MeshBasicMaterial;
 
   constructor(
@@ -66,10 +67,7 @@ export class LevelView {
       glass: new THREE.Color(p.glass),
       hazard: new THREE.Color(p.hazard),
     };
-    this.material = createWorldMaterial({
-      roughness: env.surface.roughness,
-      metalness: env.surface.metalness,
-    });
+    this.material = createWorldMaterial();
     this.disposables.push(this.material, this.shardGeo);
     this.gemMat = new THREE.MeshBasicMaterial({
       color: new THREE.Color(p.accent).multiplyScalar(3.2),
@@ -81,7 +79,7 @@ export class LevelView {
       opacity: 0.35,
       fog: false,
     });
-    this.disposables.push(this.gemMat, this.gemMatDim);
+    this.disposables.push(this.gemMat, this.gemMatDim, this.inkMat);
 
     this.buildStatic();
     this.buildDecor();
@@ -188,13 +186,9 @@ export class LevelView {
     }
   }
 
-  private entityMaterial(): { mat: THREE.MeshStandardMaterial; warn: { value: number } } {
+  private entityMaterial(): { mat: THREE.MeshToonMaterial; warn: { value: number } } {
     const warn = { value: 0 };
-    const mat = createWorldMaterial({
-      roughness: this.material.roughness,
-      metalness: this.material.metalness,
-      warn,
-    });
+    const mat = createWorldMaterial({ warn });
     this.disposables.push(mat);
     return { mat, warn };
   }
@@ -311,6 +305,10 @@ export class LevelView {
       const mesh = new THREE.Mesh(this.shardGeo, owned.has(c.id) ? this.gemMatDim : this.gemMat);
       mesh.position.set(c.p[0], c.p[1], c.p[2]);
       mesh.scale.set(0.28, 0.5, 0.28);
+      // inked outline: a slightly larger shell drawn inside-out
+      const shell = new THREE.Mesh(this.shardGeo, this.inkMat);
+      shell.scale.setScalar(1.22);
+      mesh.add(shell);
       this.group.add(mesh);
       this.collectibles.push(mesh);
     }

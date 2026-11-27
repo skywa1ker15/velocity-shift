@@ -1,79 +1,77 @@
 /**
- * Visual effects with a 2D graphic-design feel, all pooled and GPU-cheap:
- *  - SpeedLines: screen-space streaks in the viewmodel scene, fully animated in the vertex shader.
- *  - Bursts: flat expanding rings / shockwaves drawn in world space (double jump, landing, dash…).
- *  - Sparks: a CPU-updated point pool for dust, sparks and shards.
+ * Illustrated visual effects. Everything here is drawn, not simulated:
+ *  - SpeedLines: anime-style screen-space speed lines converging on the direction of travel.
+ *  - Stickers: pooled sprites from a small sprite sheet painted in code (dust puffs, impact
+ *    stars, brush streaks, rings), flat-coloured with ink outlines and animated in steps at
+ *    12 frames per second, the cadence of hand-drawn animation. One draw call for all of them.
+ *  - Sparks: a CPU-updated point pool of small four-point glints for hot contact (slide, wall).
  *  - Motes: an endless ambient particle field that wraps around the camera (no CPU cost).
  * Colours come from the level palette so the effects belong to the world they appear in.
  */
 import * as THREE from 'three';
 import { worldUniforms } from '../render/WorldMaterial';
 
+/** Hand-animation cadence: effects advance on "twos". */
+const STEP_FPS = 12;
+
 // ---------------------------------------------------------------------------------------
 export class SpeedLines {
   readonly mesh: THREE.Mesh;
   private mat: THREE.ShaderMaterial;
   private intensity = 0;
+  private cx = 0;
+  private cy = 0;
 
-  constructor(count: number) {
-    const geo = new THREE.InstancedBufferGeometry();
-    geo.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3),
-    );
-    geo.setIndex([0, 1, 2, 0, 2, 3]);
-    const seed = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) {
-      // deterministic pseudo-random layout (visual only)
-      const r = (n: number) => {
-        const x = Math.sin(i * 127.1 + n * 311.7) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      seed[i * 4] = r(1) * Math.PI * 2; // angle around the view axis
-      seed[i * 4 + 1] = 0.55 + r(2) * 1.25; // radius
-      seed[i * 4 + 2] = r(3); // phase
-      seed[i * 4 + 3] = 0.5 + r(4) * 1.6; // length
-    }
-    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 4));
-    geo.instanceCount = count;
+  constructor() {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
     this.mat = new THREE.ShaderMaterial({
       transparent: true,
       depthTest: false,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
       uniforms: {
         uTime: { value: 0 },
         uIntensity: { value: 0 },
-        uColor: { value: new THREE.Color(1, 1, 1) },
         uBurst: { value: 0 },
+        uColor: { value: new THREE.Color(1, 1, 1) },
+        uInk: worldUniforms.uInk,
+        uCenter: { value: new THREE.Vector2() },
+        uAspect: { value: 1.78 },
       },
       vertexShader: /* glsl */ `
-        attribute vec4 aSeed;
-        uniform float uTime, uIntensity, uBurst;
-        varying float vAlpha;
-        varying vec2 vUv;
-        void main() {
-          float ang = aSeed.x, rad = aSeed.y, len = aSeed.w * (0.7 + uIntensity * 1.6 + uBurst * 2.0);
-          float z = -9.0 + mod(aSeed.z * 9.0 + uTime * (9.0 + uIntensity * 22.0 + uBurst * 30.0), 9.0);
-          vec3 c = vec3(cos(ang) * rad, sin(ang) * rad, z);
-          vec3 tangent = vec3(-sin(ang), cos(ang), 0.0);
-          float width = 0.006 + 0.012 * aSeed.w * (0.5 + uIntensity);
-          vec3 p = c + tangent * position.x * width + vec3(0.0, 0.0, -position.y * len);
-          // each streak has its own threshold, so more of them appear as speed builds
-          float gate = smoothstep(aSeed.z * 0.85, aSeed.z * 0.85 + 0.2, uIntensity + uBurst);
-          float fade = smoothstep(-9.0, -6.5, z) * smoothstep(0.0, -1.2, z);
-          vAlpha = gate * fade * (0.25 + 0.55 * uIntensity + 0.5 * uBurst);
-          vUv = position.xy;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-        }`,
+        varying vec2 vP;
+        void main() { vP = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uColor;
-        varying float vAlpha;
-        varying vec2 vUv;
+        uniform float uTime, uIntensity, uBurst, uAspect;
+        uniform vec3 uColor, uInk;
+        uniform vec2 uCenter;
+        varying vec2 vP;
+        float h1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
         void main() {
-          float edge = 1.0 - abs(vUv.x) * 2.0;
-          float taper = sin(vUv.y * 3.14159);
-          gl_FragColor = vec4(uColor * 1.6, vAlpha * edge * taper);
+          float k = clamp(uIntensity + uBurst, 0.0, 1.0);
+          if (k < 0.01) discard;
+          vec2 p = (vP - uCenter) * vec2(uAspect, 1.0);
+          float r = length(p);
+          float ang = atan(p.y, p.x) / 6.2831853 + 0.5;
+          float frame = floor(uTime * ${STEP_FPS}.0);          // redrawn 12 times a second
+          const float N = 120.0;
+          float cell = ang * N;
+          float id = floor(cell);
+          float across = abs(fract(cell) - 0.5);                // 0 at the middle of the wedge
+          float hA = h1(id + frame * 13.0);
+          float hB = h1(id * 1.73 + 5.0 + frame * 7.0);
+          // only some wedges carry a line each frame; more as speed builds
+          float on = step(hA, 0.08 + k * 0.3);
+          // each line is a long thin spike: its tip points at the focus, its base is off-screen
+          float tip = mix(1.35, 0.66, k) + hB * 0.5 - uBurst * 0.12;
+          float len = max(r - tip, 0.0);
+          float halfW = min(0.34, len * (0.3 + hB * 0.6));
+          float line = on * (1.0 - smoothstep(halfW - 0.06, halfW, across)) * step(tip, r);
+          if (line < 0.01) discard;
+          // most lines are light, some are ink: reads on bright and dark backgrounds alike
+          float inkLine = step(0.72, h1(id * 3.1 + frame));
+          vec3 col = mix(uColor, uInk, inkLine);
+          gl_FragColor = vec4(col, line * (0.4 + 0.35 * k) * mix(1.0, 0.7, inkLine));
         }`,
     });
     this.mesh = new THREE.Mesh(geo, this.mat);
@@ -82,17 +80,37 @@ export class SpeedLines {
   }
 
   setColor(hex: number) {
-    this.mat.uniforms.uColor.value.set(hex);
+    // keep the lines light: tint white toward the chosen colour
+    this.mat.uniforms.uColor.value.set(hex).lerp(new THREE.Color(1, 1, 1), 0.55);
+  }
+  setAspect(a: number) {
+    this.mat.uniforms.uAspect.value = a;
   }
 
-  /** speed in m/s; `burst` 0..1 for dashes; `scale` from comfort settings. */
-  update(time: number, dt: number, speed: number, burst: number, scale: number) {
-    const target = Math.min(1, Math.max(0, (speed - 11.5) / 14)) * scale;
+  /**
+   * speed in m/s; `burst` 0..1 for dashes; `scale` from comfort settings; (fx, fy) is where the
+   * motion is heading on screen (-1..1), so the lines streak sideways in a strafe and upward in a fall.
+   */
+  update(
+    time: number,
+    dt: number,
+    speed: number,
+    burst: number,
+    scale: number,
+    fx = 0,
+    fy = 0,
+    snap = false,
+  ) {
+    const target = Math.min(1, Math.max(0, (speed - 11.5) / 13)) * scale;
     this.intensity += (target - this.intensity) * Math.min(1, dt * 6);
+    const rate = snap ? 1 : Math.min(1, dt * 7);
+    this.cx += (fx - this.cx) * rate;
+    this.cy += (fy - this.cy) * rate;
     const u = this.mat.uniforms;
     u.uTime.value = time;
     u.uIntensity.value = this.intensity;
     u.uBurst.value = burst * scale;
+    u.uCenter.value.set(this.cx, this.cy);
     this.mesh.visible = this.intensity > 0.01 || burst * scale > 0.01;
   }
 
@@ -104,98 +122,491 @@ export class SpeedLines {
 }
 
 // ---------------------------------------------------------------------------------------
-interface Burst {
-  mesh: THREE.Mesh;
-  mat: THREE.ShaderMaterial;
+/** Sprite-sheet cells (4 x 4 grid). Animated sprites occupy a whole row, left to right. */
+export const Sprite = {
+  puff: 0, // 4 frames: a cartoon dust cloud that swells and breaks apart
+  star: 4, // 4 frames: an impact burst that opens into a hollow ring of spikes
+  ring: 8, // 2 frames: a hand-drawn ring, thick then thin
+  streak: 10, // a tapered brush stroke
+  scuff: 11, // a short double skid mark
+  tick: 12, // a small wedge ("action line")
+  glint: 13, // a four-point sparkle
+  chevron: 14,
+  dot: 15,
+} as const;
+
+/** Paint the sprite sheet: white shapes with black ink outlines, tinted per sprite at draw time. */
+function paintSheet(): THREE.Texture {
+  const S = 512,
+    C = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d')!;
+  // deterministic wobble so the shapes look hand-drawn but are identical on every run
+  let seed = 7;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const cell = (i: number, draw: () => void) => {
+    g.save();
+    g.translate((i % 4) * C + C / 2, Math.floor(i / 4) * C + C / 2);
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    draw();
+    g.restore();
+  };
+  const INK = '#0b0d14';
+  const blob = (x: number, y: number, r: number) => {
+    g.beginPath();
+    const n = 9;
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = r * (0.9 + rnd() * 0.2);
+      const px = x + Math.cos(a) * rr,
+        py = y + Math.sin(a) * rr;
+      if (i === 0) g.moveTo(px, py);
+      else
+        g.quadraticCurveTo(
+          x + Math.cos(a - Math.PI / n) * rr * 1.12,
+          y + Math.sin(a - Math.PI / n) * rr * 1.12,
+          px,
+          py,
+        );
+    }
+    g.closePath();
+  };
+  // puffs: clusters of lobes, outlined as one shape, with a shade crescent
+  for (let f = 0; f < 4; f++)
+    cell(Sprite.puff + f, () => {
+      const lobes = [
+        [-16, 6, 22],
+        [10, 10, 24],
+        [-2, -12, 24],
+        [22, -8, 16],
+        [-26, -10, 14],
+      ];
+      const spread = 1 + f * 0.32,
+        shrink = 1 - f * 0.2;
+      g.fillStyle = INK;
+      for (const [x, y, r] of lobes.slice(0, 5 - (f === 3 ? 1 : 0))) {
+        blob(x * spread, y * spread, r * shrink + 5);
+        g.fill();
+      }
+      g.fillStyle = '#fff';
+      for (const [x, y, r] of lobes.slice(0, 5 - (f === 3 ? 1 : 0))) {
+        blob(x * spread, y * spread, Math.max(2, r * shrink - (f === 3 ? 3 : 0)));
+        g.fill();
+      }
+      g.fillStyle = 'rgba(11,13,20,0.22)';
+      for (const [x, y, r] of lobes.slice(0, 3)) {
+        g.beginPath();
+        g.arc(x * spread + 3, y * spread + r * shrink * 0.45, r * shrink * 0.55, 0.1, Math.PI - 0.1);
+        g.fill();
+      }
+    });
+  // impact stars
+  for (let f = 0; f < 4; f++)
+    cell(Sprite.star + f, () => {
+      const n = 11;
+      const outer = 30 + f * 9,
+        inner = f < 2 ? 12 + f * 6 : 0;
+      const hole = f >= 2 ? 22 + (f - 2) * 12 : 0;
+      const path = (grow: number) => {
+        g.beginPath();
+        for (let i = 0; i < n * 2; i++) {
+          const a = (i / (n * 2)) * Math.PI * 2;
+          const spike = i % 2 === 0;
+          const r = spike
+            ? (outer + grow) * (0.78 + ((i * 7) % 5) * 0.06)
+            : Math.max(inner, hole * 0.9) + 8 - grow * 0.3;
+          g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        g.closePath();
+      };
+      g.fillStyle = INK;
+      path(5);
+      g.fill();
+      g.fillStyle = '#fff';
+      path(0);
+      g.fill();
+      if (hole) {
+        g.globalCompositeOperation = 'destination-out';
+        g.beginPath();
+        g.arc(0, 0, hole, 0, Math.PI * 2);
+        g.fill();
+        g.globalCompositeOperation = 'source-over';
+        g.strokeStyle = INK;
+        g.lineWidth = 4;
+        g.beginPath();
+        g.arc(0, 0, hole, 0, Math.PI * 2);
+        g.stroke();
+      }
+    });
+  // rings: a brush ring with uneven weight and a gap, like a quick pen stroke
+  for (let f = 0; f < 2; f++)
+    cell(Sprite.ring + f, () => {
+      const R = 50;
+      const w = f === 0 ? 11 : 5;
+      for (const [col, extra] of [
+        [INK, 7],
+        ['#fff', 0],
+      ] as const) {
+        g.strokeStyle = col;
+        for (let i = 0; i < 40; i++) {
+          const a0 = (i / 40) * Math.PI * 2 + 0.2,
+            a1 = a0 + (Math.PI * 2) / 40 + 0.02;
+          if (f === 1 && i % 10 > 7) continue; // broken line on the thin frame
+          g.lineWidth = w * (0.55 + 0.45 * Math.sin(a0 * 1.5 + 1) ** 2) + extra;
+          g.beginPath();
+          g.arc(0, 0, R, a0, a1);
+          g.stroke();
+        }
+      }
+    });
+  // brush streak: tapered at both ends, with dry-brush gaps at the tail
+  cell(Sprite.streak, () => {
+    const shape = (grow: number) => {
+      g.beginPath();
+      g.moveTo(-58, 0);
+      g.quadraticCurveTo(-10, -13 - grow, 56, -3 - grow * 0.4);
+      g.lineTo(60, 2);
+      g.quadraticCurveTo(-10, 12 + grow, -58, 0);
+      g.closePath();
+    };
+    g.fillStyle = INK;
+    shape(5);
+    g.fill();
+    g.fillStyle = '#fff';
+    shape(0);
+    g.fill();
+    g.globalCompositeOperation = 'destination-out';
+    g.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      g.beginPath();
+      g.moveTo(-56, -5 + i * 3.4);
+      g.lineTo(-22 + i * 5, -6 + i * 3.6);
+      g.stroke();
+    }
+    g.globalCompositeOperation = 'source-over';
+  });
+  cell(Sprite.scuff, () => {
+    for (const y of [-14, 14]) {
+      g.strokeStyle = INK;
+      g.lineWidth = 15;
+      g.beginPath();
+      g.moveTo(-46, y);
+      g.lineTo(46, y * 0.8);
+      g.stroke();
+      g.strokeStyle = '#fff';
+      g.lineWidth = 8;
+      g.setLineDash([26, 9, 14, 7]);
+      g.beginPath();
+      g.moveTo(-44, y);
+      g.lineTo(44, y * 0.8);
+      g.stroke();
+      g.setLineDash([]);
+    }
+  });
+  cell(Sprite.tick, () => {
+    const shape = (grow: number) => {
+      g.beginPath();
+      g.moveTo(-50 - grow, 0);
+      g.lineTo(46, -9 - grow);
+      g.lineTo(52 + grow, 0);
+      g.lineTo(46, 9 + grow);
+      g.closePath();
+    };
+    g.fillStyle = INK;
+    shape(4);
+    g.fill();
+    g.fillStyle = '#fff';
+    shape(0);
+    g.fill();
+  });
+  cell(Sprite.glint, () => {
+    const shape = (R: number, r: number) => {
+      g.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rr = i % 2 ? r : R;
+        g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      g.closePath();
+    };
+    g.fillStyle = INK;
+    shape(56, 15);
+    g.fill();
+    g.fillStyle = '#fff';
+    shape(48, 9);
+    g.fill();
+  });
+  cell(Sprite.chevron, () => {
+    for (const [col, w] of [
+      [INK, 26],
+      ['#fff', 15],
+    ] as const) {
+      g.strokeStyle = col;
+      g.lineWidth = w;
+      g.lineJoin = 'miter';
+      g.beginPath();
+      g.moveTo(-34, 30);
+      g.lineTo(0, -22);
+      g.lineTo(34, 30);
+      g.stroke();
+    }
+  });
+  cell(Sprite.dot, () => {
+    g.fillStyle = INK;
+    blob(0, 0, 40);
+    g.fill();
+    g.fillStyle = '#fff';
+    blob(0, 0, 32);
+    g.fill();
+  });
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 2;
+  return tex;
+}
+
+export interface StickerOpts {
+  /** First sprite cell and how many frames to play through over the lifetime. */
+  sprite: number;
+  frames?: number;
+  size: number;
+  /** Final size as a multiple of the start size (sprites pop out fast, then settle). */
+  grow?: number;
+  life?: number;
+  /** Lie flat on this surface normal. Omit for a camera-facing sprite. */
+  normal?: THREE.Vector3;
+  /** Rotation in the sprite's plane (radians). For flat sprites, 0 points the sprite's +X along `along`. */
+  rot?: number;
+  along?: THREE.Vector3;
+  vel?: THREE.Vector3;
+  gravity?: number;
+  drag?: number;
+  alpha?: number;
+  /** Stretch along the sprite's X axis. */
+  stretch?: number;
+}
+
+interface Sticker {
   life: number;
   max: number;
+  sprite: number;
+  frames: number;
   size: number;
+  grow: number;
+  flat: boolean;
+  rot: number;
+  alpha: number;
+  stretch: number;
+  gravity: number;
+  drag: number;
+  p: THREE.Vector3;
+  v: THREE.Vector3;
+  ax: THREE.Vector3;
+  ay: THREE.Vector3;
+  c: THREE.Color;
 }
 
 const _n = new THREE.Vector3();
-const Z = new THREE.Vector3(0, 0, 1);
+const _t = new THREE.Vector3();
+const _r = new THREE.Vector3();
+const _u = new THREE.Vector3();
 
-/** Flat graphic shockwaves: ring, double ring or starburst, expanding and fading. */
-export class Bursts {
-  readonly group = new THREE.Group();
-  private pool: Burst[] = [];
-  private geo = new THREE.PlaneGeometry(2, 2);
+/** Pooled illustrated sprites, world-space, drawn in one instanced call. */
+export class Stickers {
+  readonly mesh: THREE.Mesh;
+  private pool: Sticker[] = [];
+  private geo: THREE.InstancedBufferGeometry;
+  private mat: THREE.ShaderMaterial;
+  private tex: THREE.Texture;
+  private aPos: THREE.InstancedBufferAttribute;
+  private aX: THREE.InstancedBufferAttribute;
+  private aY: THREE.InstancedBufferAttribute;
+  private aCol: THREE.InstancedBufferAttribute;
+  private aCell: THREE.InstancedBufferAttribute;
+  private next = 0;
+  private live = 0;
 
-  constructor(count = 24) {
-    for (let i = 0; i < count; i++) {
-      const mat = new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        uniforms: { uColor: { value: new THREE.Color() }, uT: { value: 0 }, uStyle: { value: 0 } },
-        vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv * 2.0 - 1.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: /* glsl */ `
-          uniform vec3 uColor; uniform float uT; uniform float uStyle;
-          varying vec2 vUv;
-          void main() {
-            float r = length(vUv);
-            float a = atan(vUv.y, vUv.x);
-            float w = mix(0.16, 0.035, uT);
-            float ring = smoothstep(w, 0.0, abs(r - 0.82));
-            float inner = smoothstep(w * 0.6, 0.0, abs(r - 0.55)) * 0.6 * step(0.5, uStyle);
-            // starburst spokes (style 2): crisp graphic shards
-            float spokes = step(1.5, uStyle) * smoothstep(0.75, 1.0, abs(sin(a * 6.0))) * smoothstep(0.95, 0.3, r) * smoothstep(0.15, 0.4, r);
-            float alpha = (ring + inner + spokes * 0.8) * (1.0 - uT) * (1.0 - uT);
-            if (alpha < 0.003) discard;
-            gl_FragColor = vec4(uColor * 2.2, alpha);
-          }`,
+  constructor(private n = 180) {
+    this.tex = paintSheet();
+    const geo = (this.geo = new THREE.InstancedBufferGeometry());
+    geo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3),
+    );
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const attr = (size: number) =>
+      new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aPos', (this.aPos = attr(3)));
+    geo.setAttribute('aX', (this.aX = attr(3)));
+    geo.setAttribute('aY', (this.aY = attr(3)));
+    geo.setAttribute('aCol', (this.aCol = attr(4)));
+    geo.setAttribute('aCell', (this.aCell = attr(1)));
+    geo.instanceCount = 0;
+    this.mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { uMap: { value: this.tex } },
+      vertexShader: /* glsl */ `
+        attribute vec3 aPos, aX, aY; attribute vec4 aCol; attribute float aCell;
+        varying vec2 vUv; varying vec4 vCol;
+        void main() {
+          vec2 c = vec2(mod(aCell, 4.0), floor(aCell / 4.0));
+          vUv = (c + position.xy + 0.5) * 0.25;
+          vUv.y = 1.0 - vUv.y;
+          vCol = aCol;
+          gl_Position = projectionMatrix * viewMatrix * vec4(aPos + aX * position.x + aY * position.y, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uMap;
+        varying vec2 vUv; varying vec4 vCol;
+        void main() {
+          vec4 t = texture2D(uMap, vUv);
+          float a = t.a * vCol.a;
+          if (a < 0.02) discard;
+          // white paint takes the sprite's colour, ink stays ink
+          gl_FragColor = vec4(t.rgb * mix(vec3(1.0), vCol.rgb, smoothstep(0.2, 0.9, t.r)), a);
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 5;
+    for (let i = 0; i < n; i++)
+      this.pool.push({
+        life: 0,
+        max: 1,
+        sprite: 0,
+        frames: 1,
+        size: 1,
+        grow: 1,
+        flat: false,
+        rot: 0,
+        alpha: 1,
+        stretch: 1,
+        gravity: 0,
+        drag: 0,
+        p: new THREE.Vector3(),
+        v: new THREE.Vector3(),
+        ax: new THREE.Vector3(),
+        ay: new THREE.Vector3(),
+        c: new THREE.Color(),
       });
-      const mesh = new THREE.Mesh(this.geo, mat);
-      mesh.visible = false;
-      mesh.frustumCulled = false;
-      this.group.add(mesh);
-      this.pool.push({ mesh, mat, life: 0, max: 1, size: 1 });
-    }
   }
 
-  spawn(pos: THREE.Vector3, normal: THREE.Vector3, color: THREE.Color, size: number, life = 0.45, style = 0) {
-    // reuse a free burst, or the oldest one
-    let b = this.pool[0];
-    for (const c of this.pool) {
-      if (!c.mesh.visible) {
-        b = c;
-        break;
-      }
-      if (c.life / c.max > b.life / b.max) b = c;
+  spawn(pos: THREE.Vector3, color: THREE.Color, o: StickerOpts) {
+    const s = this.pool[this.next];
+    this.next = (this.next + 1) % this.n;
+    s.max = o.life ?? 0.4;
+    s.life = s.max;
+    s.sprite = o.sprite;
+    s.frames = o.frames ?? 1;
+    s.size = o.size;
+    s.grow = o.grow ?? 1;
+    s.rot = o.rot ?? 0;
+    s.alpha = o.alpha ?? 1;
+    s.stretch = o.stretch ?? 1;
+    s.gravity = o.gravity ?? 0;
+    s.drag = o.drag ?? 0;
+    s.p.copy(pos);
+    if (o.vel) s.v.copy(o.vel);
+    else s.v.set(0, 0, 0);
+    s.c.copy(color);
+    s.flat = !!o.normal;
+    if (o.normal) {
+      // build the sprite's plane: X along `along` (projected), Y perpendicular, both in the surface
+      _n.copy(o.normal).normalize();
+      if (o.along && o.along.lengthSq() > 1e-6) _t.copy(o.along);
+      else _t.set(Math.abs(_n.y) > 0.9 ? 1 : 0, Math.abs(_n.y) > 0.9 ? 0 : 1, 0);
+      _t.addScaledVector(_n, -_t.dot(_n));
+      if (_t.lengthSq() < 1e-6) _t.set(1, 0, 0).addScaledVector(_n, -_n.x);
+      _t.normalize();
+      _u.crossVectors(_n, _t);
+      const cs = Math.cos(s.rot),
+        sn = Math.sin(s.rot);
+      s.ax.copy(_t).multiplyScalar(cs).addScaledVector(_u, sn);
+      s.ay.copy(_u).multiplyScalar(cs).addScaledVector(_t, -sn);
+      s.p.addScaledVector(_n, 0.02); // sit just off the surface
     }
-    b.life = 0;
-    b.max = life;
-    b.size = size;
-    b.mesh.visible = true;
-    b.mesh.position.copy(pos);
-    _n.copy(normal).normalize();
-    b.mesh.quaternion.setFromUnitVectors(Z, _n);
-    b.mat.uniforms.uColor.value.copy(color);
-    b.mat.uniforms.uStyle.value = style;
-    b.mat.uniforms.uT.value = 0;
-    b.mesh.scale.setScalar(size * 0.2);
+    this.live = Math.max(this.live, 1);
   }
 
-  update(dt: number) {
-    for (const b of this.pool) {
-      if (!b.mesh.visible) continue;
-      b.life += dt;
-      const t = b.life / b.max;
-      if (t >= 1) {
-        b.mesh.visible = false;
-        continue;
-      }
-      const e = 1 - (1 - t) * (1 - t) * (1 - t);
-      b.mesh.scale.setScalar(b.size * (0.2 + 0.8 * e));
-      b.mat.uniforms.uT.value = t;
+  /** `camera` orients the camera-facing sprites. Time is stepped so motion lands on twos. */
+  update(dt: number, camera: THREE.Camera) {
+    if (!this.live) {
+      this.geo.instanceCount = 0;
+      return;
     }
+    _r.setFromMatrixColumn(camera.matrixWorld, 0);
+    _u.setFromMatrixColumn(camera.matrixWorld, 1);
+    let k = 0;
+    const P = this.aPos.array as Float32Array,
+      AX = this.aX.array as Float32Array,
+      AY = this.aY.array as Float32Array,
+      CO = this.aCol.array as Float32Array,
+      CE = this.aCell.array as Float32Array;
+    for (const s of this.pool) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      if (s.life <= 0) continue;
+      s.v.y -= s.gravity * dt;
+      if (s.drag) s.v.multiplyScalar(Math.max(0, 1 - s.drag * dt));
+      s.p.addScaledVector(s.v, dt);
+      // age snaps to 12 fps steps: size and frame change together, like drawn frames
+      const age = 1 - s.life / s.max;
+      const stepped = Math.min(
+        1,
+        Math.floor(age * s.max * STEP_FPS + 1) / Math.max(1, Math.ceil(s.max * STEP_FPS)),
+      );
+      const e = 1 - (1 - stepped) * (1 - stepped);
+      const size = s.size * (1 + (s.grow - 1) * e);
+      const frame = s.sprite + Math.min(s.frames - 1, Math.floor(stepped * s.frames));
+      let ax = s.ax,
+        ay = s.ay;
+      if (!s.flat) {
+        const cs = Math.cos(s.rot),
+          sn = Math.sin(s.rot);
+        ax = _n.copy(_r).multiplyScalar(cs).addScaledVector(_u, sn);
+        ay = _t.copy(_u).multiplyScalar(cs).addScaledVector(_r, -sn);
+      }
+      const j = k * 3;
+      P[j] = s.p.x;
+      P[j + 1] = s.p.y;
+      P[j + 2] = s.p.z;
+      AX[j] = ax.x * size * s.stretch;
+      AX[j + 1] = ax.y * size * s.stretch;
+      AX[j + 2] = ax.z * size * s.stretch;
+      AY[j] = ay.x * size;
+      AY[j + 1] = ay.y * size;
+      AY[j + 2] = ay.z * size;
+      CO[k * 4] = s.c.r;
+      CO[k * 4 + 1] = s.c.g;
+      CO[k * 4 + 2] = s.c.b;
+      // hold solid, then drop out over the last third
+      CO[k * 4 + 3] = s.alpha * Math.min(1, (1 - stepped) * 3 + 0.001);
+      CE[k] = frame;
+      k++;
+    }
+    this.live = k;
+    this.geo.instanceCount = k;
+    this.aPos.needsUpdate =
+      this.aX.needsUpdate =
+      this.aY.needsUpdate =
+      this.aCol.needsUpdate =
+      this.aCell.needsUpdate =
+        true;
   }
 
   dispose() {
     this.geo.dispose();
-    for (const b of this.pool) b.mat.dispose();
-    this.group.removeFromParent();
+    this.mat.dispose();
+    this.tex.dispose();
+    this.mesh.removeFromParent();
   }
 }
 
@@ -252,10 +663,10 @@ export class Sparks {
         varying vec3 vColor; varying float vLife;
         void main() {
           vec2 p = abs(gl_PointCoord - 0.5);
-          float d = p.x + p.y;            // diamond
-          float a = smoothstep(0.5, 0.36, d) * vLife;
+          float d = p.x + p.y + min(p.x, p.y) * 2.6;   // four-point glint
+          float a = step(d, 0.5) * step(0.12, vLife);
           if (a < 0.01) discard;
-          gl_FragColor = vec4(vColor * 1.8, a);
+          gl_FragColor = vec4(mix(vColor, vec3(1.0), step(d, 0.2)) * 1.5, a);
         }`,
     });
     this.points = new THREE.Points(this.geo, this.mat);

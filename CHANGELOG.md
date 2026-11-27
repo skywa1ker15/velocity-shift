@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — "Ink & Signal" visual, art and animation overhaul
+
+No level layouts, obstacle timings or movement values changed.
+
+- **Art direction:** cel-shaded world (flat light bands), black ink lines on every block edge,
+  hatching in shadow, crisp painted tone patches, painted wall-run chevrons, bold hazard stripes,
+  banded sky with cut-paper clouds and a graphic sun. Bloom cut by 40%, chromatic aberration removed,
+  tone mapping switched to Khronos Neutral to keep colours flat and saturated.
+- **Character:** rebuilt first-person arms and hands (jacket sleeve with rolled cuff, strapped
+  guard, glove with separate jointed fingers and thumb, accent-dipped fingertips), legs, shoes and
+  hips, all toon-shaded with halftone shade, a hard rim light and ink outlines (`render/ink.ts`).
+  New full-body `Runner` figure (hood, visor, scarf) used for the ghost and the menu.
+- **Animation:** velocity-driven poses for idle, run, sprint, take-off, rise, fall, landing,
+  slide, wall-run, wall-jump, vault, dash, double jump and air steering; per-state spring
+  stiffness; wrist bend, finger splay and elbow pole channels.
+- **2D effects:** sprite sheet painted in code (dust puffs, impact stars, rings, brush streaks,
+  skid marks, action ticks, glints), stepped at 12 fps, one instanced draw call; anime speed lines
+  that converge on the direction of travel; landing ripple through nearby surfaces; wall-run
+  markings brighten near the player.
+- **Camera:** landing/take-off nod, sharper sprint footfalls, slide rattle, wall-run side offset,
+  FOV includes fall speed and relaxes slowly. All scaled by the existing comfort settings.
+- **Menu:** the autopilot runs Level 1 for real behind the menu, followed by a chase camera.
+- **UI:** comic-panel theme (ink borders, offset shadows, halftone, slanted plates), outlined HUD
+  numbers, speed-tier chevrons, icons for double jump / wall / slide, caption-box prompts.
+- **Dev:** `debugBot`, `debugAuto`, `debugFrozen` hooks on the game for automated visual checks.
+
 ## Unreleased — Level 3 (Momentum) fairness pass
 
 ### Fixed

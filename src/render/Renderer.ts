@@ -11,7 +11,6 @@ import * as THREE from 'three';
 import {
   BloomEffect,
   BrightnessContrastEffect,
-  ChromaticAberrationEffect,
   ClearPass,
   EffectComposer,
   EffectPass,
@@ -50,7 +49,6 @@ export class Renderer {
 
   private composer!: EffectComposer;
   private bloom!: BloomEffect;
-  private chroma!: ChromaticAberrationEffect;
   private vignette!: VignetteEffect;
   private tone!: ToneMappingEffect;
   private grade!: HueSaturationEffect;
@@ -125,13 +123,8 @@ export class Renderer {
       radius: 0.72,
       levels: t.bloomLevels,
     });
-    this.chroma = new ChromaticAberrationEffect({
-      offset: new THREE.Vector2(0, 0),
-      radialModulation: true,
-      modulationOffset: 0.2,
-    });
     this.vignette = new VignetteEffect({ darkness: 0.35, offset: 0.3 });
-    this.tone = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
+    this.tone = new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL });
     this.grade = new HueSaturationEffect({ saturation: 0 });
     this.contrast = new BrightnessContrastEffect({ brightness: 0, contrast: 0 });
 
@@ -140,8 +133,7 @@ export class Renderer {
     if (this.postEnabled) effects.push(this.vignette);
     effects.push(this.tone, this.grade, this.contrast);
     this.composer.addPass(new EffectPass(this.camera, ...effects));
-    // convolution effects need their own pass
-    if (this.postEnabled && t.chroma) this.composer.addPass(new EffectPass(this.camera, this.chroma));
+    // (no chromatic aberration: colour fringes fight the ink lines; dashes use drawn speed lines)
     if (t.smaa)
       this.composer.addPass(
         new EffectPass(
@@ -241,12 +233,14 @@ export class Renderer {
     u.uSunDir.value.copy(this.sunDir);
     u.uSeam.value = env.surface.seam;
     u.uRim.value = env.surface.rim;
+    u.uInk.value.set(env.ink ?? 0x0b0d14);
+    u.uSunPower.value = Math.max(this.sun.color.r, this.sun.color.g, this.sun.color.b) * l.sunIntensity;
     this.applyEnvPost();
   }
 
   private applyEnvPost() {
     const p = this.env.post;
-    this.bloom.intensity = p.bloom * this.tier.bloomScale;
+    this.bloom.intensity = p.bloom * this.tier.bloomScale * 0.6; // the inked look wants restrained glow
     this.bloom.luminanceMaterial.threshold = p.bloomThreshold;
     this.vignette.darkness = p.vignette;
     this.gl.toneMappingExposure = 1;
@@ -307,10 +301,6 @@ export class Renderer {
       this.sun.position.copy(this.sunDir).multiplyScalar(100);
     }
 
-    if (this.postEnabled && this.tier.chroma) {
-      const k = this.dashFx * 0.006;
-      this.chroma.offset.set(k, k * 0.6);
-    }
     this.gl.info.reset();
     this.composer.render(dt);
   }

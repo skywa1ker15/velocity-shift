@@ -32,6 +32,8 @@ export interface EnvPreset {
     contrast: number;
   };
   motes: { color: number; count: number; rise: number; size: number };
+  /** Ink line colour (defaults to near-black). */
+  ink?: number;
   /** Colour of speed lines / dash streaks. */
   streak: number;
 }

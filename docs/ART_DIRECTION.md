@@ -1,3 +1,19 @@
+# Art direction — "Ink & Signal" (current)
+
+A comic-book treatment of the original "Dreamlike Brutalism" spaces. Rules:
+
+1. **Flat tone, not gradients.** Four light bands (`toonRamp`), crisp tone swatches, banded sky.
+2. **Ink everywhere.** Every block edge carries a black line (world shader); every character piece
+   carries an ink hull (`PartBuilder`); sprites and UI use the same near-black `#0b0d14`.
+3. **Shade is drawn.** Hatching on shadowed world surfaces, halftone dots on the character and UI.
+4. **One hot accent per level** for everything the player should read: wall-run markings, glow
+   strips, fingertips, effects. Hazards use their own colour plus a stripe pattern.
+5. **Effects are drawings.** Sprite-sheet shapes stepped at 12 fps; speed lines, not blur. Each
+   effect is tied to one movement event; nothing is ambient noise.
+6. **Restraint.** Bloom at 60% of the old value, no chromatic aberration, no film grain.
+
+The sections below describe the level palettes and spaces, which are unchanged.
+
 # Art direction — "Dreamlike Brutalism"
 
 Enormous, simple architecture in soft, surreal light, with crisp 2D graphics layered on top.

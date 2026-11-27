@@ -1,5 +1,7 @@
 /**
- * World material: MeshStandardMaterial extended with the game's stylised surface language.
+ * World material: a cel-shaded (toon) material extended with the game's inked, illustrated
+ * surface language: flat light bands, black ink lines on every block edge, hatching in shadow,
+ * crisp painted tone patches and graphic markings.
  *
  * Per-vertex inputs (built by render/geometry.ts):
  *   color  – palette colour
@@ -26,6 +28,12 @@ export interface WorldUniforms {
   uSeam: { value: number };
   uRim: { value: number };
   uHazardAlt: { value: number }; // 1 = colour-blind-safe hazard pattern boost
+  uInk: { value: THREE.Color };
+  uSunPower: { value: number };
+  /** xyz = where the player last landed, w = when (level time): surfaces ripple outward from it. */
+  uPulse: { value: THREE.Vector4 };
+  uPulseAmt: { value: number };
+  uPlayer: { value: THREE.Vector3 };
 }
 
 export const worldUniforms: WorldUniforms = {
@@ -41,7 +49,26 @@ export const worldUniforms: WorldUniforms = {
   uSeam: { value: 0.1 },
   uRim: { value: 0.2 },
   uHazardAlt: { value: 0 },
+  uInk: { value: new THREE.Color(0x0b0d14) },
+  uSunPower: { value: 2 },
+  uPulse: { value: new THREE.Vector4(0, -9999, 0, -100) },
+  uPulseAmt: { value: 0 },
+  uPlayer: { value: new THREE.Vector3(0, -9999, 0) },
 };
+
+/** Light bands for cel shading (shared by the world and the character). */
+let ramp: THREE.DataTexture | null = null;
+export function toonRamp(): THREE.DataTexture {
+  if (!ramp) {
+    // four flat tones: deep shade, shade, light, full light
+    const t = new Uint8Array([96, 96, 96, 255, 150, 150, 150, 255, 222, 222, 222, 255, 255, 255, 255, 255]);
+    ramp = new THREE.DataTexture(t, 4, 1, THREE.RGBAFormat);
+    ramp.minFilter = ramp.magFilter = THREE.NearestFilter;
+    ramp.generateMipmaps = false;
+    ramp.needsUpdate = true;
+  }
+  return ramp;
+}
 
 /** GLSL shared with other shaders (sky, particles) so fog always matches. */
 export const fogGLSL = /* glsl */ `
@@ -63,15 +90,10 @@ vec3 applyWorldFog(vec3 color, vec3 wpos, vec3 camPos) {
 }
 `;
 
-export function createWorldMaterial(opts: {
-  roughness: number;
-  metalness: number;
-  warn?: { value: number };
-}): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({
+export function createWorldMaterial(opts: { warn?: { value: number } } = {}): THREE.MeshToonMaterial {
+  const mat = new THREE.MeshToonMaterial({
     vertexColors: true,
-    roughness: opts.roughness,
-    metalness: opts.metalness,
+    gradientMap: toonRamp(),
     fog: false,
   });
   const warn = opts.warn ?? { value: 0 };
@@ -108,10 +130,15 @@ varying vec3 vWNormal;
 uniform float uTime;
 uniform vec3 uAccent;
 uniform vec3 uHazard;
+uniform vec3 uInk;
 uniform float uSeam;
 uniform float uRim;
 uniform float uWarn;
 uniform float uHazardAlt;
+uniform float uSunPower;
+uniform vec4 uPulse;
+uniform float uPulseAmt;
+uniform vec3 uPlayer;
 ${fogGLSL}
 float vsHash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
@@ -125,7 +152,9 @@ float vsNoise(vec3 x) {
   return mix(mix(mix(vsHash(i), vsHash(i + vec3(1,0,0)), f.x), mix(vsHash(i + vec3(0,1,0)), vsHash(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(vsHash(i + vec3(0,0,1)), vsHash(i + vec3(1,0,1)), f.x), mix(vsHash(i + vec3(0,1,1)), vsHash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
-vec3 vsEmissive = vec3(0.0);`,
+vec3 vsEmissive = vec3(0.0);
+float vsInk = 0.0;      // 0..1 ink line coverage (applied after lighting so lines stay black)
+float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surface is in shadow`,
       )
       .replace(
         '#include <color_fragment>',
@@ -133,57 +162,87 @@ vec3 vsEmissive = vec3(0.0);`,
 {
   float u = vFace.x, v = vFace.y, fw = vFace.z, fh = vFace.w;
   float edge = min(min(u, fw - u), min(v, fh - v));
-  float aa = fwidth(edge) + 0.0005;
-  // bevel highlight along every box edge (cheap "chamfer")
-  float rim = 1.0 - smoothstep(0.02, 0.07 + aa, edge);
-  // panel seams every 2.5 m, centred on the face
-  vec2 cell = abs(fract(vec2(u - fw * 0.5, v - fh * 0.5) / 2.5 + 0.5) - 0.5) * 2.5;
-  float seamD = min(cell.x, cell.y);
-  float seam = (1.0 - smoothstep(0.012, 0.03 + fwidth(seamD), seamD)) * step(1.6, min(fw, fh));
-  // broad tonal variation + fine grain so large faces never look flat
-  float n = vsNoise(vWPos * 0.18) * 0.6 + vsNoise(vWPos * 1.7) * 0.25 + vsNoise(vWPos * 9.0) * 0.15;
+  float px = fwidth(edge) + 0.0002;            // metres per pixel on this face
   float up = vWNormal.y;
+  bool boxFace = fw < 99.0;
   vec3 c = diffuseColor.rgb;
-  c *= 0.9 + n * 0.2;
-  c *= 1.0 + up * 0.1;                       // tops catch light, undersides sink
-  c *= 1.0 - seam * uSeam * 2.2;
-  c += rim * uRim * (0.35 + 0.65 * max(up, 0.0)) * mix(vec3(1.0), uAccent, 0.25);
-  // soft contact darkening where vertical faces meet the ground plane of the box
-  if (abs(up) < 0.5) c *= 0.82 + 0.18 * smoothstep(0.0, 1.4, v);
 
-  // ---- wall-runnable: two light rails and drifting chevrons on vertical faces ----
+  // ---- painted tone: crisp-edged swatches instead of smooth noise, like gouache blocks ----
+  float n1 = vsNoise(vWPos * 0.21);
+  float n2 = vsNoise(vWPos * 0.83 + 11.0);
+  float swatch = smoothstep(0.5, 0.52, n1) * 0.6 + smoothstep(0.62, 0.64, n2) * 0.4;
+  c *= 0.93 + swatch * 0.11;
+  c *= 1.0 + up * 0.14;                        // tops read lighter, undersides sink
+  // a soft painted gradient up every wall: darker at the foot
+  if (abs(up) < 0.5 && boxFace) c *= 0.8 + 0.2 * smoothstep(0.0, 2.2, v);
+
+  if (boxFace) {
+    // ---- ink: a black line along every block edge, never thinner than ~1.3 px ----
+    float w = max(0.028, px * 1.3);
+    float faceMin = min(fw, fh);
+    float tiny = clamp(faceMin / (px * 9.0), 0.0, 1.0);   // faces only a few pixels wide stay clean
+    vsInk = (1.0 - smoothstep(w, w + px, edge)) * tiny;
+    // an inner highlight line just inside the ink on lit tops: the "drawn" bevel
+    float hl = smoothstep(w + px, w + px * 2.0, edge) * (1.0 - smoothstep(w * 2.4, w * 2.4 + px, edge));
+    c += hl * uRim * (0.25 + 0.75 * max(up, 0.0)) * mix(vec3(1.0), uAccent, 0.3) * tiny;
+    // panel seams every 2.5 m as thin ink scratches
+    vec2 cell = abs(fract(vec2(u - fw * 0.5, v - fh * 0.5) / 2.5 + 0.5) - 0.5) * 2.5;
+    float seamD = min(cell.x, cell.y);
+    float seam = (1.0 - smoothstep(0.008, 0.012 + fwidth(seamD), seamD)) * step(1.6, faceMin);
+    seam *= clamp(0.02 / (px + 0.0001), 0.0, 1.0);        // fades out in the distance
+    c = mix(c, c * 0.45, seam * min(1.0, uSeam * 6.0));
+    // ---- hatching strokes (only revealed in shadow, see below) ----
+    float hk = (u + v) * 5.5 + n2 * 0.9;
+    float hline = abs(fract(hk) - 0.5);
+    float hfade = clamp(1.0 - fwidth(hk) * 2.2, 0.0, 1.0);
+    vsHatch = (1.0 - smoothstep(0.1, 0.16, hline)) * hfade * step(0.5, faceMin);
+  }
+
+  // ---- wall-runnable: painted rails and a band of bold chevrons on vertical faces ----
   if (vFx.x > 0.5 && abs(up) < 0.5) {
-    float rail = (1.0 - smoothstep(0.035, 0.06, abs(v - 0.45))) + (1.0 - smoothstep(0.035, 0.06, abs(v - (fh - 0.45))));
+    float rail = (1.0 - smoothstep(0.05, 0.06 + px, abs(v - 0.45))) + (1.0 - smoothstep(0.05, 0.06 + px, abs(v - (fh - 0.45))));
     float inside = smoothstep(0.55, 0.75, v) * smoothstep(fh - 0.55, fh - 0.75, v);
-    // a strip of small chevrons every 3.2 m of height, drifting along the wall
     float vv = mod(v - 0.45, 3.2) - 1.6;
-    float strip = (1.0 - smoothstep(0.26, 0.3, abs(vv))) * inside;
-    float chev = abs(fract(u * 0.9 - uTime * 0.45 - abs(vv) * 1.1) - 0.5);
-    float chevron = (1.0 - smoothstep(0.07, 0.11, chev)) * strip;
-    float guide = (1.0 - smoothstep(0.012, 0.03, abs(abs(vv) - 0.3))) * inside;
-    float shimmer = 0.78 + 0.22 * sin(uTime * 2.2 + u * 0.8);
-    vsEmissive += uAccent * (rail * 2.2 + chevron * 0.9 + guide * 0.5) * shimmer;
-    c = mix(c, c * 0.8 + uAccent * 0.05, inside * 0.5);
+    float strip = (1.0 - smoothstep(0.3, 0.31 + px, abs(vv))) * inside;
+    float chev = abs(fract(u * 0.8 - uTime * 0.45 - abs(vv) * 1.1) - 0.5);
+    float chevron = (1.0 - smoothstep(0.09, 0.1 + fwidth(chev), chev)) * strip;
+    float guide = (1.0 - smoothstep(0.02, 0.03 + px, abs(abs(vv) - 0.33))) * inside;
+    // the wall wakes up as the player gets close
+    float near = 1.0 - smoothstep(3.0, 16.0, distance(vWPos, uPlayer));
+    float paint = clamp(rail + chevron + guide * 0.7, 0.0, 1.0);
+    c = mix(c, c * 0.72, inside * 0.6);
+    c = mix(c, uAccent, paint);
+    vsEmissive += uAccent * paint * (0.35 + near * 0.9);
+    vsHatch *= 1.0 - paint;
   }
   // ---- glow strips / accent pieces ----
   if (vFx.y > 0.0) {
-    vsEmissive += diffuseColor.rgb * vFx.y * (2.0 + 0.5 * sin(uTime * 1.7 + vWPos.x * 0.3 + vWPos.z * 0.3));
+    vsEmissive += diffuseColor.rgb * vFx.y * (1.5 + 0.35 * sin(uTime * 1.7 + vWPos.x * 0.3 + vWPos.z * 0.3));
+    vsInk = 0.0;
+    vsHatch = 0.0;
   }
-  // ---- hazard: pulsing diagonal stripes (pattern as well as colour, for colour-blind players) ----
+  // ---- hazard: bold black-and-colour warning stripes (pattern as well as colour) ----
   if (vFx.z > 0.5) {
     float d = fract((vWPos.x + vWPos.y + vWPos.z) * 0.7 + uTime * 0.9);
-    float stripe = smoothstep(0.42, 0.5, d) * (1.0 - smoothstep(0.92, 1.0, d));
-    float pulse = 0.7 + 0.3 * sin(uTime * 6.0);
-    c = mix(uHazard * 0.25, uHazard, stripe);
-    vsEmissive += uHazard * (0.9 + stripe * (2.2 + uHazardAlt * 1.5)) * pulse;
-    c = mix(c, vec3(0.02), uHazardAlt * (1.0 - stripe) * 0.8);
+    float stripe = smoothstep(0.46, 0.5, d) * (1.0 - smoothstep(0.96, 1.0, d));
+    float pulse = 0.75 + 0.25 * sin(uTime * 6.0);
+    c = mix(uInk, uHazard, stripe);
+    vsEmissive += uHazard * stripe * (0.9 + uHazardAlt * 1.2) * pulse;
+    vsHatch = 0.0;
   }
   // ---- telegraph: about to move / collapse ----
   if (uWarn > 0.001) {
     float flick = 0.55 + 0.45 * sin(uTime * 22.0);
-    float crack = smoothstep(0.55, 0.6, vsNoise(vWPos * 2.3 + 7.0)) ;
+    float crack = smoothstep(0.55, 0.6, vsNoise(vWPos * 2.3 + 7.0));
     vsEmissive += uHazard * uWarn * (0.5 + crack * 2.0) * flick;
     c = mix(c, uHazard, uWarn * 0.25 * flick);
+  }
+  // ---- the world answers a landing: a ring of light runs out across nearby surfaces ----
+  float age = uTime - uPulse.w;
+  if (age > 0.0 && age < 0.7 && uPulseAmt > 0.0) {
+    float pd = distance(vWPos, uPulse.xyz);
+    float ring = (1.0 - smoothstep(0.0, 0.22, abs(pd - age * 13.0))) * (1.0 - age / 0.7);
+    vsEmissive += uAccent * ring * uPulseAmt * 1.4;
   }
   diffuseColor.rgb = c;
 }`,
@@ -193,10 +252,22 @@ vec3 vsEmissive = vec3(0.0);`,
         `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vsEmissive;`,
       )
       .replace(
+        '#include <opaque_fragment>',
+        `{
+  // how lit is this pixel by the sun (0 = in shadow, cast or self)? hatch and cool the shadows
+  float sunLit = max(max(reflectedLight.directDiffuse.r, reflectedLight.directDiffuse.g), reflectedLight.directDiffuse.b)
+    / max(max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b) * 0.3183 * uSunPower, 0.0001);
+  float shade = 1.0 - smoothstep(0.3, 0.5, sunLit);
+  outgoingLight *= 1.0 - vsHatch * shade * 0.3;
+  outgoingLight = mix(outgoingLight, uInk, vsInk * 0.92);
+}
+#include <opaque_fragment>`,
+      )
+      .replace(
         '#include <fog_fragment>',
         `gl_FragColor.rgb = applyWorldFog(gl_FragColor.rgb, vWPos, cameraPosition);`,
       );
   };
-  mat.customProgramCacheKey = () => 'vs-world';
+  mat.customProgramCacheKey = () => 'vs-world-toon';
   return mat;
 }

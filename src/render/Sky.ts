@@ -47,7 +47,10 @@ export class Sky {
         void main() {
           vec3 d = normalize(vDir);
           float h = d.y;
-          vec3 col = mix(uHorizon, uTop, pow(clamp(h, 0.0, 1.0), 0.55));
+          // a painted sky: the gradient steps through soft-edged bands instead of blending smoothly
+          float q = pow(clamp(h, 0.0, 1.0), 0.55) * 7.0;
+          q = (floor(q) + smoothstep(0.35, 0.65, fract(q))) / 7.0;
+          vec3 col = mix(uHorizon, uTop, q);
           col = mix(col, uBottom, smoothstep(0.0, -0.4, h));
           // horizon haze band
           col = mix(col, uHorizon * 1.08, exp(-abs(h) * 9.0) * 0.5);
@@ -78,13 +81,19 @@ export class Sky {
             vec2 cp = d.xz / (abs(h) + 0.22);
             float c = fbm(cp * 1.4 + vec2(uTime * 0.012, uTime * 0.004));
             float c2 = fbm(cp * 3.1 - vec2(uTime * 0.02, 0.0));
-            float cov = smoothstep(1.0 - uClouds * 0.72, 1.0, c * 0.75 + c2 * 0.35 + exp(-abs(h) * 5.0) * 0.28);
-            float lit = 0.75 + 0.5 * pow(max(dot(d, uSunDir), 0.0), 3.0);
-            col = mix(col, uCloudColor * lit, cov * smoothstep(-0.12, 0.08, h) * 0.85);
+            // cel clouds: a flat body with a hard-edged lighter core, like cut paper
+            float dens = c * 0.75 + c2 * 0.35 + exp(-abs(h) * 5.0) * 0.28;
+            float thr = 1.0 - uClouds * 0.72;
+            float body = smoothstep(thr + 0.1, thr + 0.115, dens);
+            float core = smoothstep(thr + 0.27, thr + 0.285, dens);
+            float lit = 0.8 + 0.4 * pow(max(dot(d, uSunDir), 0.0), 3.0);
+            col = mix(col, mix(uCloudColor * 0.8, uCloudColor * 1.12, core) * lit, body * smoothstep(-0.12, 0.08, h) * 0.8);
           }
           // sun disc + bloom halo
           float sd = max(dot(d, uSunDir), 0.0);
-          col += uSun * (smoothstep(0.9993, 0.9997, sd) * 7.0 + pow(sd, 60.0) * 0.55 * uSunGlow + pow(sd, 7.0) * 0.22 * uSunGlow);
+          // a graphic sun: flat disc, one drawn halo ring, restrained glow
+          float ring = 1.0 - smoothstep(0.00012, 0.00028, abs(sd - 0.9972));
+          col += uSun * (smoothstep(0.9990, 0.9992, sd) * 4.0 + ring * 0.9 + pow(sd, 60.0) * 0.3 * uSunGlow + pow(sd, 7.0) * 0.14 * uSunGlow);
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
