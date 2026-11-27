@@ -260,12 +260,201 @@ vec3 skySynth(vec3 d, vec3 k[4]) {
   return col;
 }
 
+vec3 skyHsv(float h, float s, float v) {
+  vec3 k = clamp(abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+  return v * mix(vec3(1.0), k, s);
+}
+
+// ---------- 4: PSYCHEDELIC. A kaleidoscope sky around a watching iris ----------
+vec3 skyPsyche(vec3 d, vec3 k[4]) {
+  float t = uTime * 0.07;
+  float az = atan(d.x, d.z);
+  float h = d.y;
+  // fold the sky into mirrored wedges, then warp a flowing field through them
+  float seg = 3.14159 / 5.0;
+  float fa = abs(mod(az + t * 0.6, seg * 2.0) - seg);
+  vec2 p = vec2(fa * 2.2, acos(clamp(h, -1.0, 1.0)) * 1.6);
+  float f1 = fbm(p * 1.3 + vec2(t, -t * 0.7));
+  float f2 = fbm(p * 2.4 + f1 * 2.5 + vec2(-t * 1.3, t));
+  float bands = (f1 * 0.6 + f2 * 0.6) * 7.0 + t * 3.0;
+  float inBand = fract(bands);
+  vec3 col = skyHsv(fract(floor(bands) * 0.13 + t), 0.8, 0.85) * (0.7 + 0.3 * inBand);
+  col = mix(col, vec3(0.03, 0.0, 0.07), 1.0 - smoothstep(0.0, 0.07, min(inBand, 1.0 - inBand)));
+  // concentric rings pulse out of the zenith
+  float zen = acos(clamp(h, -1.0, 1.0));
+  float ring = 0.5 + 0.5 * sin(zen * 16.0 - uTime * 1.1);
+  col = mix(col, col.brg, smoothstep(0.75, 0.95, ring) * 0.5);
+  // the "sun" is an iris: striated colour around a black pupil that slowly dilates
+  vec3 sdir = uSunDir;
+  vec3 ax = normalize(cross(sdir, vec3(0.0, 1.0, 0.001)));
+  vec3 ay = cross(ax, sdir);
+  vec2 sp = vec2(dot(d, ax), dot(d, ay)) / max(dot(d, sdir), 0.001);
+  float r = length(sp);
+  float front = step(0.0, dot(d, sdir));
+  float R = 0.1;
+  float pupil = R * (0.4 + 0.1 * sin(uTime * 0.6));
+  float ang = atan(sp.y, sp.x);
+  vec3 iris = skyHsv(fract(r * 3.0 - t * 2.0 + noise(vec2(ang * 9.0, 2.0)) * 0.3), 0.9, 1.1) * (0.6 + 0.4 * noise(vec2(ang * 40.0, r * 8.0)));
+  float inIris = (1.0 - smoothstep(R - 0.006, R, r)) * front;
+  col = mix(col, iris, inIris);
+  col = mix(col, vec3(0.0), (1.0 - smoothstep(pupil - 0.006, pupil, r)) * front);
+  col = mix(col, vec3(1.3), (1.0 - smoothstep(0.0, 0.006, abs(r - R))) * front);
+  col += vec3(1.0) * (1.0 - smoothstep(0.0, 0.012, length(sp - vec2(-0.025, 0.025)))) * front * 0.9;
+  // below the horizon the pattern sinks into a dark mirror
+  col = mix(col, col * 0.25 + k[2] * 0.3, 1.0 - smoothstep(-0.25, 0.0, h));
+  return col;
+}
+
+// ---------- 5: VOXEL. A sky made of big texels: square sun, block clouds, stepped hills ----------
+vec3 skyVoxel(vec3 d, vec3 k[4]) {
+  // snap the view direction onto a coarse cube grid: the whole sky becomes texels
+  vec3 a = abs(d);
+  float m = max(a.x, max(a.y, a.z));
+  vec3 c3 = d / m;
+  float res = 46.0;
+  vec3 q = (floor(c3 * res) + 0.5) / res;
+  vec3 qd = normalize(q);
+  float h = qd.y;
+  float steps = 9.0;
+  vec3 col = mix(k[1], k[0], floor(clamp(h * 1.25, 0.0, 1.0) * steps) / steps);
+  col = mix(col, k[2], 1.0 - step(-0.02, h));
+  // square sun with a square halo
+  vec3 sdir = uSunDir;
+  vec3 ax = normalize(cross(sdir, vec3(0.0, 1.0, 0.001)));
+  vec3 ay = cross(ax, sdir);
+  vec2 sp = vec2(dot(qd, ax), dot(qd, ay)) / max(dot(qd, sdir), 0.001);
+  float sq = max(abs(sp.x), abs(sp.y));
+  float front = step(0.0, dot(qd, sdir));
+  col = mix(col, mix(col, k[3], 0.35), step(sq, 0.2) * front);
+  col = mix(col, k[3] * 1.4, step(sq, 0.11) * front);
+  // flat block clouds on a plane, drifting one texel at a time
+  if (h > 0.03) {
+    vec2 cp = qd.xz / h;
+    vec2 cc = floor(cp * 2.2 + vec2(floor(uTime * 0.25) * 0.25, 0.0));
+    float cl = step(0.62, noise(cc * 0.37) * 0.7 + noise(cc * 0.11 + 9.0) * 0.5);
+    float shade = step(0.62, noise((cc + vec2(0.0, 1.0)) * 0.37) * 0.7 + noise((cc + vec2(0.0, 1.0)) * 0.11 + 9.0) * 0.5);
+    col = mix(col, mix(vec3(0.84, 0.9, 0.97), vec3(1.0), shade), cl * smoothstep(0.03, 0.14, h) * 0.95);
+  }
+  // stepped hills: two terraces of blocks with trees as single dark texels
+  float az = atan(qd.x, qd.z);
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float cx = floor(az * (26.0 + fi * 14.0));
+    float hh = floor((noise(vec2(cx * 0.21, fi * 7.0)) * 0.16 + noise(vec2(cx * 0.05, fi)) * 0.12) * (1.0 - fi * 0.35) * 40.0) / 40.0 - 0.03;
+    float cov = step(h, hh);
+    vec3 hill = mix(vec3(0.3, 0.55, 0.3), vec3(0.42, 0.68, 0.34), fi) * mix(0.75, 1.0, step(hh - 0.03, h));
+    hill = mix(hill, vec3(0.16, 0.36, 0.2), step(0.7, hash(vec2(cx, fi + 3.0))) * step(hh - 0.03, h));
+    col = mix(col, mix(hill, k[1], 0.45 * (1.0 - fi)), cov);
+  }
+  return col;
+}
+
+// ---------- 7: PAINTED FANTASY. Towering brushed clouds, light shafts, far spires ----------
+vec3 skyPainted(vec3 d, vec3 k[4]) {
+  float h = d.y;
+  float az = atan(d.x, d.z);
+  float sd = max(dot(d, uSunDir), 0.0);
+  // the canvas: a warm-to-cool gradient laid down in broad, visible strokes
+  float strokeN = fbm(vec2(az * 3.0 + h * 2.0, h * 14.0));
+  vec3 col = mix(k[1], k[0], smoothstep(-0.05, 0.75, h + (strokeN - 0.5) * 0.12));
+  col = mix(col, k[3], pow(sd, 5.0) * 0.5);
+  // cumulus: three banks, each lit warm on the sun side and violet beneath
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec2 cp = d.xz / (abs(h) + 0.28 + fi * 0.1) * (0.8 + fi * 0.45) + vec2(uTime * (0.004 + fi * 0.002), fi * 3.7);
+    float base_ = fbm(cp);
+    float detail = fbm(cp * 3.2 + base_ * 1.5);
+    float dens = base_ * 0.78 + detail * 0.3;
+    float thr = 0.56 - fi * 0.02;
+    // brushy edge: the threshold wobbles with a streaky noise
+    float edge = smoothstep(thr, thr + 0.07, dens + (strokeN - 0.5) * 0.06);
+    float core = smoothstep(thr + 0.08, thr + 0.24, dens);
+    float up = fbm(cp + vec2(0.05, 0.11)) - base_;                 // crude "which side is lit"
+    vec3 lit = mix(vec3(1.0, 0.86, 0.7), vec3(1.0, 0.97, 0.9), core) * (0.85 + 0.5 * pow(sd, 2.0));
+    vec3 under = mix(k[0] * 0.9 + vec3(0.12, 0.06, 0.16), k[1], 0.25);
+    vec3 cloud = mix(under, lit, smoothstep(-0.03, 0.05, up + (h - 0.1) * 0.25));
+    col = mix(col, cloud, edge * smoothstep(-0.06, 0.1, h) * (0.9 - fi * 0.15));
+  }
+  // shafts of light fanning down from the sun
+  vec3 sdir = uSunDir;
+  vec3 ax = normalize(cross(sdir, vec3(0.0, 1.0, 0.001)));
+  vec3 ay = cross(ax, sdir);
+  float ang = atan(dot(d, ay), dot(d, ax));
+  float shaft = smoothstep(0.55, 0.9, noise(vec2(ang * 7.0, 1.0)) ) * smoothstep(0.3, 0.9, sd) * (1.0 - smoothstep(0.985, 1.0, sd));
+  col += k[3] * shaft * 0.22;
+  // sun: a soft painted disc
+  col = mix(col, k[3] * 1.5, smoothstep(0.9968, 0.9982, sd));
+  col += k[3] * pow(sd, 40.0) * 0.4;
+  // distant ranges fading into the air, with a citadel of thin spires on the nearer one
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float ridge = (fbm(vec2(az * (1.8 + fi * 1.1) + fi * 9.0, fi * 2.0)) - 0.32) * (0.3 - fi * 0.07) - 0.02;
+    if (i == 2) {
+      float cx = floor(az * 60.0);
+      float spire = step(0.86, hash(vec2(cx, 5.0))) * (0.03 + 0.07 * hash(vec2(cx, 8.0))) * (1.0 - abs(fract(az * 60.0) - 0.5) * 2.0);
+      ridge += spire * step(0.3, fbm(vec2(az * 1.3, 4.0)));
+    }
+    float cov = 1.0 - smoothstep(ridge - 0.003, ridge + 0.003, h + (strokeN - 0.5) * 0.004);
+    vec3 rock = mix(k[1] * 0.85, k[2], fi / 2.0);
+    rock = mix(rock, rock * 1.25 + k[3] * 0.1, smoothstep(ridge - 0.05, ridge, h));    // lit crests
+    col = mix(col, mix(rock, col, 0.55 - fi * 0.22), cov);
+  }
+  col = mix(col, k[2] * 0.8, 1.0 - smoothstep(-0.4, -0.03, h));
+  // visible canvas strokes over everything
+  col *= 0.95 + 0.1 * strokeN;
+  return col;
+}
+
+// ---------- 9: REALITY CORRUPTION. The skybox is failing to load ----------
+vec3 skyCorrupt(vec3 d, vec3 k[4]) {
+  float tick = floor(uTime * 6.0);
+  float slow = floor(uTime * 0.8);
+  float h = d.y;
+  float az = atan(d.x, d.z);
+  // rows of the sky slide sideways
+  float row = floor(h * 30.0);
+  az += step(0.9, hash(vec2(row, tick))) * (hash(vec2(tick, row)) - 0.5) * 0.6;
+  // a banded, low bit-depth gradient
+  vec3 col = mix(k[1], k[0], floor(clamp(h * 1.4, 0.0, 1.0) * 6.0) / 6.0);
+  col = mix(col, k[2], 1.0 - step(0.0, h));
+  // the sky is a grid of tiles; some never loaded (black, or static), some show the wrong texture
+  vec2 tg = vec2(az * 7.0, h * 9.0);
+  vec2 tc = floor(tg);
+  vec2 tf = fract(tg);
+  float tr = hash(tc + slow * 0.13);
+  float staticN = hash(floor(tf * 22.0) + tick + tc);
+  col = mix(col, vec3(0.0), step(0.8, tr));
+  col = mix(col, vec3(staticN) * vec3(0.8, 0.95, 1.0), step(0.9, tr));
+  float chk = mod(floor(tf.x * 6.0) + floor(tf.y * 6.0), 2.0);
+  col = mix(col, mix(vec3(0.02), vec3(1.0, 0.0, 0.86), chk), step(0.955, tr));
+  // tile seams glow like a wireframe
+  float seam = 1.0 - smoothstep(0.0, 0.02, min(min(tf.x, tf.y), min(1.0 - tf.x, 1.0 - tf.y)));
+  col += vec3(0.1, 0.9, 1.0) * seam * 0.35;
+  // a sun that cannot decide where it is: three offset ghosts in R, G and B
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec3 off = vec3(sin(tick * 1.7 + fi * 2.0), 0.0, cos(tick * 1.3 + fi)) * 0.03 * step(0.6, hash(vec2(tick, fi)));
+    float sdn = dot(d, normalize(uSunDir + off));
+    vec3 ch = vec3(fi == 0.0 ? 1.0 : 0.0, fi == 1.0 ? 1.0 : 0.0, fi == 2.0 ? 1.0 : 0.0);
+    col += ch * step(0.9965, sdn) * 1.3;
+  }
+  // a vertical tear where another universe shows through as raw colour bars
+  float tearX = fract(az * 0.5 + slow * 0.37);
+  float tear = step(tearX, 0.035) * step(0.5, hash(vec2(slow, 2.0)));
+  col = mix(col, skyHsv(floor(h * 14.0 + tick) * 0.14, 0.9, 1.0), tear * step(0.0, h));
+  return col;
+}
+
 vec3 mvSky(float id, vec3 d, vec3 k[4]) {
   if (id < 1.5) return skyNeon(d, k);
   if (id < 2.5) return skyComic(d, k);
   if (id < 3.5) return skyLowPoly(d, k);
-  if (id > 5.5 && id < 6.5) return skyInk(d, k);
-  if (id > 7.5 && id < 8.5) return skySynth(d, k);
+  if (id < 4.5) return skyPsyche(d, k);
+  if (id < 5.5) return skyVoxel(d, k);
+  if (id < 6.5) return skyInk(d, k);
+  if (id < 7.5) return skyPainted(d, k);
+  if (id < 8.5) return skySynth(d, k);
+  if (id < 9.5) return skyCorrupt(d, k);
   float h = d.y;
   vec3 col = mix(k[1], k[0], smoothstep(0.0, 0.8, h));
   return mix(col, k[2], 1.0 - smoothstep(-0.4, 0.0, h));

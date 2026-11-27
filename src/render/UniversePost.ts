@@ -19,9 +19,15 @@ float uvN(vec2 p) {
   return mix(mix(uvH(i), uvH(i + vec2(1, 0)), f.x), mix(uvH(i + vec2(0, 1)), uvH(i + vec2(1, 1)), f.x), f.y);
 }
 vec3 uvHue(vec3 c, float a) {
-  const vec3 k = vec3(0.57735);
-  float ca = cos(a), sa = sin(a);
-  return c * ca + cross(k, c) * sa + k * dot(k, c) * (1.0 - ca);
+  // rotate chroma in YIQ space
+  float y = dot(c, vec3(0.299, 0.587, 0.114));
+  float ci = dot(c, vec3(0.596, -0.274, -0.322));
+  float cq = dot(c, vec3(0.211, -0.523, 0.312));
+  float cs = cos(a);
+  float sn = sin(a);
+  float i2 = ci * cs - cq * sn;
+  float q2 = ci * sn + cq * cs;
+  return vec3(y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2, y - 1.106 * i2 + 1.703 * q2);
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 p = uv;
@@ -48,6 +54,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   } else {
     col = inputColor.rgb;
   }
+  // grading before this pass can push a channel of a pure colour below zero, which the colour
+  // transform between passes turns into NaN; one bad channel would poison everything below
+  if (isnan(col.r)) col.r = 0.0;
+  if (isnan(col.g)) col.g = 0.0;
+  if (isnan(col.b)) col.b = 0.0;
+  col = max(col, 0.0);
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   if (uPosterize > 0.5) {
     col = floor(col * uPosterize + 0.5) / uPosterize;
@@ -88,7 +100,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     float g = uvH(uv * uRes + fract(uT * 7.0) * 91.7) - 0.5;
     col += g * uGrain * 0.09;
   }
-  outputColor = vec4(col, inputColor.a);
+  // negative channels (hue rotation, grain) would turn into NaN in the output transform
+  outputColor = vec4(max(col, 0.0), inputColor.a);
 }`;
 
 export class UniverseEffect extends Effect {

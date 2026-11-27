@@ -231,6 +231,167 @@ const MAKERS: Partial<Record<UniverseId, Maker>> = {
       b.add(prim.cyl6, [0, 1.75, 0], [3.6, 0.3, 3], 0x69c24a, 0);
     }
   },
+  // impossible objects: knots of rings, twisted prisms, stacked spinning discs
+  psyche(b, rng, x, y, z, far) {
+    const yaw = rng() * 6.28;
+    const k = rng();
+    const sc = (1 + rng() * 1.6) * (1 + far * 2);
+    const hue = [0xff3df2, 0x3dffd9, 0xfff23d, 0x8a3dff, 0xff7a3d];
+    const col = () => hue[Math.floor(rng() * hue.length)];
+    if (k < 0.4) {
+      b.begin(x, y, z, yaw, sc);
+      for (let i = 0; i < 5; i++)
+        b.add(prim.ring, [0, 0, 0], [3 + i * 1.5, 3 + i * 1.5, 3 + i * 1.5], col(), 0.6, [
+          i * 0.63,
+          i * 0.4,
+          0,
+        ]);
+      b.add(prim.ball, [0, 0, 0], [2, 2, 2], 0xffffff, 1.2);
+    } else if (k < 0.75) {
+      b.begin(x, y, z, yaw, sc);
+      for (let i = 0; i < 9; i++)
+        b.add(
+          prim.box,
+          [0, (i - 4) * 1.15, 0],
+          [4 - Math.abs(i - 4) * 0.6, 1, 4 - Math.abs(i - 4) * 0.6],
+          col(),
+          0.4,
+          [0, i * 0.35, 0],
+        );
+    } else {
+      b.begin(x, y, z, yaw, sc);
+      for (let i = 0; i < 6; i++)
+        b.add(
+          prim.cyl6,
+          [Math.sin(i * 1.1) * 1.4, (i - 2.5) * 1.3, Math.cos(i * 1.1) * 1.4],
+          [3.4 - i * 0.3, 0.35, 3.4 - i * 0.3],
+          col(),
+          0.5,
+          [0.25 * i, 0, 0.18 * i],
+        );
+      b.add(prim.oct, [0, 5.4, 0], [1.6, 2.6, 1.6], 0xffffff, 1.2);
+    }
+  },
+  // cube islands with cube trees, cube clouds
+  voxel(b, rng, x, y, z, far) {
+    const k = rng();
+    const u = 2 * (1 + far * 1.5); // block size
+    const snap = (v: number) => Math.round(v / u) * u;
+    if (k < 0.65) {
+      b.begin(snap(x), snap(y), snap(z));
+      const w = 2 + Math.floor(rng() * 3);
+      for (let ix = -w; ix <= w; ix++)
+        for (let iz = -w; iz <= w; iz++) {
+          const r = Math.abs(ix) + Math.abs(iz);
+          if (r > w + 1 || (r > w && rng() < 0.5)) continue;
+          b.add(prim.box, [ix * u, 0, iz * u], [u, u, u], rng() < 0.12 ? 0x5fae48 : 0x6fbe52, 0);
+          const depth = Math.max(1, w - r + Math.floor(rng() * 2));
+          b.add(
+            prim.box,
+            [ix * u, (-depth * u) / 2 - u / 2, iz * u],
+            [u, depth * u, u],
+            r < 2 ? 0x8a8a92 : 0x9a6a48,
+            0,
+          );
+        }
+      const trees = 1 + Math.floor(rng() * 2);
+      for (let t = 0; t < trees; t++) {
+        const tx = Math.round((rng() - 0.5) * w) * u,
+          tz = Math.round((rng() - 0.5) * w) * u;
+        b.add(prim.box, [tx, u * 1.5, tz], [u * 0.5, u * 2, u * 0.5], 0x7a5230, 0);
+        b.add(prim.box, [tx, u * 3, tz], [u * 2.5, u, u * 2.5], 0x3f8f3a, 0);
+        b.add(prim.box, [tx, u * 4, tz], [u * 1.5, u, u * 1.5], 0x4fa348, 0);
+      }
+    } else {
+      b.begin(snap(x), snap(y + 14), snap(z));
+      const n = 3 + Math.floor(rng() * 4);
+      for (let i = 0; i < n; i++)
+        b.add(
+          prim.box,
+          [i * u * 2 - n * u, 0, Math.round(rng() * 2 - 1) * u],
+          [u * (2 + Math.floor(rng() * 2)), u, u * 2],
+          0xffffff,
+          0,
+        );
+      b.add(prim.box, [0, u, 0], [u * 3, u, u * 2], 0xffffff, 0);
+    }
+  },
+  // ruins of an older world: arches, broken columns, great trees, floating stones
+  painted(b, rng, x, y, z, far) {
+    const yaw = rng() * 6.28;
+    const k = rng();
+    const sc = (1 + rng() * 0.8) * (1 + far * 1.6);
+    if (k < 0.3) {
+      b.begin(x, y, z, yaw, sc);
+      b.add(prim.box, [-3, 0, 0], [1.4, 10, 1.4], 0xcbb79a, 0);
+      b.add(prim.box, [3, 0, 0], [1.4, 10, 1.4], 0xcbb79a, 0);
+      b.add(prim.box, [0, 5.6, 0], [8.6, 1.3, 1.7], 0xd8c6aa, 0);
+      b.add(prim.box, [0, 6.6, 0], [6, 0.8, 1.4], 0xcbb79a, 0);
+      b.add(prim.ico, [0, -6.2, 0], [10, 4, 6], 0x8f8474, 0);
+      b.add(prim.ball, [1.5, 7.2, 0.2], [3, 1.2, 2], 0x5e8f5a, 0);
+    } else if (k < 0.55) {
+      b.begin(x, y, z, yaw, sc);
+      const h = 7 + rng() * 8;
+      b.add(prim.cyl6, [0, 0, 0], [2.2, h, 2.2], 0xd8c6aa, 0);
+      b.add(prim.box, [0, -h / 2 - 0.3, 0], [3.2, 0.7, 3.2], 0xcbb79a, 0);
+      b.add(prim.ico, [0.3, h / 2 + 0.2, 0.1], [2.6, 1.2, 2.4], 0xcbb79a, 0);
+      b.add(prim.ico, [0, -h / 2 - 2.6, 0], [6, 4, 6], 0x8f8474, 0);
+      b.add(prim.ball, [0.8, h / 2 - 1, 0.9], [1.8, 2.6, 1.4], 0x5e8f5a, 0);
+    } else if (k < 0.85 || far > 0.5) {
+      b.begin(x, y, z, yaw, sc * 1.2);
+      b.add(prim.taper, [0, 0, 0], [2.6, 12, 2.6], 0x6a4a3a, 0);
+      b.add(prim.ball, [0, 9, 0], [13, 8, 13], 0x4f8f5a, 0);
+      b.add(prim.ball, [4.5, 6.5, 1], [8, 6, 8], 0x6aa85e, 0);
+      b.add(prim.ball, [-4, 7, -2], [8, 5.5, 8], 0x3f7a52, 0);
+      b.add(prim.ball, [1, 12, 2], [7, 5, 7], 0xe0b84a, 0.15);
+      b.add(prim.ico, [0, -8, 0], [9, 5, 9], 0x8f8474, 0);
+    } else {
+      b.begin(x, y, z, yaw, sc);
+      b.add(prim.oct, [0, 0, 0], [2.4, 6, 2.4], 0x8fe0ff, 0.9);
+      b.add(prim.oct, [1.8, -1.4, 0.6], [1.4, 3.4, 1.4], 0xc8a8ff, 0.9, [0, 0, -0.35]);
+      b.add(prim.ico, [0, -4, 0], [5, 2.4, 5], 0x8f8474, 0);
+    }
+  },
+  // debris of failed geometry: shard clouds, wire ghosts, error blocks
+  corrupt(b, rng, x, y, z, far) {
+    const yaw = rng() * 6.28;
+    const k = rng();
+    const sc = (1 + rng() * 1.2) * (1 + far * 2);
+    if (k < 0.45) {
+      b.begin(x, y, z, yaw, sc);
+      const n = 9 + Math.floor(rng() * 8);
+      for (let i = 0; i < n; i++) {
+        const s1 = 0.6 + rng() * 2.6;
+        b.add(
+          prim.box,
+          [(rng() - 0.5) * 12, (rng() - 0.5) * 12, (rng() - 0.5) * 12],
+          [s1, s1 * (0.2 + rng()), s1 * (0.2 + rng())],
+          rng() < 0.2 ? 0xff00db : rng() < 0.5 ? 0x9aa2ad : 0x4a5058,
+          rng() < 0.25 ? 1.4 : 0,
+          [rng() * 3, rng() * 3, rng() * 3],
+        );
+      }
+    } else if (k < 0.8 || far > 0.5) {
+      const h = 30 + rng() * 50;
+      b.begin(x, y - 25, z, yaw);
+      // a tower that only half exists: stacked slabs with gaps, slightly misaligned
+      const slabs = 6 + Math.floor(rng() * 5);
+      for (let i = 0; i < slabs; i++) {
+        if (rng() < 0.22) continue;
+        b.add(
+          prim.box,
+          [(rng() - 0.5) * 2.5, (i + 0.5) * (h / slabs), (rng() - 0.5) * 2.5],
+          [9, (h / slabs) * 0.82, 9],
+          0x6a727c,
+          i % 3 === 0 ? 0.9 : 0,
+        );
+      }
+    } else {
+      b.begin(x, y, z, yaw, sc);
+      b.add(prim.oct, [0, 0, 0], [7, 7, 7], 0x16ff73, 2.2);
+      b.add(prim.box, [0, 0, 0], [3.2, 3.2, 3.2], 0xff00db, 1.4, [0.6, 0.6, 0]);
+    }
+  },
   // palms, wire pyramids, chrome spheres
   synth(b, rng, x, y, z, far) {
     const yaw = rng() * 6.28;
@@ -329,12 +490,12 @@ function placements(
     const s = data.solids[Math.floor(rng() * data.solids.length)];
     const far = rng() < 0.3 ? 1 : 0;
     const a = rng() * Math.PI * 2;
-    const d = far ? 95 + rng() * 120 : 22 + rng() * 48;
+    const d = far ? 110 + rng() * 120 : 26 + rng() * 48;
     const x = s.p[0] + Math.cos(a) * d,
       z = s.p[2] + Math.sin(a) * d,
       y = s.p[1] + (rng() - 0.6) * (far ? 50 : 26);
-    // nothing within 16 m sideways of any surface (props are up to ~10 m wide), at any height near it
-    if (!clear(x, y, z, far ? 40 : 17, 60)) continue;
+    // nothing within 22 m sideways of any surface (props reach ~14 m from their anchor), at any height near it
+    if (!clear(x, y, z, far ? 60 : 22, 60)) continue;
     // keep props apart from one another
     let ok = true;
     for (const o of out)
@@ -370,6 +531,18 @@ void main() {
   float tw = (1.0 - e) * 2.4;
   float ct = cos(tw), st = sin(tw);
   local = vec3(local.x * ct - local.z * st, local.y, local.x * st + local.z * ct) * pop;
+  if (uMine > 3.5 && uMine < 4.5) {
+    // psychedelic: every object turns and breathes on its own clock
+    float a = uTime * (0.25 + fract(aAnchor.x * 0.37) * 0.5) + aAnchor.z;
+    float ca = cos(a), sa = sin(a);
+    local = vec3(local.x * ca - local.z * sa, local.y, local.x * sa + local.z * ca);
+    local *= 1.0 + 0.14 * sin(uTime * 1.3 + local.y * 0.6 + aAnchor.x);
+  } else if (uMine > 8.5) {
+    // corruption: pieces snap between a few wrong positions
+    float tk = floor(uTime * 5.0 + aAnchor.x);
+    float r = fract(sin(dot(vec2(tk, aAnchor.z + floor(position.y * 0.4)), vec2(12.9898, 78.233))) * 43758.5453);
+    local += step(0.82, r) * (vec3(fract(r * 13.0), fract(r * 7.0), fract(r * 29.0)) - 0.5) * 3.0;
+  }
   // a slow bob so the world never stands perfectly still
   vec3 wp = aAnchor + local;
   wp.y += sin(uTime * 0.35 + aAnchor.x * 0.13 + aAnchor.z * 0.07) * 0.6;
@@ -428,6 +601,21 @@ void main() {
     float fl = max(dot(fn, uSunDir), 0.0);
     c = vCol * (uAmbC * (0.75 + 0.45 * fn.y) + uSunC * fl);
     c = mix(c, c * vec3(0.82, 0.9, 1.15), (1.0 - fl) * 0.3) + vCol * vGlow * 0.6;
+  } else if (uMine < 4.5) {
+    // psychedelic: bands of shifting colour wrap the form, white keyline on the silhouette
+    float band = dot(vW, vec3(0.21, 0.37, 0.17)) + uTime * 0.3;
+    float bi = floor(band);
+    vec3 hk = clamp(abs(fract(bi * 0.137 + uTime * 0.05 + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+    c = mix(vCol, hk, 0.6) * (0.6 + 0.4 * fract(band)) * (0.6 + 0.5 * ndl);
+    c = mix(c, vec3(0.02, 0.0, 0.05), step(0.93, fract(band)));
+    c = mix(c, vec3(1.3), step(0.82, rim));
+    c += vCol * vGlow * 0.5;
+  } else if (uMine < 5.5) {
+    // voxel: flat stepped light per face and a texel grain
+    vec3 an = abs(n);
+    float face = an.y > 0.5 ? (n.y > 0.0 ? 1.0 : 0.5) : (an.x > 0.5 ? 0.7 : 0.82);
+    vec3 tp = floor(vW * 2.0);
+    c = vCol * face * (0.92 + 0.14 * sH(tp.xz + tp.y * 3.0)) * (0.55 + 0.75 * dot(uAmbC + uSunC * 0.55, vec3(0.333)));
   } else if (uMine < 6.5) {
     // ink: silhouettes in flat washes, darker the nearer, with a pale lit side
     float lum = dot(vCol, vec3(0.299, 0.587, 0.114));
@@ -436,12 +624,27 @@ void main() {
     c = mix(vec3(0.05), paper * mix(0.45, 0.8, ndl), smoothstep(0.1, 0.5, lum));
     c = mix(c, c * 0.8, step(0.5, fract((gl_FragCoord.x * 0.6 + gl_FragCoord.y) / 9.0)) * (1.0 - ndl) * 0.5);
     c = mix(c, vCol * (0.75 + 0.25 * ndl), isRed);
-  } else {
+  } else if (uMine < 7.5) {
+    // painted: soft warm key, cool shade, brush streaks, glowing crystals
+    float stroke = sH(floor(vec2(dot(vW.xz, vec2(0.7, 0.7)) * 0.5, vW.y * 2.5))) * 0.5 + sH(floor(vW.xy * 1.7)) * 0.5;
+    float key = smoothstep(0.0, 0.8, ndl + (stroke - 0.5) * 0.35);
+    c = vCol * (0.84 + 0.3 * stroke) * (uAmbC * vec3(0.75, 0.88, 1.2) * (0.8 + 0.3 * n.y) + uSunC * vec3(1.1, 1.0, 0.84) * key);
+    c += uAmbC * pow(rim, 3.0) * 0.3 + vCol * vGlow * 0.9;
+  } else if (uMine < 8.5) {
     // synthwave: black volumes, glowing wire, sunset rim
     c = vCol * 0.25 + mix(vec3(1.0, 0.16, 0.62), vec3(1.0, 0.75, 0.25), 0.5 + 0.5 * n.y) * pow(rim, 2.0) * 0.8;
     float wire = max(1.0 - smoothstep(0.0, 0.05, abs(fract(vW.y / 2.5 + 0.5) - 0.5)), 0.0);
     c += vec3(1.0, 0.16, 0.62) * wire * step(0.5, vGlow) * step(vGlow, 1.5) * 0.9;
     c += vCol * max(vGlow - 1.5, 0.0) * 1.6;
+  } else {
+    // corruption: grey untextured geometry, wire edges, error colours flicker
+    float tick = floor(uTime * 7.0);
+    c = vec3(0.2 + dot(vCol, vec3(0.333)) * 0.5) * (0.45 + 0.7 * ndl);
+    c = mix(c, vCol, step(0.3, vGlow));
+    float row = floor(vW.y * 1.5);
+    c = mix(c, c.gbr * 1.5, step(0.9, sH(vec2(row, tick))));
+    c += vCol * vGlow * (0.4 + 0.6 * step(0.3, sH(vec2(tick, floor(vW.x)))));
+    c = mix(c, vec3(1.5), step(0.9, rim) * 0.6);
   }
   // fog, as on the level geometry
   float fd = 1.0 - exp(-uFogP.x * uFogP.x * dist * dist);

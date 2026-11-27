@@ -71,6 +71,43 @@ vec3 mvChar(float id, vec3 alb, float lit, float rim, float hull, vec3 glow, vec
     c += vec3(0.12, 0.85, 1.0) * step(0.9, fract(fc.y / 4.0)) * 0.1;
     return c + glow * 1.7;
   }
+  if (id > 3.5 && id < 4.5) {
+    // PSYCHEDELIC: the figure is a moving heat-map of itself with a white keyline
+    if (hull > 0.5) return vec3(1.3);
+    float band = fract(chLum(alb) * 2.0 + lit * 1.5 + rim * 1.2 + uTime * 0.25);
+    vec3 k = clamp(abs(fract(band + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+    vec3 c = mix(alb, k, 0.7) * (0.55 + 0.6 * lit);
+    c = mix(c, vec3(0.02, 0.0, 0.05), step(0.94, fract(band * 6.0)));
+    return c + glow;
+  }
+  if (id > 4.5 && id < 5.5) {
+    // VOXEL: three flat steps of light and a chunky dither where they meet
+    if (hull > 0.5) return vec3(0.07, 0.06, 0.08);
+    float dither = step(0.5, fract((floor(fc.x / 3.0) + floor(fc.y / 3.0)) * 0.5));
+    float st = floor(clamp(lit + dither * 0.12, 0.0, 0.999) * 3.0) / 2.0;
+    vec3 c = alb * (0.5 + 0.6 * st) * (0.6 + 0.6 * dot(amb + sun * 0.5, vec3(0.333)));
+    return c + glow * 0.7;
+  }
+  if (id > 6.5 && id < 7.5) {
+    // PAINTED: soft warm key, cool shade, strokes across the form, no outline
+    float stroke = mvNoise(vec3(fc * 0.045, 3.0)) * 0.6 + mvNoise(vec3(fc.x * 0.02, fc.y * 0.2, 7.0)) * 0.4;
+    if (hull > 0.5) return alb * 0.0 + amb * vec3(0.3, 0.26, 0.4);
+    float key = smoothstep(0.1, 0.8, lit + (stroke - 0.5) * 0.3);
+    vec3 c = alb * (0.85 + 0.3 * stroke) * (amb * vec3(0.75, 0.88, 1.2) * 0.95 + sun * vec3(1.1, 1.0, 0.84) * key);
+    c += amb * pow(rim, 3.0) * 0.35;
+    return c + glow * 0.9;
+  }
+  if (id > 8.5) {
+    // CORRUPTION: untextured grey with scan tears and a split-colour outline
+    float tick = floor(uTime * 7.0);
+    if (hull > 0.5) return mix(vec3(1.6, 0.1, 0.2), vec3(0.1, 0.4, 1.6), step(0.0, n.x));
+    vec3 c = vec3(0.25 + chLum(alb) * 0.5) * (0.45 + 0.7 * lit);
+    float row = floor(fc.y / 6.0);
+    float tear = step(0.9, mvH2(vec2(row, tick)));
+    c = mix(c, alb.gbr * 1.4, tear);
+    c = mix(c, vec3(0.1, 1.0, 0.45), step(0.97, mvH2(floor(fc / 8.0) + tick)) * 0.8);
+    return c + glow * 1.3;
+  }
   // a universe without a character style yet: simple lit colour
   if (hull > 0.5) return vec3(0.04);
   return alb * (amb + sun * lit) + glow;

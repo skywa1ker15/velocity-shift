@@ -277,6 +277,183 @@ vec3 mvSynthStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
   return mvMarks(c + glow, pal[3], pal[5], vec3(0.01, 0.0, 0.03), 1.7);
 }
 
+// ---------- 4: PSYCHEDELIC. Surfaces are flowing contour maps of impossible colour ----------
+vec3 mvPsycheStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
+  float t = uTime * 0.12;
+  // a slow domain-warped field; its contour lines crawl across everything
+  vec3 q = vWPos * 0.11;
+  float w1 = mvNoise(q + vec3(t, 0.0, -t));
+  float w2 = mvNoise(q * 2.1 + vec3(w1 * 2.0, t * 1.3, w1));
+  float field = w1 * 0.65 + w2 * 0.35 + dot(normalize(vWNormal), vec3(0.13, 0.31, 0.07));
+  float bands = field * 9.0 + t * 2.0;
+  float bandId = floor(bands);
+  float inBand = fract(bands);
+  // walkable ground stays calmer and darker so the route always reads
+  float calm = mvWalk;
+  float hue = fract(bandId * 0.137 + t * 0.4 + vRole * 0.11);
+  vec3 c = mvHsv(hue, mix(0.85, 0.6, calm), mix(0.95, 0.45, calm));
+  // each band has a soft inner gradient and a hard black contour
+  c *= 0.75 + 0.35 * inBand;
+  float bw = fwidth(bands);
+  float contour = 1.0 - smoothstep(0.02, 0.02 + bw * 1.5, min(inBand, 1.0 - inBand));
+  // where bands get thinner than a few pixels, drop the contour instead of flooding black
+  c = mix(c, vec3(0.02, 0.0, 0.05), contour * 0.85 * clamp(1.0 - bw * 4.0, 0.0, 1.0));
+  // breathing rings ripple out from the player
+  float pd = distance(vWPos, uPlayer);
+  float breathe = 0.5 + 0.5 * sin(pd * 0.9 - uTime * 2.2);
+  c += mvHsv(hue + 0.33, 0.7, 1.0) * pow(breathe, 6.0) * 0.16 * (1.0 - smoothstep(10.0, 40.0, pd));
+  c *= 0.7 + 0.4 * mvSun;
+  if (mvBox > 0.5) {
+    // a white edge with a black keyline: shapes stay legible inside the colour storm
+    float w = max(0.05, mvPx * 1.6);
+    float white = (1.0 - smoothstep(w, w + mvPx, mvEdge)) * mvTiny;
+    float key = (1.0 - smoothstep(w * 2.2, w * 2.2 + mvPx, mvEdge)) * mvTiny - white;
+    c = mix(c, vec3(0.02, 0.0, 0.05), clamp(key, 0.0, 1.0));
+    c = mix(c, vec3(1.3), white);
+  }
+  return mvMarks(c, pal[3], pal[5], vec3(0.02, 0.0, 0.05), 0.9);
+}
+
+// ---------- 5: VOXEL. The world is rebuilt from half-metre blocks ----------
+vec3 mvVoxelStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
+  float size = 0.5;
+  vec3 n = normalize(vWNormal);
+  // which block: step just inside the surface so faces do not flicker between cells
+  vec3 cellP = (vWPos - n * 0.02) / size;
+  vec3 cell = floor(cellP);
+  vec3 f = fract(cellP);
+  // 2D position inside the block face
+  vec3 an = abs(n);
+  vec2 uv = an.y > 0.5 ? f.xz : (an.x > 0.5 ? f.zy : f.xy);
+  float rnd = mvHash(cell * 0.731);
+  float patch_ = mvNoise(cell * 0.16);
+  // materials by role and height on the block: grass caps, soil under them, stone, ore
+  float lum = dot(base, vec3(0.299, 0.587, 0.114));
+  vec3 stone = base * (0.86 + 0.24 * rnd);
+  stone = mix(stone, stone * vec3(0.9, 0.95, 1.08), step(0.6, patch_));
+  vec3 c = stone;
+  if (mvBox > 0.5 && vRole < 1.5 || vRole > 5.5) {
+    vec3 grass = mix(vec3(0.36, 0.72, 0.3), vec3(0.5, 0.8, 0.32), rnd);
+    vec3 soil = mix(vec3(0.5, 0.36, 0.24), vec3(0.42, 0.3, 0.2), rnd);
+    if (mvUp > 0.6) c = mix(stone, grass, step(0.35, patch_));
+    else if (abs(mvUp) < 0.5) {
+      // the top block of a wall wears the turf, with a ragged lower edge
+      float fromTop = mvFh - mvV;
+      float turf = step(fromTop, size * (1.0 + step(0.5, mvHash(vec3(cell.x, 0.0, cell.z)))));
+      c = mix(c, mix(soil, grass, step(fromTop, size * 0.45)), turf * step(0.35, patch_) * step(3.0, mvFh));
+    }
+  }
+  // ore flecks in the dark masses
+  if (vRole > 1.5 && vRole < 2.5) {
+    vec2 pix = floor(uv * 4.0);
+    float ore = step(0.9, rnd) * step(0.55, mvH2(pix + cell.xy));
+    c = mix(c, pal[4] * 1.3, ore);
+  }
+  // each block is a tile of 8x8 texels: quantise a little tone noise to them
+  vec2 texel = floor(uv * 8.0);
+  c *= 0.93 + 0.14 * mvH2(texel + cell.xz * 7.0 + cell.y * 3.0) * mvDetail(0.07);
+  // block bevel: light top-left, dark bottom-right, a groove between blocks
+  float fade = mvDetail(0.06);
+  float edgeD = min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y));
+  float groove = 1.0 - smoothstep(0.03, 0.03 + fwidth(uv.x) * 1.5, edgeD);
+  float hi = step(uv.y, 0.94) * step(0.88, uv.y) + step(uv.x, 0.12) * step(0.06, uv.x);
+  float lo = step(uv.y, 0.12) * step(0.06, uv.y) + step(uv.x, 0.94) * step(0.88, uv.x);
+  c *= 1.0 + (hi * 0.16 - lo * 0.14) * fade;
+  c *= 1.0 - groove * 0.4 * fade;
+  // flat, stepped light per face, as block games do it
+  float face = an.y > 0.5 ? (n.y > 0.0 ? 1.0 : 0.5) : (an.x > 0.5 ? 0.7 : 0.82);
+  float sh = mix(0.62, 1.0, mvShadow);
+  c *= face * sh * (0.55 + 0.75 * dot(amb + sun * 0.55, vec3(0.333)));
+  // blocky ambient occlusion in the corner where a wall meets the ground
+  if (abs(mvUp) < 0.5 && mvBox > 0.5) c *= 0.8 + 0.2 * step(size, mvV);
+  return mvMarks(c, pal[3], pal[5], vec3(0.07, 0.06, 0.08), 0.45);
+}
+
+// ---------- 7: PAINTED FANTASY. Thick brushwork, warm light, cool shade, no hard lines ----------
+vec3 mvPaintedStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
+  vec3 n = normalize(vWNormal);
+  // brush strokes: long streaks following each face, in three sizes
+  vec2 fuv = vec2(mvU, mvV);
+  if (mvBox < 0.5) fuv = vWPos.xz + vWPos.y * 0.7;
+  float dirK = mvNoise(vWPos * 0.09) * 2.4;
+  vec2 dir = vec2(cos(dirK), sin(dirK));
+  vec2 along = vec2(dot(fuv, dir), dot(fuv, vec2(-dir.y, dir.x)));
+  float s1 = mvNoise(vec3(along.x * 0.45, along.y * 1.1, 1.0));
+  float s2 = mvNoise(vec3(along.x * 1.3, along.y * 3.4, 5.0));
+  float s3 = mvNoise(vec3(along.x * 4.0, along.y * 10.0, 9.0)) * mvDetail(0.12);
+  float stroke = s1 * 0.5 + s2 * 0.32 + s3 * 0.18;
+  // pigment wanders: hue leans toward a neighbour colour in broad patches
+  float patch_ = mvNoise(vWPos * 0.17 + 20.0);
+  vec3 c = mix(base, base * vec3(1.12, 0.98, 0.84), smoothstep(0.35, 0.75, patch_));
+  c = mix(c, mix(c, pal[1], 0.35), smoothstep(0.6, 0.85, mvNoise(vWPos * 0.31 + 3.0)) * 0.6);
+  c *= 0.9 + 0.26 * stroke;
+  // moss and lichen gather on tops and ledges
+  float moss = smoothstep(0.52, 0.7, mvNoise(vWPos * 0.42 + 7.0) + (mvUp > 0.6 ? 0.08 : -0.12) + stroke * 0.12);
+  c = mix(c, vec3(0.34, 0.5, 0.27) * (0.8 + 0.5 * stroke), moss * (mvUp > 0.6 ? 0.7 : 0.35));
+  // light: a soft warm key with the terminator broken up by the strokes, deep cool shade
+  // the key light is judged by shadow first, angle second, so a low sun still reads as daylight
+  float key = smoothstep(0.05, 0.75, mvShadow * (0.5 + 0.5 * max(mvNdl, 0.0)) * step(-0.05, mvNdl) + (stroke - 0.5) * 0.35);
+  vec3 warm = sun * vec3(1.12, 1.0, 0.82);
+  vec3 coolSh = amb * vec3(0.84, 0.9, 1.12);
+  vec3 lit = c * (coolSh * (0.95 + 0.35 * n.y) + warm * key * 0.95);
+  // bounced gold on undersides and at the foot of walls
+  lit += c * vec3(1.0, 0.72, 0.4) * 0.14 * max(-n.y, 0.0);
+  if (mvBox > 0.5) {
+    // edges are painted, not drawn: a broad soft shadow in the creases, a dry-brush light on top edges
+    float crease = exp(-mvEdge * 5.5) * mvTiny;
+    lit *= 1.0 - crease * 0.42 * (0.6 + 0.8 * s2);
+    float dry = (1.0 - smoothstep(0.03, 0.16, mvEdge)) * step(0.55, s2 + s3 * 0.5) * mvTiny * max(mvUp, 0.0);
+    lit += vec3(1.0, 0.93, 0.78) * dry * 0.4 * key;
+    if (abs(mvUp) < 0.5) lit *= 0.8 + 0.2 * smoothstep(0.0, 3.0, mvV);
+  }
+  // rim of sky light so forms turn
+  lit += amb * pow(1.0 - abs(dot(mvView, n)), 3.0) * 0.35;
+  return mvMarks(lit, pal[3], pal[5], vec3(0.12, 0.08, 0.14), 0.7);
+}
+
+// ---------- 9: REALITY CORRUPTION. A level whose data is failing ----------
+vec3 mvCorruptStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
+  float tick = floor(uTime * 7.0);
+  float slow = floor(uTime * 1.3);
+  vec3 n = normalize(vWNormal);
+  // untextured debug look: grey shaded geometry with a measurement grid
+  float lum = dot(base, vec3(0.299, 0.587, 0.114));
+  vec3 c = vec3(0.2 + lum * 0.4) * (0.5 + 0.6 * mvSun + 0.25 * n.y);
+  float fine = mvDetail(0.06);
+  float grid = max(mvLine(mvU, 0.012), mvLine(mvV, 0.012)) * fine * mvBox;
+  float grid5 = max(mvLine(mvU / 5.0, 0.006), mvLine(mvV / 5.0, 0.006)) * mvBox;
+  c = mix(c, vec3(0.85, 0.95, 1.0), grid * 0.22 + grid5 * 0.55);
+  // chunks of surface have lost their texture: the classic magenta/black checker
+  vec3 chunk = floor(vWPos / 4.0);
+  float lost = step(0.86, mvHash(chunk + slow * 0.37)) * (1.0 - mvWalk * 0.75);
+  float chk = mod(floor(mvU * 2.0) + floor(mvV * 2.0), 2.0);
+  c = mix(c, mix(vec3(0.02), vec3(1.0, 0.0, 0.86), chk), lost * mvBox);
+  // other chunks show raw memory: columns of flickering bytes
+  float mem = step(0.9, mvHash(chunk * 1.7 + 11.0 + floor(uTime * 0.6))) * (1.0 - mvWalk);
+  vec2 by = floor(vec2(mvU * 5.0, mvV * 3.0 + tick * 0.5));
+  float byte = step(0.5, mvH2(by + chunk.xz));
+  c = mix(c, vec3(0.1, 1.0, 0.45) * byte * 1.2, mem * mvBox * fine);
+  // horizontal tears: bands of the world are colour-shifted and offset
+  float band = floor(vWPos.y * 2.3 + tick * 0.13);
+  float tear = step(0.93, mvHash(vec3(band, tick, 3.0)));
+  c = mix(c, c.gbr * 1.4 + vec3(0.0, 0.2, 0.3), tear * 0.8);
+  // z-fighting shimmer on big faces
+  float zf = step(0.5, fract(gl_FragCoord.y * 0.25 + tick * 0.5)) * step(0.95, mvHash(chunk + 5.0 + slow));
+  c = mix(c, vec3(0.0), zf * 0.6 * (1.0 - mvWalk));
+  // edges: RGB-split wireframe
+  if (mvBox > 0.5) {
+    float w = max(0.03, mvPx * 1.3);
+    float jitter = (mvH2(vec2(band, tick)) - 0.5) * 0.08;
+    float r = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.05 + jitter));
+    float g = 1.0 - smoothstep(w, w + mvPx, mvEdge);
+    float b = 1.0 - smoothstep(w, w + mvPx, abs(mvEdge - 0.1 - jitter));
+    c = mix(c, vec3(1.6, 0.1, 0.2), r * 0.7 * mvTiny);
+    c = mix(c, vec3(0.1, 0.4, 1.6), b * 0.7 * mvTiny);
+    c = mix(c, vec3(1.5), g * mvTiny);
+  }
+  return mvMarks(c, pal[3], pal[5], vec3(0.0), 1.2);
+}
+
 // ---------- 6: INK. Black brush on paper: three tones, wobbling brush lines, dry-brush shade ----------
 vec3 mvInkStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
   vec3 black = vec3(0.035, 0.035, 0.045);
@@ -318,8 +495,12 @@ vec3 mvSurface(float id, vec3 pal[7], vec3 sun, vec3 amb) {
   if (id < 1.5) return mvNeonStyle(base, pal, sun, amb);
   if (id < 2.5) return mvComicStyle(base, pal, sun, amb);
   if (id < 3.5) return mvLowPolyStyle(base, pal, sun, amb);
-  if (id > 5.5 && id < 6.5) return mvInkStyle(base, pal, sun, amb);
-  if (id > 7.5 && id < 8.5) return mvSynthStyle(base, pal, sun, amb);
+  if (id < 4.5) return mvPsycheStyle(base, pal, sun, amb);
+  if (id < 5.5) return mvVoxelStyle(base, pal, sun, amb);
+  if (id < 6.5) return mvInkStyle(base, pal, sun, amb);
+  if (id < 7.5) return mvPaintedStyle(base, pal, sun, amb);
+  if (id < 8.5) return mvSynthStyle(base, pal, sun, amb);
+  if (id < 9.5) return mvCorruptStyle(base, pal, sun, amb);
   // a universe without a style yet: flat lit colour, markings intact
   return mvMarks(base * (amb + sun * mvSun), pal[3], pal[5], vec3(0.04), 1.0);
 }
