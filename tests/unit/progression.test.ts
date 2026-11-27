@@ -4,6 +4,7 @@ import { levels } from '../../src/levels/registry';
 import type { LevelData } from '../../src/levels/types';
 import {
   achievements,
+  SHARD_COUNT,
   checkAchievements,
   cosmeticFor,
   cosmetics,
@@ -199,5 +200,58 @@ describe('level unlocks', () => {
     expect(isUnlocked(s, 'momentum')).toBe(false);
     s.settings.unlockAll = true;
     expect(isUnlocked(s, 'momentum')).toBe(true);
+  });
+});
+
+describe('course achievements (Phase F)', () => {
+  const rec = (medal = 1) => ({
+    best: 50,
+    splits: [],
+    medal,
+    collectibles: [],
+    objectives: [],
+    completions: 1,
+  });
+  test('the shard total counts every level, so "Every Last One" means every last one', () => {
+    expect(SHARD_COUNT).toBe(levels.length * 3);
+    const done = achievements.find((a) => a.id === 'completionist')!;
+    expect(done.desc).toContain(String(SHARD_COUNT));
+    const s = defaultSave();
+    s.levels.awakening = {
+      ...rec(),
+      collectibles: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'],
+    };
+    expect(checkAchievements(s, null, null, null).some((a) => a.id === 'completionist')).toBe(false);
+  });
+  test('every course has a finish achievement, and finishing all of them earns Every World', () => {
+    const s = defaultSave();
+    for (const l of levels.filter((x) => !x.meta.training)) s.levels[l.meta.id] = rec();
+    const ids = checkAchievements(s, null, null, null).map((a) => a.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'awakened',
+        'ascended',
+        'unstoppable',
+        'breakpoint-done',
+        'inkfalls-done',
+        'faceted-done',
+        'blockfall-done',
+        'core-done',
+        'world-tour',
+      ]),
+    );
+  });
+  test('course feats need the run they describe on that course', () => {
+    const meta = levels.find((l) => l.meta.id === 'breakpoint')!.meta;
+    const run = { finished: true, deaths: 0, vaults: 5, ticks: 30 * 120 } as never;
+    expect(checkAchievements(defaultSave(), run, meta, null).map((a) => a.id)).toContain('breakpoint-flow');
+    const other = levels.find((l) => l.meta.id === 'inkfalls')!.meta;
+    expect(checkAchievements(defaultSave(), run, other, null).map((a) => a.id)).not.toContain(
+      'breakpoint-flow',
+    );
+    const sloppy = { finished: true, deaths: 1, vaults: 6, ticks: 30 * 120 } as never;
+    expect(checkAchievements(defaultSave(), sloppy, meta, null).map((a) => a.id)).not.toContain(
+      'breakpoint-flow',
+    );
   });
 });

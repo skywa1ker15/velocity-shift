@@ -39,7 +39,8 @@ export function build(): LevelData {
   b.prompt([0, 7.5, 23], [10, 4, 8], 'jump', 'Wall to wall: every run and kick-off carries you higher');
   b.plat(0, 15, 78, 8, 24, { h: 1 }); // exit ledge 66..90
   b.checkpoint(0, 15, 72);
-  // hidden route: climb fast enough and a second, higher pair of walls continues above the ledge
+  // hidden route: a second, higher pair of walls continues above the ledge. Land on the ledge,
+  // double jump onto them, kick up three times and double jump onto the beam (tests/sim/hidden-routes)
   b.wall(-2.1, 18, 83, 0.8, 16, 34); // 66..100
   b.wall(2.1, 18, 83, 0.8, 16, 34);
   b.plat(0, 25.5, 115, 3.2, 28, { h: 0.7, mat: 'alt', dress: false }); // high beam 101..129

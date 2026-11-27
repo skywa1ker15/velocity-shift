@@ -90,10 +90,18 @@ export function build(): LevelData {
   );
 
   // ===== E. Blinking platforms =========================================================================
-  b.entity({ type: 'blink', p: [0, G - 0.5, 279], s: [6, 1, 6], onTime: 1.7, offTime: 1.1, phase: 0.8 });
-  b.entity({ type: 'blink', p: [0, G - 0.5, 288], s: [6, 1, 6], onTime: 1.7, offTime: 1.1, phase: 2.75 });
-  b.entity({ type: 'blink', p: [0, G - 0.5, 297], s: [6, 1, 6], onTime: 1.7, offTime: 1.1, phase: 1.9 });
-  b.entity({ type: 'blink', p: [0, G - 0.5, 306], s: [6, 1, 6], onTime: 1.7, offTime: 1.1, phase: 1.05 });
+  // A wave: each tile switches on 1.0 s after the one before (a 9 m/s wave, between run and sprint
+  // pace) and stays solid 2.4 s, so a 7 m/s run has a real window as well as a sprint
+  // (tests/sim/hazards.test.ts measures pass rate and window per pace). Phases put the reference
+  // line mid-window.
+  [
+    [279, 1.4],
+    [288, 0.4],
+    [297, 2.6],
+    [306, 1.6],
+  ].forEach(([z, phase]) =>
+    b.entity({ type: 'blink', p: [0, G - 0.5, z], s: [6, 1, 6], onTime: 2.4, offTime: 0.8, phase }),
+  );
   b.plat(0, G, 346, 9, 70); // 311..381
   b.checkpoint(0, G, 315);
   b.prompt(

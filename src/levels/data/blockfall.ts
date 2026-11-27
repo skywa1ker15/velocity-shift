@@ -19,9 +19,9 @@ export function build(): LevelData {
   b.plat(0, 0, 2, 14, 20); // -8..12
   b.plat(0, 0, 22, 8, 20); // 12..32
   b.checkpoint(0, 0, 20);
-  b.plat(0, 0, 38, 3.5, 4, { h: 4, dress: false }); // 36..40
-  b.plat(0, 0.5, 46, 3.5, 4, { h: 4, dress: false }); // 44..48
-  b.plat(0, 1, 54, 3.5, 4, { h: 4, dress: false }); // 52..56
+  b.plat(0, 0, 38, 3.5, 4.6, { h: 4, dress: false }); // 35.7..40.3
+  b.plat(0, 0.5, 46, 3.5, 4.6, { h: 4, dress: false }); // 43.7..48.3
+  b.plat(0, 1, 54, 3.5, 4.6, { h: 4, dress: false }); // 51.7..56.3
   b.plat(0, D, 65, 8, 10); // 60..70
   b.checkpoint(0, D, 63);
   b.prompt([0, 1.5, 26], [8, 4, 8], 'jump', 'Small blocks: land in the middle, jump from the edge');

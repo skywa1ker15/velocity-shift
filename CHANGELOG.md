@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase F: course fairness, verified secrets and course rewards
+
+- Momentum's blink tiles retuned: they were frame-perfect below sprint pace (0% at 7 m/s). Now 22% with a 0.69 s window at 7 m/s, still 41% at sprint; the reference time is unchanged.
+- Blockfall's stepping blocks are 4.6 m deep (was 4 m): a running jump now tolerates 0.05 s early to 0.15 s late.
+- "Every Last One" now counts all 27 shards (it said 12 and unlocked at 12).
+- 11 new achievements: finish each Phase E course, one feat per course, and Every World.
+- Hidden routes of all eight courses are now regression-tested (Verticality and Momentum verified reachable; Verticality's misleading comment corrected).
+- New fairness tests: blink pass rate and window per pace (Momentum, Faceted), Core's crusher hall, Blockfall with sloppy timing.
+- Report and evidence: `docs/phase-f/`.
+
 ## Phase E – five new courses
 
 - Breakpoint (Comic), Ink Falls (Ink), Faceted (Low-Poly), Blockfall (Voxel) and Corrupted Core (Corrupt), unlocking in order after Momentum. Each has its own focus, environment preset, home universe, checkpoints, shards, hidden route, objectives, themed destructibles, calibrated medals and real-render preview art. Built entirely from existing mechanics; no physics changes.

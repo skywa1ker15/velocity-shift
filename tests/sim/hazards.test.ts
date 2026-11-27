@@ -7,7 +7,7 @@
  * run. The movement-based checks at the bottom drive the real controller with sloppy timing.
  */
 import { beforeAll, describe, expect, test } from 'vitest';
-import { Mover, TELEGRAPH_TIME, type EntityCtx } from '../../src/entities/Entities';
+import { Blink, Mover, TELEGRAPH_TIME, type EntityCtx } from '../../src/entities/Entities';
 import { Simulation } from '../../src/gameplay/Simulation';
 import { initPhysics } from '../../src/physics/PhysicsWorld';
 import { levelById, levels } from '../../src/levels/registry';
@@ -95,19 +95,21 @@ function cycleOf(m: Mover) {
   return (2 * len) / d.speed + (d.pause ?? 0) + (d.rest ?? d.pause ?? 0);
 }
 
-describe('Momentum (Level 3) crusher hall', () => {
-  const G = -20.5;
+describe.each([
+  ['momentum', -20.5, 325, 370, 326, 368],
+  ['core', 0, 135, 185, 136, 182],
+] as const)('%s crusher hall', (id, G, m0, m1, z0, z1) => {
   const paces = [8, 9, 10, 11, 12];
   const results = new Map<number, { rate: number; window: number }>();
 
   beforeAll(async () => {
-    const sim = await load('momentum');
-    const movers = lethalMovers(sim, 325, 370);
+    const sim = await load(id);
+    const movers = lethalMovers(sim, m0, m1);
     expect(movers).toHaveLength(3);
     const cycle = cycleOf(movers[0]);
-    for (const v of paces) results.set(v, sweep(sim, movers, 0, G, 326, 368, v, cycle));
+    for (const v of paces) results.set(v, sweep(sim, movers, 0, G, z0, z1, v, cycle));
     console.log(
-      'crusher hall pass rate / longest window by pace: ' +
+      `${id} crusher hall pass rate / longest window by pace: ` +
         paces
           .map(
             (v) =>
@@ -200,6 +202,103 @@ describe('Momentum (Level 3) laser run with sloppy timing', () => {
       expect(deaths).toBe(0);
       expect(sim.player.pos.z).toBeGreaterThanOrEqual(172);
       expect(sim.player.speed).toBeGreaterThan(cfg.runSpeed); // momentum survives the sequence
+    },
+  );
+});
+
+/**
+ * Blinking platforms at human paces. A runner crosses the tiles at a constant pace, arriving at
+ * every possible moment of the cycle; the crossing fails if they are over a tile while it is not
+ * solid. Air time over a tile counts as standing on it, so this is a pessimistic model (a real
+ * player hops and touches each tile only briefly). Uses the real Blink entity code.
+ */
+function blinkSweep(sim: Simulation, tiles: Blink[], pace: number) {
+  const z0 = Math.min(...tiles.map((b) => b.def.p[2] - b.def.s[2] / 2)) - 0.5;
+  const z1 = Math.max(...tiles.map((b) => b.def.p[2] + b.def.s[2] / 2)) + 0.5;
+  const period = tiles[0].def.onTime + tiles[0].def.offTime;
+  const ctx: EntityCtx = { player: sim.player, time: 0, dt: SIM_DT, kill: () => {}, signal: () => {} };
+  const step = 0.01;
+  const n = Math.round(period / step);
+  const ok: boolean[] = [];
+  for (let i = 0; i < n; i++) {
+    let pass = true;
+    ctx.time = 20 + i * step;
+    for (let z = z0; z < z1 && pass; z += pace * SIM_DT) {
+      for (const b of tiles) {
+        b.update(ctx, sim.physics);
+        const over = Math.abs(z - b.def.p[2]) < b.def.s[2] / 2;
+        if (over && !b.solid) pass = false;
+      }
+      ctx.time += SIM_DT;
+    }
+    ok.push(pass);
+  }
+  let best = 0,
+    run = 0;
+  for (const v of [...ok, ...ok]) {
+    run = v ? run + 1 : 0;
+    best = Math.max(best, run);
+  }
+  return { rate: ok.filter(Boolean).length / n, window: Math.min(best, n) * step };
+}
+
+describe.each(['momentum', 'faceted'])('blinking platforms in %s at human paces', (id) => {
+  const paces = [7, 8, 9, 10, 11, 12];
+  const res = new Map<number, { rate: number; window: number }>();
+  beforeAll(async () => {
+    const sim = await load(id);
+    const tiles = sim.entities.filter((e): e is Blink => e instanceof Blink);
+    expect(tiles.length).toBeGreaterThanOrEqual(3);
+    for (const v of paces) res.set(v, blinkSweep(sim, tiles, v));
+    console.log(
+      `${id} blink pass rate / window by pace: ` +
+        paces
+          .map((v) => `${v} m/s ${(res.get(v)!.rate * 100).toFixed(0)}% ${res.get(v)!.window.toFixed(2)}s`)
+          .join(', '),
+    );
+  });
+  test('every pace from a run (7 m/s) to a fast sprint has a reactable window of at least 0.35 s', () => {
+    for (const v of paces) expect(res.get(v)!.window, `${v} m/s`).toBeGreaterThanOrEqual(0.35);
+  });
+  test('every pace gets through on at least 20% of arrival times', () => {
+    for (const v of paces) expect(res.get(v)!.rate, `${v} m/s`).toBeGreaterThanOrEqual(0.2);
+  });
+  test('still a challenge: no pace passes on more than 80% of arrival times', () => {
+    for (const v of paces) expect(res.get(v)!.rate, `${v} m/s`).toBeLessThanOrEqual(0.8);
+  });
+});
+
+describe('Blockfall stepping blocks with sloppy timing (real controller)', () => {
+  const jumps = [31.4, 39.3, 47.3, 55.3];
+  async function cross(sprint: boolean, lag: number) {
+    const sim = await load('blockfall');
+    const d = new Driver(sim);
+    sim.player.reset(0, 0.05, 20, Math.PI);
+    d.settle();
+    let k = 0,
+      deaths = 0;
+    sim.events.on('death', () => deaths++);
+    for (let i = 0; i < 120 * 8 && !deaths && !(sim.player.pos.z > 62 && sim.player.grounded); i++) {
+      const keys: Parameters<Driver['tick']>[0] = { moveZ: 1, sprint };
+      // acting `lag` seconds late = acting `lag * speed` metres later along the lane
+      if (k < jumps.length && sim.player.pos.z >= jumps[k] + lag * sim.player.speed) {
+        keys.jump = true;
+        k++;
+      }
+      d.tick(keys);
+    }
+    return deaths === 0 && sim.player.pos.z > 62;
+  }
+  test.each([-0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15])(
+    'a sprinting player jumping %s s off clears all three',
+    async (lag) => {
+      expect(await cross(true, lag)).toBe(true);
+    },
+  );
+  test.each([-0.05, 0, 0.05, 0.1, 0.15])(
+    'a running (7 m/s) player jumping %s s off clears all three',
+    async (lag) => {
+      expect(await cross(false, lag)).toBe(true);
     },
   );
 });

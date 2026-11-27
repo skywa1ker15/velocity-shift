@@ -70,6 +70,10 @@ const courses = () => levels.filter((l) => !l.meta.training);
 const finished = (s: SaveData, id: string) => (s.levels[id]?.completions ?? 0) > 0;
 const medalOf = (s: SaveData, id: string) => s.levels[id]?.medal ?? 0;
 const totalShards = (s: SaveData) => Object.values(s.levels).reduce((n, r) => n + r.collectibles.length, 0);
+/** Every shard in the game: three per level, training included (grows as courses are added). */
+export const SHARD_COUNT = levels.length * 3;
+/** The run just finished on this course, cleanly or not. */
+const ranCourse = (c: AchCtx, id: string) => !!c.stats && c.meta?.id === id && c.stats.finished;
 
 export const achievements: AchievementDef[] = [
   {
@@ -95,6 +99,73 @@ export const achievements: AchievementDef[] = [
     name: 'Unstoppable',
     desc: 'Finish Momentum.',
     test: (c) => finished(c.save, 'momentum'),
+  },
+  // ----- the Phase E courses: finishing each, and one feat that is each course's own identity
+  {
+    id: 'breakpoint-done',
+    name: 'Off the Page',
+    desc: 'Finish Breakpoint.',
+    test: (c) => finished(c.save, 'breakpoint'),
+  },
+  {
+    id: 'breakpoint-flow',
+    name: 'Clean Lines',
+    desc: 'Finish Breakpoint with 5 vaults and no deaths.',
+    test: (c) => ranCourse(c, 'breakpoint') && c.stats!.vaults >= 5 && c.stats!.deaths === 0,
+  },
+  {
+    id: 'inkfalls-done',
+    name: 'All the Way Down',
+    desc: 'Finish Ink Falls.',
+    test: (c) => finished(c.save, 'inkfalls'),
+  },
+  {
+    id: 'inkfalls-void',
+    name: 'Over the Void',
+    desc: 'Finish Ink Falls without dying.',
+    test: (c) => ranCourse(c, 'inkfalls') && c.stats!.deaths === 0,
+  },
+  {
+    id: 'faceted-done',
+    name: 'Unfolded',
+    desc: 'Finish Faceted.',
+    test: (c) => finished(c.save, 'faceted'),
+  },
+  {
+    id: 'faceted-clockwork',
+    name: 'Clockwork',
+    desc: 'Finish Faceted without dying, in under 40 seconds.',
+    test: (c) => ranCourse(c, 'faceted') && c.stats!.deaths === 0 && c.stats!.ticks / 120 < 40,
+  },
+  {
+    id: 'blockfall-done',
+    name: 'Solid Ground',
+    desc: 'Finish Blockfall.',
+    test: (c) => finished(c.save, 'blockfall'),
+  },
+  {
+    id: 'blockfall-precise',
+    name: 'Pixel Perfect',
+    desc: 'Finish Blockfall without dying.',
+    test: (c) => ranCourse(c, 'blockfall') && c.stats!.deaths === 0,
+  },
+  {
+    id: 'core-done',
+    name: 'Core Breach',
+    desc: 'Finish Corrupted Core.',
+    test: (c) => finished(c.save, 'core'),
+  },
+  {
+    id: 'core-gold',
+    name: 'Clean Shutdown',
+    desc: 'Earn gold on Corrupted Core.',
+    test: (c) => medalOf(c.save, 'core') >= 3,
+  },
+  {
+    id: 'world-tour',
+    name: 'Every World',
+    desc: 'Finish every course.',
+    test: (c) => courses().every((l) => finished(c.save, l.meta.id)),
   },
   {
     id: 'podium',
@@ -173,8 +244,8 @@ export const achievements: AchievementDef[] = [
   {
     id: 'completionist',
     name: 'Every Last One',
-    desc: 'Collect all 12 shards.',
-    test: (c) => totalShards(c.save) >= 12,
+    desc: `Collect all ${SHARD_COUNT} shards.`,
+    test: (c) => totalShards(c.save) >= SHARD_COUNT,
   },
   {
     id: 'objectives',
