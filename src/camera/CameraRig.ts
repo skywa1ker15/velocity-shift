@@ -37,6 +37,10 @@ export class CameraRig {
   private trauma = 0;
   private leanX = 0;
   private lastYaw = 0;
+  private landRoll = new Spring(140, 13);
+  /** 0..1: how close the ground is for a falling player (set each frame by the game). */
+  brace = 0;
+  private braceS = 0;
   private yawRate = 0;
   private seeded = false;
   /** Master scales from the player's motion profile, refreshed each frame. */
@@ -58,13 +62,18 @@ export class CameraRig {
     this.fovPunch.reset();
     this.lurch.reset();
     this.nod.reset();
+    this.landRoll.reset();
+    this.braceS = 0;
     this.wallOff = 0;
     this.trauma = 0;
     this.roll = 0;
     this.eyeHeight = pl.height - cfg.eyeOffset;
   }
 
-  onLand(impact: number) {
+  onLand(impact: number, lateral = 0) {
+    // a hard landing also staggers the view sideways a touch, then it rights itself
+    if (impact > 12)
+      this.landRoll.kick((lateral >= 0 ? 1 : -1) * clamp((impact - 12) / 14, 0, 1) * 0.5 * this.landK);
     this.dip.kick(-clamp(impact, 2, 30) * 0.075 * this.landK);
     this.nod.kick(-clamp(impact, 3, 26) * 0.022 * this.landK); // the head nods forward with the impact
     if (impact > 20) this.trauma = Math.min(1, this.trauma + (impact - 20) * 0.03 * this.landK);
@@ -94,9 +103,10 @@ export class CameraRig {
     this.nod.kick(-0.06 - power * 0.08);
     this.fovPunch.kick(-30 - power * 40);
   }
-  onJump() {
-    this.dip.kick(0.5 * this.fxK);
-    this.nod.kick(0.12 * this.fxK); // chin lifts as the legs drive
+  onJump(speed = 0) {
+    const k = 0.6 + 0.4 * clamp(speed / 12, 0, 1.3);
+    this.dip.kick(0.5 * this.fxK * k);
+    this.nod.kick(0.12 * this.fxK * k); // chin lifts as the legs drive
   }
   /** Big world events only (collapses, crushers). */
   shake(amount: number) {
@@ -135,9 +145,10 @@ export class CameraRig {
     const sliding = pl.state === MoveState.Slide;
     // how hard the slide is still going: the view sits lower the faster the ground rushes past
     const slideK = sliding ? clamp((pl.speed - 3) / 9, 0, 1) : 0;
+    this.braceS = damp(this.braceS, this.brace, 16, dt);
     this.eyeHeight = damp(
       this.eyeHeight,
-      pl.height - cfg.eyeOffset - (sliding ? 0.06 + slideK * 0.05 : 0),
+      pl.height - cfg.eyeOffset - (sliding ? 0.06 + slideK * 0.05 : 0) - this.braceS * 0.045 * m.landing,
       sliding ? 15 : 11,
       dt,
     );
@@ -205,7 +216,15 @@ export class CameraRig {
     // the head leans into a push-off and rocks a little with each stride (visual only: aim is untouched)
     const lean = gait.moving ? clamp(-gait.accel, -1, 1) * 0.012 * m.headBob : 0;
     const stepRoll = gait.moving ? Math.sin(gait.phase) * 0.0035 * bobAmt : 0;
-    cam.rotation.set(pitch + shy * 0.5 + nod + lean, yaw + shx * 0.5, this.roll + shr + stepRoll);
+    // a long fall: wind flutters the view very slightly (no shake, no aim change)
+    const fallK = !pl.grounded ? clamp((-pl.vel.y - 12) / 18, 0, 1) : 0;
+    const flutter = fallK > 0 ? Math.sin(this.t * 23) * 0.002 * fallK * fallK * m.headBob : 0;
+    const lroll = this.landRoll.update(0, dt) * 0.03 * m.roll;
+    cam.rotation.set(
+      pitch + shy * 0.5 + nod + lean,
+      yaw + shx * 0.5,
+      this.roll + shr + stepRoll + flutter + lroll,
+    );
 
     // FOV: widens with speed, punches on dash
     // the setting is a horizontal FOV at 16:9 (the usual convention); three.js wants vertical

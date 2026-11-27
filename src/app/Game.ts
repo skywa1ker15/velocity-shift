@@ -701,8 +701,8 @@ export class Game {
     const ahead = (t: number) => _v.set(pl.pos.x + pl.vel.x * t, pl.pos.y + 0.04, pl.pos.z + pl.vel.z * t);
     ev.on('jump', () => {
       audio.jump();
-      this.rig.onJump();
-      this.body.onJump();
+      this.rig.onJump(pl.speed);
+      this.body.onJump(pl.speed);
       // take-off: a kick of dust and a quick pen ring where the feet were
       this.puffs(feet(), 3, 1.5, 0.3);
       this.stickers.spawn(feet(), this.dust, {
@@ -769,8 +769,21 @@ export class Game {
     });
     ev.on('land', ({ speed }) => {
       audio.land(speed);
-      this.rig.onLand(speed);
+      this.rig.onLand(speed, pl.vel.x * Math.cos(this.input.yaw) - pl.vel.z * Math.sin(this.input.yaw));
       this.body.onLand(speed);
+      // universes that throw sparks throw them from a hard landing too
+      if (speed > 10 && this.slideLook.rate > 0) {
+        for (let i = 0; i < 3; i++) {
+          this.pickSlideColor(i);
+          _w.set(0, 0.9, 0);
+          this.sparks.emit(this.body.contact, _w, this.count(5), this.sparkCol, {
+            speed: 3 + speed * 0.18,
+            spread: 2,
+            life: this.slideLook.life,
+            size: 0.04 * this.slideLook.size,
+          });
+        }
+      }
       if (speed > 4) {
         const k = Math.min(1, speed / 22);
         this.impactFx = Math.max(this.impactFx, 0.35 + k * 0.65);
@@ -1299,6 +1312,24 @@ export class Game {
     }
   }
 
+  private groundRay = { dist: 0, nx: 0, ny: 0, nz: 0, id: 0, wallrun: false };
+  /**
+   * Landing anticipation (presentation only): how soon the ground arrives for a falling player,
+   * 0 (far) .. 1 (about to touch). A single read-only ray; the simulation is not involved.
+   */
+  private updateBrace(pl: Simulation['player']) {
+    let brace = 0;
+    if (!pl.grounded && pl.vel.y < -4 && this.sim) {
+      const p = pl.pos;
+      if (this.sim.physics.raycast(p.x, p.y + 0.1, p.z, 0, -1, 0, 6, this.groundRay)) {
+        const tti = Math.max(0, this.groundRay.dist - 0.1) / Math.max(1, -pl.vel.y);
+        brace = clamp((0.3 - tti) / 0.26, 0, 1);
+      }
+    }
+    this.rig.brace = brace;
+    this.body.brace = brace;
+  }
+
   private frameLevel(alpha: number, dt: number) {
     const sim = this.sim!,
       pl = sim.player;
@@ -1308,6 +1339,7 @@ export class Game {
     this.shiftKick = Math.max(0, this.shiftKick - dt * 2.4);
     const kick = this.shiftKick * this.shiftKick * (this.motion.speedLines > 0 ? 1 : 0.3);
     this.gait.update(pl, dt, yaw);
+    this.updateBrace(pl);
     this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion, this.gait);
     this.body.update(pl, this.rig.feet, this.gait, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);

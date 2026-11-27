@@ -247,6 +247,11 @@ export class Body {
   private wjT = 9;
   private jumpT = 9;
   private slideT = 9;
+  private landDur = 0.34;
+  private landHard = 0;
+  /** 0..1: how close the ground is for a falling body (set each frame by the game). */
+  brace = 0;
+  private braceS = 0;
   private exitT = 9;
   private slideBlend = 0;
   private hipDrop = 0;
@@ -426,12 +431,21 @@ export class Body {
   private hips!: THREE.Mesh;
 
   // ----- reactions ----------------------------------------------------------------------
+  /**
+   * Landings come in sizes. A soft touch barely registers and recovers fast; a medium one braces
+   * the hands and dips; a hard one (impact > ~14 m/s) slams the hands wide, sinks the body deep and
+   * takes noticeably longer to come back up.
+   */
   onLand(impact: number) {
+    const k = this.motion.landing;
     this.landT = 0;
-    this.landAmt = clamp(impact / 20, 0.15, 1) * Math.min(1.3, this.motion.landing);
+    this.landHard = clamp((impact - 10) / 14, 0, 1);
+    this.landDur = lerp(0.24, 0.56, clamp((impact - 4) / 18, 0, 1));
+    this.landAmt = clamp(impact / 20, 0.15, 1) * Math.min(1.3, k);
     for (const a of this.arms) {
-      a.spring.v.y -= 1.2 + this.landAmt * 2.6;
+      a.spring.v.y -= (1.2 + this.landAmt * 2.6) * (1 + this.landHard * 0.5);
       a.spring.v.z -= this.landAmt * 0.8;
+      a.spring.v.x += a.side * this.landHard * 1.2 * k;
     }
   }
   onDash() {
@@ -446,10 +460,11 @@ export class Body {
     }
     for (const l of this.legs) l.spring.v.y += 3.5;
   }
-  onJump() {
+  /** Take-off: the arms load for an instant (never delaying the jump), then throw up with the legs. */
+  onJump(speed = 0) {
     this.jumpT = 0;
-    // wind-up without delaying the jump: the arms dip for an instant, then the pose throws them up
-    for (const a of this.arms) a.spring.v.y -= 1.5;
+    const k = this.motion.intensity * (1 + clamp(speed / 14, 0, 1) * 0.6);
+    for (const a of this.arms) a.spring.v.y -= 1.5 * k;
   }
   onWallJump() {
     this.wjT = 0;
@@ -571,7 +586,8 @@ export class Body {
     c.fall = clamp(-vy / 15, 0, 1);
     c.longFall = clamp((pl.airTime - 0.45) / 0.8, 0, 1);
     const sp = c.sp;
-    const landK = this.landT < 0.34 ? (1 - this.landT / 0.34) * this.landAmt : 0;
+    const landK = this.landT < this.landDur ? (1 - this.landT / this.landDur) * this.landAmt : 0;
+    this.braceS = damp(this.braceS, this.brace, 20, dt);
 
     // state weights: the active state eases in, the others ease out
     const ti = stateIndex(st);
@@ -695,7 +711,7 @@ export class Body {
 
     // the whole upper body: sinks on landings, leans into speed, stays upright when the view rolls
     const fall = c.fall;
-    this.rootDip = damp(this.rootDip, landK * 0.035, 20, dt);
+    this.rootDip = damp(this.rootDip, landK * (0.035 + this.landHard * 0.04), 20, dt);
     const g = this.gait;
     const stepping = g.moving && grounded ? clamp(sp, 0, 1.2) : 0;
     this.rootLean = damp(
@@ -851,21 +867,31 @@ export class Body {
         break;
       }
       default: {
-        // airborne. Rising: arms drive up, lead arm ahead. Falling: arms spread wide and
-        // high with open fluttering hands: a long fall looks nothing like a hop.
+        // airborne. Rising: arms drive up, lead arm ahead. At the top of the arc the body
+        // floats: hands open, a slow drift. Falling: arms spread wide and high with open
+        // fluttering hands: a long fall looks nothing like a hop. Close to the ground the hands
+        // reach down and out to meet it.
         const lead = s > 0 ? 1 : 0;
         const { rise, fall, longFall } = c;
-        p.x = s * (0.25 + fall * 0.13 + longFall * 0.04);
-        p.y = -0.21 + rise * (0.1 + lead * 0.03) + fall * 0.1;
-        p.z = -0.42 - rise * lead * 0.05 + fall * 0.06;
+        const apex = (1 - clamp(Math.abs(pl.vel.y) / 3.5, 0, 1)) * clamp(pl.airTime / 0.2, 0, 1);
+        const fast = clamp((Math.hypot(pl.vel.x, pl.vel.z) - 9) / 9, 0, 1);
+        const b = this.braceS;
+        p.x = s * (0.25 + fall * 0.13 + longFall * 0.04 + apex * 0.03 + b * 0.04);
+        p.y =
+          -0.21 +
+          rise * (0.1 + lead * 0.03) +
+          fall * 0.1 +
+          Math.sin(this.t * 2.6 + s) * 0.008 * apex -
+          b * 0.12;
+        p.z = -0.42 - rise * lead * 0.05 + fall * 0.06 + fast * 0.05 * (1 - fall) - b * 0.03;
         p.y += Math.sin(this.t * 17 + s * 1.3) * 0.012 * fall * (0.4 + longFall);
         p.x += Math.cos(this.t * 13 + s) * 0.008 * fall * (0.4 + longFall);
-        p.curl = lerp(0.6, 0.06, Math.max(fall, rise * 0.5));
-        p.splay = fall;
-        p.roll = s * 0.75 * fall - s * 0.2 * rise;
-        p.bend = -0.45 * fall + 0.15 * rise;
+        p.curl = lerp(lerp(0.6, 0.06, Math.max(fall, rise * 0.5)), 0.08, Math.max(apex * 0.6, b));
+        p.splay = Math.max(fall, apex * 0.5, b);
+        p.roll = s * 0.75 * fall - s * 0.2 * rise + s * 0.3 * b;
+        p.bend = -0.45 * fall + 0.15 * rise - 0.4 * b;
         p.pole = 0.55 + fall * 0.8;
-        p.stiff = 170;
+        p.stiff = 170 + b * 80;
       }
     }
   }
@@ -1073,7 +1099,10 @@ export class Body {
     this.bodyRoll = damp(this.bodyRoll, wall ? -pl.wallSide * 0.3 : 0, 9, dt);
     root.rotation.z = this.bodyRoll;
 
-    const land = this.landT < 0.3 ? Math.sin((this.landT / 0.3) * Math.PI) * this.landAmt * 0.26 : 0;
+    const land =
+      this.landT < this.landDur
+        ? Math.sin((this.landT / this.landDur) * Math.PI) * this.landAmt * (0.26 + this.landHard * 0.14)
+        : 0;
     this.slideBlend = damp(this.slideBlend, sliding ? 1 : 0, sliding ? 16 : 9, dt);
     const sb = this.slideBlend;
     const slideLow = 0.47 + 0.1 * clamp(speed / 11, 0, 1);
@@ -1133,8 +1162,8 @@ export class Body {
         const lead = s > 0 ? 1 : 0;
         t.set(
           s * (0.14 + fall * 0.05),
-          0.2 + tuck + rise * lead * 0.22 - fall * 0.14,
-          (lead ? -0.34 : 0.1) - tuck * 0.5 + fall * (lead ? 0.12 : -0.14),
+          0.2 + tuck + rise * lead * 0.22 - fall * 0.14 - this.braceS * 0.1,
+          (lead ? -0.34 : 0.1) - tuck * 0.5 + fall * (lead ? 0.12 : -0.14) - this.braceS * 0.06 * lead,
         );
       }
       l.spring.update(t, dt);
