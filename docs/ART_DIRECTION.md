@@ -94,3 +94,32 @@ figures (timers and numbers). Buttons and panels use a clipped-corner diagonal.
 - **The sword** is a slim single-edged blade with a forward-swept tanto point, a stepped spine notch (the "shift") and a light channel up the fuller. It has an asymmetric hex guard with a swept quillon, accent grip wraps and a glowing pommel. Between swings it rests on the right shoulder so the view stays clear, and the recovery passes through a low guard so the blade never crosses the eye.
 - **Slash arcs** are drawn face-on to the camera along the blade tip's real screen path. A first-person swing plane passes near the eye, so the true swept surface would read as a line. The arcs have a white-hot cutting edge, an accent body with dry-brush streaks and an ink border.
 - **Cuts** split objects along the blade's sweep plane. Fresh faces glow in the accent colour and cool over about a second. Pieces are kinematic, live about 2 s and are capped at 28.
+
+## The multiverse
+
+The game travels between ten visual universes. Each one is a full rendering identity, not a palette: its own surface shader branch, sky, character treatment, 3D background scenery, light, fog, grading, screen treatment, movement effects, HUD theme and music voicing.
+
+| Universe | Id | Surfaces | Sky | Scenery |
+| --- | --- | --- | --- | --- |
+| Hand-Drawn | `anime` | The original inked cel look | Painted bands, skyline | (the level's own decor) |
+| Neon District | `neon` | Wet reflective ground, lit windows, neon-tube edges | Megacity, holo-signs, searchlights | Slab towers, billboards, drones |
+| Issue #1 | `comic` | Ben-Day dots, spot blacks, brush outlines | Sunburst, printed dot gradient, outlined clouds | Burst signs, puffy clouds, rocks |
+| Facet Valley | `lowpoly` | Per-facet flat shading, bevels | Faceted dome, folded peaks, hex sun | Floating islands with pines, crystals |
+| The Bloom | `psyche` | Flowing contour bands, white keyline | Kaleidoscope with an iris sun | Ring knots, twisted stacks |
+| Blockworld | `voxel` | Half-metre block grid, turf, ore | Texel sky, square sun, block clouds | Cube islands and trees |
+| Ink | `ink` | Three-tone brush washes on paper | Ink-wash ranges, black sun | Karst spires, pines, red gates |
+| Elderwild | `painted` | Brush strokes, moss, warm key / cool shade | Brushed cumulus, light shafts, spires | Ruins, great trees, crystals |
+| Outrun | `synth` | World-space glowing grid | Striped sun, wire mountains, grid plane | Palms, wire pyramids, chrome spheres |
+| ERR_REALITY | `corrupt` | Debug grid, missing textures, memory dumps | A skybox failing to load | Shard clouds, half-built towers |
+
+Home universes: Training = Hand-Drawn, The Awakening = Elderwild, Verticality = Neon District, Momentum = Outrun.
+
+**Readability is universal.** Every surface style routes the gameplay markings through one shared function (`mvMarks` in `multiverse/surface.ts`): safe-ground lip, wall-run rails and chevrons, glow strips, hazard stripes (pattern and colour), telegraph flicker and the landing ring. Walkable ground is kept calmer than walls in the loud universes (Psychedelic, Corruption). Scenery never comes within 4 m of anything the player can touch (tested), and distortion is only ever applied to scenery or the screen, never to ground you stand on.
+
+**Transitions.** Seven kinds, all world-space fronts drawn in the same pass: portal, tear, glitch, drain, wave, pixel, collapse. Nothing loads, pauses or touches input.
+
+**How a run is planned.** `multiverse/plan.ts` builds a plan from (level, seed): shifts at checkpoints, a drift back home, and rare anomalies (a short unannounced visit somewhere else). The same seed always gives the same plan; the pause card shows it.
+
+**Adding a universe.** Add an entry to `multiverse/universes.ts` (id, shader index, env, screen look) and to `FX`, then a branch in `multiverse/surface.ts`, `multiverse/sky.ts`, `multiverse/character.ts`, a maker in `multiverse/Scenery.ts` and a voicing in `AudioEngine.ts`. The director, planner, tests and settings pick it up automatically.
+
+**Built for the movement overhaul.** The character material and movement effects already read their style from the universe at the camera, so new animation work only has to drive poses; the universe look follows.

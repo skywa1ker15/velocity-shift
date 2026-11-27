@@ -380,12 +380,13 @@ vec3 mvPaintedStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
   vec2 along = vec2(dot(fuv, dir), dot(fuv, vec2(-dir.y, dir.x)));
   float s1 = mvNoise(vec3(along.x * 0.45, along.y * 1.1, 1.0));
   float s2 = mvNoise(vec3(along.x * 1.3, along.y * 3.4, 5.0));
-  float s3 = mvNoise(vec3(along.x * 4.0, along.y * 10.0, 9.0)) * mvDetail(0.12);
+  float fineD = mvDetail(0.12);
+  float s3 = fineD > 0.01 ? mvNoise(vec3(along.x * 4.0, along.y * 10.0, 9.0)) * fineD : 0.0;
   float stroke = s1 * 0.5 + s2 * 0.32 + s3 * 0.18;
   // pigment wanders: hue leans toward a neighbour colour in broad patches
   float patch_ = mvNoise(vWPos * 0.17 + 20.0);
   vec3 c = mix(base, base * vec3(1.12, 0.98, 0.84), smoothstep(0.35, 0.75, patch_));
-  c = mix(c, mix(c, pal[1], 0.35), smoothstep(0.6, 0.85, mvNoise(vWPos * 0.31 + 3.0)) * 0.6);
+  c = mix(c, mix(c, pal[1], 0.35), smoothstep(0.6, 0.85, fract(patch_ * 3.7)) * 0.6 * patch_);
   c *= 0.9 + 0.26 * stroke;
   // moss and lichen gather on tops and ledges
   float moss = smoothstep(0.52, 0.7, mvNoise(vWPos * 0.42 + 7.0) + (mvUp > 0.6 ? 0.08 : -0.12) + stroke * 0.12);

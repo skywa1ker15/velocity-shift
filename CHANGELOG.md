@@ -1,5 +1,16 @@
 # Changelog
 
+## Phase 3: Multiverse art and graphics overhaul
+
+- **Ten visual universes**, each a full rendering identity: Hand-Drawn (the original look), Neon District, Issue #1 (comic), Facet Valley (low-poly), The Bloom (psychedelic), Blockworld (voxel), Ink, Elderwild (painted fantasy), Outrun (synthwave) and ERR_REALITY (corruption). Each has its own surface rendering, sky, character and arm treatment, seeded 3D background scenery, light, fog, grading, screen treatment, movement effects, HUD theme and music voicing. See docs/ART_DIRECTION.md.
+- **Shifts during play.** Each level has a home universe. A seeded plan shifts universes at checkpoints, drifts back home and throws in rare anomalies, so every run differs but any run can be reproduced from its seed (shown on the pause card).
+- **Seven transitions**: portal, tear, glitch, drain, wave, pixel and collapse. Two universes are drawn at once along a world-space front, so nothing loads or pauses.
+- **Movement presentation**: speed lines and decals in six styles, air streaks at speed, flow-chain and close-call call-outs, a camera breath and lens effect when a front passes, and the universe name announced on entry.
+- **Menu and UI**: the main menu tours the universes; HUD themes per universe; level previews show each home universe.
+- **Settings**: Multiverse (Shifting / Home universe / Classic look) and Shift intensity, which also respects Reduce motion.
+- **Safety**: visual only; the simulation never reads it. Tests cover planner determinism, director behaviour, every transition kind, scenery clearance, identical physics with and without shifts, resource stability across repeated shifts, and HUD overlap.
+- **Fix**: the universe effect sanitises its input. Grading could push a channel below zero and produce NaN, which turned regions black.
+
 ## Phase 3: Phase C, UI and game presentation
 
 - **Main menu:** a stacked logo, one prominent Play entry (Continue or Play, with the level name and best time) over a quiet list, and a legibility gradient in place of the old halftone wash. The live attract runner is larger, carries the Shift Edge drawn in hand, and follows the real sword state. The hero camera keeps clear of columns and walls.

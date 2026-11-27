@@ -102,7 +102,7 @@ vec3 skyComic(vec3 d, vec3 k[4]) {
   if (h > -0.02) {
     vec2 cp = d.xz / (h + 0.3) * 1.2 + vec2(uTime * 0.008, 0.0);
     float c1 = fbm(cp);
-    float c2 = fbm(cp + vec2(0.0, 0.07));
+    float c2 = fbm3(cp + vec2(0.0, 0.07));
     float body = step(0.6, c1);
     float ew = fwidth(c1) * 3.0 + 0.0005;
     float edge = (1.0 - smoothstep(ew * 0.6, ew, abs(c1 - 0.6))) * step(fwidth(c1), 0.05);
@@ -167,7 +167,7 @@ vec3 skyInk(vec3 d, vec3 k[4]) {
   vec3 paper = mix(k[1], k[0], smoothstep(0.0, 0.7, h));
   paper = mix(paper, k[2], 1.0 - smoothstep(-0.5, 0.0, h));
   // paper fibre + a faint wash of grey cloud
-  float fib = fbm(vec2(az * 40.0, h * 9.0));
+  float fib = fbm3(vec2(az * 40.0, h * 9.0));
   paper *= 0.96 + 0.06 * fib;
   float wash = fbm(d.xz / (abs(h) + 0.3) * 1.1 + uTime * 0.004);
   paper = mix(paper, paper * 0.8, smoothstep(0.52, 0.7, wash) * smoothstep(0.02, 0.3, h) * 0.7);
@@ -355,52 +355,55 @@ vec3 skyPainted(vec3 d, vec3 k[4]) {
   float az = atan(d.x, d.z);
   float sd = max(dot(d, uSunDir), 0.0);
   // the canvas: a warm-to-cool gradient laid down in broad, visible strokes
-  float strokeN = fbm(vec2(az * 3.0 + h * 2.0, h * 14.0));
+  float strokeN = fbm3(vec2(az * 3.0 + h * 2.0, h * 14.0));
   vec3 col = mix(k[1], k[0], smoothstep(-0.05, 0.75, h + (strokeN - 0.5) * 0.12));
   col = mix(col, k[3], pow(sd, 5.0) * 0.5);
-  // cumulus: three banks, each lit warm on the sun side and violet beneath
-  for (int i = 0; i < 3; i++) {
-    float fi = float(i);
-    vec2 cp = d.xz / (abs(h) + 0.28 + fi * 0.1) * (0.8 + fi * 0.45) + vec2(uTime * (0.004 + fi * 0.002), fi * 3.7);
-    float base_ = fbm(cp);
-    float detail = fbm(cp * 3.2 + base_ * 1.5);
-    float dens = base_ * 0.78 + detail * 0.3;
-    float thr = 0.56 - fi * 0.02;
-    // brushy edge: the threshold wobbles with a streaky noise
-    float edge = smoothstep(thr, thr + 0.07, dens + (strokeN - 0.5) * 0.06);
-    float core = smoothstep(thr + 0.08, thr + 0.24, dens);
-    float up = fbm(cp + vec2(0.05, 0.11)) - base_;                 // crude "which side is lit"
-    vec3 lit = mix(vec3(1.0, 0.86, 0.7), vec3(1.0, 0.97, 0.9), core) * (0.85 + 0.5 * pow(sd, 2.0));
-    vec3 under = mix(k[0] * 0.9 + vec3(0.12, 0.06, 0.16), k[1], 0.25);
-    vec3 cloud = mix(under, lit, smoothstep(-0.03, 0.05, up + (h - 0.1) * 0.25));
-    col = mix(col, cloud, edge * smoothstep(-0.06, 0.1, h) * (0.9 - fi * 0.15));
+  // cumulus: two banks, lit warm toward the top and the sun, violet beneath
+  if (h > -0.06) {
+    for (int i = 0; i < 2; i++) {
+      float fi = float(i);
+      vec2 cp = d.xz / (abs(h) + 0.28 + fi * 0.12) * (0.8 + fi * 0.6) + vec2(uTime * (0.004 + fi * 0.002), fi * 3.7);
+      float base_ = fbm(cp);
+      float detail = fbm3(cp * 3.2 + base_ * 1.5);
+      float dens = base_ * 0.78 + detail * 0.3;
+      float thr = 0.56 - fi * 0.02;
+      float edge = smoothstep(thr, thr + 0.07, dens + (strokeN - 0.5) * 0.06);
+      float core = smoothstep(thr + 0.08, thr + 0.24, dens);
+      vec3 lit = mix(vec3(1.0, 0.86, 0.7), vec3(1.0, 0.97, 0.9), core) * (0.85 + 0.5 * pow(sd, 2.0));
+      vec3 under = mix(k[0] * 0.9 + vec3(0.12, 0.06, 0.16), k[1], 0.25);
+      // dense cores and higher clouds catch the light; thin edges and low banks sit in shade
+      vec3 cloud = mix(under, lit, smoothstep(0.25, 0.75, core * 0.7 + detail * 0.4 + h * 0.6));
+      col = mix(col, cloud, edge * smoothstep(-0.06, 0.1, h) * (0.9 - fi * 0.15));
+    }
   }
   // shafts of light fanning down from the sun
   vec3 sdir = uSunDir;
   vec3 ax = normalize(cross(sdir, vec3(0.0, 1.0, 0.001)));
   vec3 ay = cross(ax, sdir);
-  float ang = atan(dot(d, ay), dot(d, ax));
-  float shaft = smoothstep(0.55, 0.9, noise(vec2(ang * 7.0, 1.0)) ) * smoothstep(0.3, 0.9, sd) * (1.0 - smoothstep(0.985, 1.0, sd));
-  col += k[3] * shaft * 0.22;
-  // sun: a soft painted disc
+  if (sd > 0.3) {
+    float ang = atan(dot(d, ay), dot(d, ax));
+    float shaft = smoothstep(0.55, 0.9, noise(vec2(ang * 7.0, 1.0))) * smoothstep(0.3, 0.9, sd) * (1.0 - smoothstep(0.985, 1.0, sd));
+    col += k[3] * shaft * 0.22;
+  }
   col = mix(col, k[3] * 1.5, smoothstep(0.9968, 0.9982, sd));
   col += k[3] * pow(sd, 40.0) * 0.4;
-  // distant ranges fading into the air, with a citadel of thin spires on the nearer one
-  for (int i = 0; i < 3; i++) {
-    float fi = float(i);
-    float ridge = (fbm(vec2(az * (1.8 + fi * 1.1) + fi * 9.0, fi * 2.0)) - 0.32) * (0.3 - fi * 0.07) - 0.02;
-    if (i == 2) {
-      float cx = floor(az * 60.0);
-      float spire = step(0.86, hash(vec2(cx, 5.0))) * (0.03 + 0.07 * hash(vec2(cx, 8.0))) * (1.0 - abs(fract(az * 60.0) - 0.5) * 2.0);
-      ridge += spire * step(0.3, fbm(vec2(az * 1.3, 4.0)));
+  // distant ranges fading into the air, with a citadel of thin spires on the nearest
+  if (h < 0.3) {
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float ridge = (fbm3(vec2(az * (1.8 + fi * 1.1) + fi * 9.0, fi * 2.0)) - 0.32) * (0.3 - fi * 0.07) - 0.02;
+      if (i == 2) {
+        float cx = floor(az * 60.0);
+        float spire = step(0.86, hash(vec2(cx, 5.0))) * (0.03 + 0.07 * hash(vec2(cx, 8.0))) * (1.0 - abs(fract(az * 60.0) - 0.5) * 2.0);
+        ridge += spire * step(0.3, noise(vec2(az * 1.3, 4.0)));
+      }
+      float cov = 1.0 - smoothstep(ridge - 0.003, ridge + 0.003, h + (strokeN - 0.5) * 0.004);
+      vec3 rock = mix(k[1] * 0.85, k[2], fi / 2.0);
+      rock = mix(rock, rock * 1.25 + k[3] * 0.1, smoothstep(ridge - 0.05, ridge, h));
+      col = mix(col, mix(rock, col, 0.55 - fi * 0.22), cov);
     }
-    float cov = 1.0 - smoothstep(ridge - 0.003, ridge + 0.003, h + (strokeN - 0.5) * 0.004);
-    vec3 rock = mix(k[1] * 0.85, k[2], fi / 2.0);
-    rock = mix(rock, rock * 1.25 + k[3] * 0.1, smoothstep(ridge - 0.05, ridge, h));    // lit crests
-    col = mix(col, mix(rock, col, 0.55 - fi * 0.22), cov);
   }
   col = mix(col, k[2] * 0.8, 1.0 - smoothstep(-0.4, -0.03, h));
-  // visible canvas strokes over everything
   col *= 0.95 + 0.1 * strokeN;
   return col;
 }
