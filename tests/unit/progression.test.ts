@@ -28,6 +28,7 @@ const fakeSaveSystem = (data: SaveData) =>
         collectibles: [],
         objectives: [],
         completions: 0,
+        layout: 1,
       }),
     flush() {},
     save() {},
@@ -195,7 +196,15 @@ describe('level unlocks', () => {
     expect(isUnlocked(s, 'training')).toBe(true);
     expect(isUnlocked(s, 'awakening')).toBe(true);
     expect(isUnlocked(s, 'verticality')).toBe(false);
-    s.levels.awakening = { best: 50, splits: [], medal: 2, collectibles: [], objectives: [], completions: 1 };
+    s.levels.awakening = {
+      best: 50,
+      splits: [],
+      medal: 2,
+      collectibles: [],
+      objectives: [],
+      completions: 1,
+      layout: 1,
+    };
     expect(isUnlocked(s, 'verticality')).toBe(true);
     expect(isUnlocked(s, 'momentum')).toBe(false);
     s.settings.unlockAll = true;
@@ -211,6 +220,7 @@ describe('course achievements (Phase F)', () => {
     collectibles: [],
     objectives: [],
     completions: 1,
+    layout: 1,
   });
   test('the shard total counts every level, so "Every Last One" means every last one', () => {
     expect(SHARD_COUNT).toBe(levels.length * 3);

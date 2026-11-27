@@ -322,6 +322,11 @@ export interface LevelMeta {
   killY: number;
   /** Optional world box [min, max]: leaving it is a fall (gravity can point anywhere). */
   bounds?: [Vec3Tuple, Vec3Tuple];
+  /**
+   * Layout version. Bump it when a course is rebuilt so that best times, medals and ghosts set on
+   * the old layout are cleared (collectibles, objectives and achievements are kept).
+   */
+  layout?: number;
   medals: MedalTimes;
   objectives: ObjectiveDef[];
   seed: number;

@@ -45,7 +45,7 @@ import { breakableCentre } from '../gameplay/breakables';
 import { Bot } from '../gameplay/Bot';
 import { Runner } from '../character/Runner';
 import { moveStateNames } from '../movement/types';
-import { loadGhost, saveGhost, SaveSystem } from '../save/SaveSystem';
+import { applyLayouts, deleteGhost, ghostKey, loadGhost, saveGhost, SaveSystem } from '../save/SaveSystem';
 import { motionProfile, type MotionProfile, type Settings } from '../settings/settings';
 import { ui } from './store';
 
@@ -156,6 +156,11 @@ export class Game {
     this.renderer.scene.add(this.stickers.mesh, this.sparks.points, this.streaks.mesh);
     this.ghost = new GhostPlayer(0xffffff);
     this.renderer.scene.add(this.ghost.group);
+    // rebuilt courses: best times, medals and ghosts set on an old layout no longer apply
+    this.save.layouts = Object.fromEntries(levels.map((l) => [l.meta.id, l.meta.layout ?? 1]));
+    const was = Object.fromEntries(Object.entries(this.save.data.levels).map(([id, r]) => [id, r.layout]));
+    for (const id of applyLayouts(this.save.data, this.save.layouts)) void deleteGhost(ghostKey(id, was[id]));
+    this.save.save();
     this.body.setVisible(false);
 
     this.input.onLockChange = (locked) => this.onLockChange(locked);
@@ -589,7 +594,7 @@ export class Game {
       await this.renderer.warm();
       if (token !== this.loadToken) return;
       set({ loadProgress: 0.9, loadLabel: 'Loading ghost' });
-      this.ghost.load(await loadGhost(id));
+      this.ghost.load(await loadGhost(ghostKey(id, entry.meta.layout)));
       if (token !== this.loadToken) return;
       this.recorder.reset();
       this.mode = 'ready';
@@ -1269,7 +1274,7 @@ export class Game {
       // the new best becomes the ghost straight away, and is stored for next time
       const run = this.recorder.toArray();
       this.ghost.load(run);
-      void saveGhost(sim.meta.id, run);
+      void saveGhost(ghostKey(sim.meta.id, sim.meta.layout), run);
     }
     this.mode = 'results';
     this.input.enabled = false;

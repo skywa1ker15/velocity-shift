@@ -2,7 +2,10 @@
  * LEVEL 3 — MOMENTUM
  * Night in a chrome canyon. Everything here rewards carrying speed: chutes, boost pads,
  * high-speed gaps, a laser run, a splitting chute that drops one lane, blinking platforms,
- * a crusher hall and a long final line. A narrow high rail skips a quarter of the course.
+ * a crusher hall, then the canyon itself starts to move (the first Dynamic World course): a bridge
+ * that swings into place ahead of you, a chute whose gravity tilts forward to pull you along, and
+ * a channel that rolls a quarter turn while you sprint through it. Then the long final line.
+ * A narrow high rail skips a quarter of the course.
  */
 import { LevelBuilder } from '../LevelBuilder';
 import type { LevelData } from '../types';
@@ -154,28 +157,99 @@ export function build(): LevelData {
   );
   b.checkpoint(0, G, 374);
 
-  // ===== G. The long line (finale) ===========================================================================
-  const H = G - 10;
-  b.ramp([0, G, 381], [0, H, 411], 9);
-  b.plat(0, H, 419, 9, 16); // 411..427
-  b.entity({ type: 'boost', p: [0, H + 0.6, 416], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
-  b.checkpoint(0, H, 413.5, Math.PI, [9, 6, 2]);
-  b.wall(-3.0, H - 2, 439.5, 0.8, 10, 39); // right wall 420..459 (starts on the deck)
-  b.plat(0, H, 470, 12, 22); // 459..481
-  b.checkpoint(0, H, 467);
-  // sinking pads: each one drops shortly after you touch it
-  for (const z of [487.5, 496.5, 505.5])
-    b.entity({ type: 'collapse', p: [0, H - 0.4, z], s: [5, 0.8, 5], delay: 0.8, mat: 'alt' });
-  b.collectible('m3', 0, H + 3.6, 496.5);
-  b.plat(0, H, 523, 10, 22); // 512..534
-  b.checkpoint(0, H, 515);
-  b.entity({ type: 'boost', p: [0, H + 0.6, 518], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
-  b.entity({ type: 'jumppad', p: [0, H + 0.6, 529], s: [6, 1.2, 4], v: [0, 16, 3] });
-  b.ring(0, H + 5.5, 539, 6.5, 0.4, [0, 0, 0], [0, 0, 0.5], 'accent', 1);
-  b.plat(0, H + 2, 559, 16, 28); // 545..573
-  b.finish(0, H + 2, 563, 12);
+  // ===== G. The canyon moves (first Dynamic World act) ======================================
+  // One new idea at a time, each in the open with room to watch it: (1) physical rotation that
+  // builds the road, (2) gravity that tilts and helps, (3) both at once — a full 90° roll.
+  const K = G - 12; // after the gravity chute
+  // (1) the turntable bridge: an 18 m span lying across the gap swings round to bridge it. It is
+  // triggered at the crusher exit and is in place 2.15 s later, before even a dashing sprinter
+  // covers the 38 m to the gap.
+  b.plat(0, G, 398, 9, 34); // 381..415
+  b.trigger([0, G + 1.5, 377], [9, 6, 3], 'turntable');
+  b.entity({
+    type: 'structure',
+    id: 'turntable',
+    on: 'turntable',
+    p: [0, G, 424],
+    warn: 0.75,
+    steps: [{ t: 1.4, rot: [0, 1, 0, 90] }],
+    parts: [
+      { p: [0, -0.5, 0], s: [18, 1, 6] }, // across the gap → along it (z 415..433)
+      { p: [0, 0.03, 0], s: [17, 0.06, 0.25], mat: 'accent' },
+      { p: [0, -1.4, 0], s: [3, 0.8, 3], mat: 'dark' },
+    ],
+  });
+  b.plat(0, G - 2.2, 424, 2.4, 2.4, { h: 40, mat: 'dark', dress: false }); // the turntable's pillar
+  b.prompt([0, G + 1.5, 386], [9, 4, 8], 'forward', 'The canyon is building the road for you. Keep running');
+  b.plat(0, G, 441, 9, 16); // 433..449
+  b.checkpoint(0, G, 437);
+  // (2) the gravity chute: gravity leans 17° forward over the ramp, so a slide picks up speed
+  // fast. The glowing arrows show the pull; the camera leans with it.
+  b.ramp([0, G, 449], [0, K, 489], 9);
+  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0.3], p: [0, G - 5, 469], s: [10, 18, 40] });
+  b.prompt([0, G + 1.5, 444], [9, 4, 8], 'slide', 'Gravity leans forward here. Slide, and let it pull you');
+  b.plat(0, K, 503, 9, 28); // 489..517
+  b.checkpoint(0, K, 500);
+  // (3) the Roll: a 64 m chrome channel rolls a quarter turn while you sprint through it. Its own
+  // gravity keeps you on its floor; your speed is untouched; the view turns with the world. It turns
+  // in 1.6 s from just inside the entrance, so the whole quarter turn happens inside the channel at
+  // any pace from a run (11 m/s) to the chute's 26 m/s.
+  const ribs = [];
+  for (let z = -30; z <= 30; z += 6)
+    ribs.push({
+      p: [0, 4.3, z] as [number, number, number],
+      s: [8, 0.6, 1] as [number, number, number],
+      mat: 'accent' as const,
+    });
+  b.entity({
+    type: 'structure',
+    id: 'roll',
+    on: 'roll',
+    p: [0, K + 3, 549],
+    warn: 0.75,
+    steps: [{ t: 1.6, rot: [0, 0, 1, -90] }],
+    parts: [
+      { p: [0, -3.5, 0], s: [6, 1, 64] }, // floor, z 517..581
+      { p: [3.5, 0.5, 0], s: [1, 9, 64], mat: 'dark' },
+      { p: [-3.5, 0.5, 0], s: [1, 9, 64], mat: 'dark' },
+      { p: [0, -2.97, 0], s: [0.2, 0.06, 62], mat: 'accent' },
+      ...ribs,
+    ],
+  });
+  b.entity({ type: 'field', mode: 'structure', link: 'roll', p: [0, 0, 0], s: [6, 7, 64] });
+  b.trigger([0, K + 1.5, 513], [9, 4, 3], 'roll');
   b.prompt(
-    [0, G + 1.5, 376],
+    [0, K + 1.5, 505],
+    [9, 4, 8],
+    'forward',
+    'The channel is about to roll. Do not slow down: its floor stays your floor',
+  );
+  b.plat(0, K, 595, 8, 28); // 581..609, meets the channel's end
+  b.checkpoint(0, K, 583);
+
+  // ===== H. The long line (finale) ===========================================================================
+  const Z0 = 609;
+  const H = K - 10;
+  b.ramp([0, K, Z0], [0, H, Z0 + 30], 9);
+  b.plat(0, H, Z0 + 38, 9, 16);
+  b.entity({ type: 'boost', p: [0, H + 0.6, Z0 + 35], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
+  b.checkpoint(0, H, Z0 + 32.5, Math.PI, [9, 6, 2]);
+  b.wall(-3.0, H - 2, Z0 + 58.5, 0.8, 10, 39); // right wall (starts on the deck)
+  b.plat(0, H, Z0 + 89, 12, 22);
+  b.checkpoint(0, H, Z0 + 86);
+  // sinking pads: each one drops shortly after you touch it
+  for (const dz of [106.5, 115.5, 124.5])
+    b.entity({ type: 'collapse', p: [0, H - 0.4, Z0 + dz], s: [5, 0.8, 5], delay: 0.8, mat: 'alt' });
+  b.collectible('m3', 0, H + 3.6, Z0 + 115.5);
+  b.plat(0, H, Z0 + 142, 10, 22);
+  b.checkpoint(0, H, Z0 + 134);
+  b.entity({ type: 'boost', p: [0, H + 0.6, Z0 + 137], s: [6, 1.2, 4], dir: [0, 0, 1], add: 5, min: 21 });
+  b.entity({ type: 'jumppad', p: [0, H + 0.6, Z0 + 148], s: [6, 1.2, 4], v: [0, 16, 3] });
+  b.ring(0, H + 5.5, Z0 + 158, 6.5, 0.4, [0, 0, 0], [0, 0, 0.5], 'accent', 1);
+  b.plat(0, H + 2, Z0 + 178, 16, 28);
+  b.finish(0, H + 2, Z0 + 182, 12);
+  b.prompt(
+    [0, K + 1.5, 604],
     [9, 4, 8],
     'slide',
     'Last line: chute, wall, sinking pads, launcher. Do not stop for anything',
@@ -210,22 +284,32 @@ export function build(): LevelData {
     [0, G, 318],
     [0, G, 323, 'g'],
     [0, G, 376],
-    [0, G, 381.5, 's'],
-    [0, H, 413],
-    [0, H, 414.5, 'u'],
-    [-2.15, H, 419.5],
-    [-2.2, H, 426.3, 'j', 0.8],
-    [-2.2, H + 1, 445],
-    [-2.2, H + 1, 452, 'wj'],
-    [0, H, 470],
-    [0, H, 480.4, 'j', 0.6],
-    [0, H, 489.4, 'j', 0.6],
-    [0, H, 498.4, 'j', 0.6],
-    [0, H, 507.4, 'j', 0.6],
-    [0, H, 518],
-    [0, H, 529],
-    [0, H + 3, 538, 'j', 2.5],
-    [0, H + 2, 563],
+    [0, G, 400],
+    [0, G, 430],
+    [0, G, 448],
+    [0, G, 449.6, 's'],
+    [0, K, 492, 'u'],
+    [0, K, 512],
+    // inside the channel: points on its rotation axis do not move as it turns
+    [0, K + 3, 525, undefined, 3],
+    [0, K + 3, 578, undefined, 3],
+    [0, K, 588, undefined, 2],
+    [0, K, 609.5, 's'],
+    [0, H, 641],
+    [0, H, 642.5, 'u'],
+    [-2.15, H, 647.5],
+    [-2.2, H, 654.3, 'j', 0.8],
+    [-2.2, H + 1, 673],
+    [-2.2, H + 1, 680, 'wj'],
+    [0, H, 698],
+    [0, H, 708.4, 'j', 0.6],
+    [0, H, 717.4, 'j', 0.6],
+    [0, H, 726.4, 'j', 0.6],
+    [0, H, 735.4, 'j', 0.6],
+    [0, H, 746],
+    [0, H, 757],
+    [0, H + 3, 766, 'j', 2.5],
+    [0, H + 2, 791],
   );
   // ----- destructibles (Phase B): neon pylons, energy barriers and cargo beside the high-speed
   // lines (none in the crusher hall)
@@ -235,15 +319,17 @@ export function build(): LevelData {
   b.breakable('energy', -3.2, -20.5, 248.7, { yaw: 0.13, scale: 0.7 });
   b.breakable('pylon', 1.45, -20.5, 266);
   b.breakable('crate', 3.6, -10.5, 115.5);
-  b.breakable('pylon', -0.7, -30.5, 425.9);
-  b.breakable('energy', 1.6, -30.5, 473.1, { yaw: -0.11, scale: 0.7 });
-  b.breakable('pylon', -1.55, -30.5, 522.8);
+  b.breakable('pylon', -0.7, H, 653.9);
+  b.breakable('energy', 1.6, H, 701.1, { yaw: -0.11, scale: 0.7 });
+  b.breakable('pylon', -1.55, H, 750.8);
+  b.breakable('energy', 3.2, G, 446, { yaw: 0.1, scale: 0.7 });
+  b.breakable('pylon', -3.0, K, 598);
   return b.data;
 }
 
 function scenery(b: LevelBuilder) {
   // canyon walls: huge chrome slabs either side, lit by flowing seams
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 22; i++) {
     const z = -30 + i * 44;
     const lean = (i % 3) * 0.04;
     b.monolith(-38 - (i % 4) * 6, -150, z, 20, 300 + (i % 3) * 40, 40, 'dark', [0, 0, lean]);
@@ -253,13 +339,13 @@ function scenery(b: LevelBuilder) {
   }
   // data rivers: long glowing ribbons far below
   for (let i = 0; i < 6; i++)
-    b.decor('box', [-18 + i * 7.2, -70 - (i % 2) * 6, 300], [0.8, 0.3, 800], i % 2 ? 'accent' : 'glass', {
+    b.decor('box', [-18 + i * 7.2, -80 - (i % 2) * 6, 400], [0.8, 0.3, 1000], i % 2 ? 'accent' : 'glass', {
       glow: 0.8,
     });
   b.ring(0, -6, 60, 16, 0.5, [0, 0, 0], [0, 0, 0.2], 'accent', 1);
   b.ring(0, -18, 420, 20, 0.6, [0, 0, 0], [0, 0, -0.25], 'accent', 1);
   b.ring(0, -10, 250, 44, 1.2, [1.2, 0, 0.3], [0, 0, 0.04], 'alt', 0.2);
-  for (let i = 0; i < 46; i++) {
+  for (let i = 0; i < 66; i++) {
     const side = i % 2 ? 1 : -1;
     b.shard(
       side * (9 + ((i * 7) % 14)),
@@ -270,5 +356,6 @@ function scenery(b: LevelBuilder) {
       0.5,
     );
   }
-  b.monolith(0, -160, 760, 120, 520, 40, 'dark');
+  b.ring(0, -34, 549, 18, 0.6, [0, 0, 0], [0, 0, 0.3], 'accent', 1);
+  b.monolith(0, -170, 980, 120, 520, 40, 'dark');
 }

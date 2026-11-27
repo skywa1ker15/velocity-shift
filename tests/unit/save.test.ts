@@ -6,7 +6,15 @@ import {
   sanitizeBindings,
   usesCtrl,
 } from '../../src/input/bindings';
-import { defaultSave, migrate, sanitizeSave, SAVE_VERSION } from '../../src/save/SaveSystem';
+import {
+  applyLayouts,
+  defaultSave,
+  emptyRecord,
+  ghostKey,
+  migrate,
+  sanitizeSave,
+  SAVE_VERSION,
+} from '../../src/save/SaveSystem';
 import { defaultSettings, motionProfile, sanitizeSettings } from '../../src/settings/settings';
 
 describe('settings', () => {
@@ -161,6 +169,65 @@ describe('save data', () => {
       collectibles: ['c'],
       objectives: [],
       completions: 0,
+      layout: 1,
     });
+  });
+});
+
+describe('rebuilt courses (layout versions)', () => {
+  const played = () => {
+    const s = defaultSave();
+    s.levels.momentum = {
+      ...emptyRecord(),
+      best: 45.2,
+      splits: [10, 20],
+      medal: 3,
+      collectibles: ['m1', 'm2'],
+      objectives: ['mo-clean'],
+      completions: 7,
+    };
+    s.levels.awakening = { ...emptyRecord(), best: 40, medal: 3, completions: 2 };
+    s.achievements['momentum-done'] = 123;
+    return s;
+  };
+
+  test('records from before layouts existed load as layout 1', () => {
+    const raw = played() as any;
+    delete raw.levels.momentum.layout;
+    expect(sanitizeSave(raw).levels.momentum.layout).toBe(1);
+  });
+
+  test('a rebuilt course loses its best time, splits and medal; the rest is kept', () => {
+    const s = played();
+    const reset = applyLayouts(s, { momentum: 2, awakening: 1 });
+    expect(reset).toEqual(['momentum']);
+    const r = s.levels.momentum;
+    expect(r.best).toBeNull();
+    expect(r.splits).toEqual([]);
+    expect(r.medal).toBe(0);
+    expect(r.layout).toBe(2);
+    expect(r.collectibles).toEqual(['m1', 'm2']);
+    expect(r.objectives).toEqual(['mo-clean']);
+    expect(r.completions).toBe(7);
+    expect(s.achievements['momentum-done']).toBe(123);
+    // untouched courses keep everything
+    expect(s.levels.awakening.best).toBe(40);
+    expect(s.levels.awakening.medal).toBe(3);
+  });
+
+  test('it happens once: a best set on the new layout survives the next start-up', () => {
+    const s = played();
+    applyLayouts(s, { momentum: 2 });
+    s.levels.momentum.best = 58.1;
+    s.levels.momentum.medal = 3;
+    const again = sanitizeSave(JSON.parse(JSON.stringify(s)));
+    expect(applyLayouts(again, { momentum: 2 })).toEqual([]);
+    expect(again.levels.momentum.best).toBe(58.1);
+  });
+
+  test('ghosts are keyed per layout (unchanged courses keep their old key)', () => {
+    expect(ghostKey('awakening')).toBe('awakening');
+    expect(ghostKey('awakening', 1)).toBe('awakening');
+    expect(ghostKey('momentum', 2)).toBe('momentum@2');
   });
 });

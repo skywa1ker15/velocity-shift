@@ -268,3 +268,46 @@ test("Phase G: holding W through Shift Point's wall run (real keyboard, real-tim
   s = await pl();
   expect(s.uy).toBeGreaterThan(0.99);
 });
+
+test("Level 3: holding W through Momentum's Roll (real keyboard, real-time) rides the quarter turn and comes out upright", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'momentum');
+  // respawn at the checkpoint on the deck before the channel
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 500) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        z: p.pos.z,
+        ux: u.x,
+        uy: u.y,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let rolled = false;
+  let s = await pl();
+  for (let i = 0; i < 3000 && s.z < 592 && s.deaths === 0; i++) {
+    s = await pl();
+    // running on the channel's old wall: gravity turned a full quarter
+    if (s.grounded && s.ux > 0.99 && s.z > 520 && s.z < 581) rolled = true;
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(rolled).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(592);
+  await page.waitForTimeout(500);
+  s = await pl();
+  expect(s.uy).toBeGreaterThan(0.99);
+});

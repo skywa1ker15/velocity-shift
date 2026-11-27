@@ -19,6 +19,8 @@ export interface LevelRecord {
   collectibles: string[];
   objectives: string[];
   completions: number;
+  /** Course layout version this record was set on (see LevelMeta.layout). */
+  layout: number;
 }
 
 export interface Totals {
@@ -51,14 +53,39 @@ export interface SaveData {
   seenPrompts: string[];
 }
 
-export const emptyRecord = (): LevelRecord => ({
+export const emptyRecord = (layout = 1): LevelRecord => ({
   best: null,
   splits: [],
   medal: 0,
   collectibles: [],
   objectives: [],
   completions: 0,
+  layout,
 });
+
+/**
+ * A course was rebuilt: records set on an older layout lose their best time, splits and medal
+ * (they were set on a different course). Collectibles, objectives and completions are kept, as
+ * are achievements. Returns the ids that were reset. Pure: the caller saves and clears ghosts.
+ */
+export function applyLayouts(data: SaveData, layouts: Record<string, number>): string[] {
+  const reset: string[] = [];
+  for (const [id, layout] of Object.entries(layouts)) {
+    const r = data.levels[id];
+    if (!r || r.layout === layout) continue;
+    if (r.layout < layout && (r.best !== null || r.medal > 0 || r.splits.length)) reset.push(id);
+    if (r.layout < layout) {
+      r.best = null;
+      r.splits = [];
+      r.medal = 0;
+    }
+    r.layout = layout;
+  }
+  return reset;
+}
+
+/** Ghosts are stored per layout, so a rebuilt course never replays a run from its old shape. */
+export const ghostKey = (levelId: string, layout = 1) => (layout > 1 ? `${levelId}@${layout}` : levelId);
 
 export const defaultSave = (): SaveData => ({
   version: SAVE_VERSION,
@@ -114,6 +141,7 @@ export function sanitizeSave(raw: unknown): SaveData {
         collectibles: strArr(r.collectibles),
         objectives: strArr(r.objectives),
         completions: Math.max(0, Math.floor(numOr(r.completions, 0))),
+        layout: Math.max(1, Math.floor(numOr(r.layout, 1))),
       };
     }
   }
@@ -188,8 +216,11 @@ export class SaveSystem {
     }
   }
 
+  /** Current layout version of each course (set by the game at start-up). */
+  layouts: Record<string, number> = {};
+
   record(levelId: string): LevelRecord {
-    return (this.data.levels[levelId] ??= emptyRecord());
+    return (this.data.levels[levelId] ??= emptyRecord(this.layouts[levelId] ?? 1));
   }
 
   exportJson(): string {
@@ -260,6 +291,16 @@ export async function loadGhost(levelId: string): Promise<Float32Array | null> {
     return buf ? new Float32Array(buf) : null;
   } catch {
     return null;
+  }
+}
+
+export async function deleteGhost(key: string): Promise<void> {
+  try {
+    const db = await openDb();
+    db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key);
+    db.close();
+  } catch {
+    /* ignore */
   }
 }
 

@@ -79,12 +79,13 @@ export const levels: LevelEntry[] = [
       index: 3,
       name: 'MOMENTUM',
       subtitle: 'Level 3',
-      description: 'Night in the chrome canyon. Never slow down — the path will not wait for you.',
+      description: 'Night in the chrome canyon. Never slow down — and watch the canyon start to move.',
       env: 'momentum',
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
+      layout: 2, // rebuilt with the first Dynamic World act (bests reset)
       killY: -90,
-      medals: { bronze: 90, silver: 63, gold: 47.5, platinum: 40 },
+      medals: { bronze: 117, silver: 82.5, gold: 62, platinum: 52.5 },
       objectives: [
         { id: 'mo-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'mo-dash', kind: 'maxDashes', value: 6, label: 'Finish using 6 dashes or fewer' },
