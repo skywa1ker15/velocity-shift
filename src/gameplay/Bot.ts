@@ -7,6 +7,7 @@
  */
 import { angleDelta } from '../core/math';
 import { emptyInput, MoveState, type InputFrame, type RayHit } from '../movement/types';
+import { Mover } from '../entities/Entities';
 import type { Simulation } from './Simulation';
 
 export class Bot {
@@ -18,6 +19,8 @@ export class Bot {
   private waitingForGround = false;
   private deferred = '';
   private waitAhead = 0;
+  /** 'g': hold here until the next telegraphing crusher ahead has just lifted (what a player would do). */
+  private gating = false;
   private deaths = 0;
   private hit = {} as RayHit;
   stuckTicks = 0;
@@ -45,6 +48,7 @@ export class Bot {
     this.wait = 0;
     this.waitingForGround = false;
     this.deferred = '';
+    this.gating = false;
   }
 
   step(): InputFrame {
@@ -74,6 +78,19 @@ export class Bot {
     inp.moveX = 0;
     inp.sprint = true;
     inp.jumpHeld = true;
+
+    if (this.gating) {
+      let next: Mover | undefined;
+      for (const e of sim.entities)
+        if (e instanceof Mover && e.def.telegraph && e.p.z > pl.pos.z && (!next || e.p.z < next.p.z))
+          next = e;
+      const rest = next ? (next.def.rest ?? next.def.pause ?? 0) : 0;
+      if (next && !(next.atRest && next.restLeft > rest - 0.1)) {
+        inp.moveZ = 0;
+        return inp;
+      }
+      this.gating = false;
+    }
 
     if (this.waitingForGround) {
       const n = pts[Math.min(pts.length - 1, this.index + this.waitAhead)];
@@ -167,6 +184,9 @@ export class Bot {
           break;
         case 'u':
           this.sliding = false;
+          break;
+        case 'g':
+          this.gating = true;
           break;
         case 'wj':
           if (pl.state === MoveState.WallRun) inp.jumpPressed = true;

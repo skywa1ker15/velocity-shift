@@ -62,6 +62,13 @@ export interface MoverDef extends EntityBase {
   lethal?: boolean;
   /** No collision, only the lethal volume (energy sweeps). */
   ghost?: boolean;
+  /** Pingpong dwell at path[0] in seconds. Defaults to `pause`; when set, `pause` is the far-end dwell only. */
+  rest?: number;
+  /**
+   * Lethal movers only: path[0] is the safe resting spot (a raised crusher). The mover glows and
+   * signals a warning for TELEGRAPH_TIME before it leaves it, instead of glowing all the time.
+   */
+  telegraph?: boolean;
 }
 
 /** A group of boxes rotating around an axis through `p`. */

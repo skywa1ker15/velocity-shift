@@ -104,28 +104,46 @@ export function build(): LevelData {
   );
 
   // ===== F. Crusher hall ====================================================================================
-  for (const [z, phase] of [
-    [334, 0],
-    [348, 0.9],
-    [362, 1.8],
-  ]) {
+  // Three crushers on a "green wave": each rests up for 1.5 s (glowing and rattling for the last
+  // 0.75 s), slams down in 0.37 s and stays down for 0.7 s. Their phases are offset so that a
+  // player who holds a sprint (about 10 m/s) meets every gap open; slower or faster still works
+  // on a narrower timing. Fairness is checked by tests/sim/hazards.test.ts.
+  const crusherRest = 1.5,
+    crusherDown = 0.7,
+    crusherDrop = 3.7,
+    crusherSpeed = 10,
+    crusherGap = 14,
+    wavePace = 10;
+  const crusherCycle = (2 * crusherDrop) / crusherSpeed + crusherDown + crusherRest;
+  for (let i = 0; i < 3; i++) {
+    const z = 334 + i * crusherGap;
+    const phase = ((((-i * crusherGap) / wavePace) % crusherCycle) + crusherCycle) % crusherCycle;
     b.entity({
       type: 'mover',
       s: [9, 3, 4],
       path: [
-        [0, G + 5.2, z],
+        [0, G + 1.5 + crusherDrop, z],
         [0, G + 1.5, z],
       ],
-      speed: 10,
-      pause: 0.95,
+      speed: crusherSpeed,
+      pause: crusherDown,
+      rest: crusherRest,
       phase,
       lethal: true,
+      telegraph: true,
     });
     b.decor('box', [-5.2, G + 4, z], [1, 8, 5], 'dark');
     b.decor('box', [5.2, G + 4, z], [1, 8, 5], 'dark');
     b.decor('box', [0, G + 8.4, z], [11.4, 0.8, 5], 'dark');
+    // glowing floor lines mark where it lands
+    for (const dz of [-2.1, 2.1]) b.strip([0, G + 0.02, z + dz], [8.4, 0.04, 0.14], 0.9);
   }
-  b.prompt([0, G + 1.5, 322], [9, 4, 8], 'forward', 'Crushers slam on a rhythm — read it, then run the gaps');
+  b.prompt(
+    [0, G + 1.5, 322],
+    [9, 4, 8],
+    'forward',
+    'Crushers glow and rattle before they drop. Go as one lifts and keep sprinting: the gaps line up',
+  );
   b.checkpoint(0, G, 374);
 
   // ===== G. The long line (finale) ===========================================================================
@@ -182,6 +200,7 @@ export function build(): LevelData {
     [0, G, 299.3, 'j', 0.6],
     [0, G, 308.3, 'j', 0.6],
     [0, G, 318],
+    [0, G, 323, 'g'],
     [0, G, 376],
     [0, G, 381.5, 's'],
     [0, H, 413],

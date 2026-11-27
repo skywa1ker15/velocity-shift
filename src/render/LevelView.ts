@@ -339,6 +339,11 @@ export class LevelView {
       if (alpha < 1) o.quaternion.slerpQuaternions(_q, o.quaternion, alpha);
       if (v.warn) v.warn.value = e.warn;
       let visible = e.visible;
+      if (e instanceof Mover && e.def.telegraph && e.atRest && e.warn > 0) {
+        // a crusher about to drop rattles in its housing as it glows
+        o.position.x += Math.sin(time * 67) * 0.03 * e.warn;
+        o.position.y += Math.cos(time * 59) * 0.025 * e.warn;
+      }
       if (e instanceof Collapse) {
         if (e.phase === 1) {
           // telegraph shake

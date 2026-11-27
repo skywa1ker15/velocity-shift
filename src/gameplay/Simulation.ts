@@ -73,7 +73,7 @@ export interface SimEvents {
   collect: { id: string; index: number };
   shortcut: { id: string; hidden: boolean };
   prompt: { index: number };
-  signal: { kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph'; entity: Entity };
+  signal: { kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn'; entity: Entity };
   event: { name: string };
 }
 

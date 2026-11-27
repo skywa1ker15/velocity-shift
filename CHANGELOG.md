@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — Level 3 (Momentum) fairness pass
+
+### Fixed
+- **Crusher hall was timed for one narrow pace.** The three crushers were phased for the test bot's
+  8.7 m/s line, so a player holding a sprint got through on about 2% of arrival times at 11 m/s and
+  0% at 12 m/s. They now run as a "green wave" for a ~10 m/s sprint: 1.5 s up, 0.37 s slam (same
+  speed as before), 0.7 s down. Measured pass rate at 9-12 m/s is now 38-51%, with 1.1-1.5 s safe
+  windows; 8 m/s still gets through 24% of the time.
+- **Crushers gave no warning.** Lethal movers glowed all the time. Telegraphing movers now stay dark
+  at rest, then glow, rattle and tick (positional sound) for 0.75 s before they drop.
+- Lethal mover hit box trimmed from 0.6 to 0.5 of the player's radius / half height (only Momentum
+  has lethal movers), so a graze at speed is not a death.
+
+### Added
+- `rest` (dwell at `path[0]`) and `telegraph` fields on movers; glowing floor lines where crushers land;
+  a clearer crusher prompt.
+- `tests/sim/hazards.test.ts`: crusher pass rate and window per pace, telegraph lead time for every
+  level, and a laser-run test where a sprinting player acts up to 0.15 s early or late.
+- Bot action `g`: wait until the next crusher has just lifted, then go.
+
 ## 1.0.0 — first release
 
 ### Phase 0 — Discovery

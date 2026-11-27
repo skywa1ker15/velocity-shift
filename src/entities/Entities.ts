@@ -34,13 +34,15 @@ import type {
 } from '../levels/types';
 
 export const TELEGRAPH_TIME = 0.75;
+/** Hit-box growth for lethal movers, as a fraction of the player's radius / half height. */
+export const LETHAL_MOVER_GROW = 0.5;
 
 export interface EntityCtx {
   player: MovementController;
   time: number;
   dt: number;
   kill(reason: string): void;
-  signal(kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph', e: Entity): void;
+  signal(kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn', e: Entity): void;
 }
 
 const tmp = v3();
@@ -121,6 +123,11 @@ export class Mover extends Entity {
   private lens: number[] = [];
   private total = 0;
   moving = false;
+  /** Seconds left in the dwell at path[0] (pingpong only), or -1 when not resting there. */
+  restLeft = -1;
+  get atRest() {
+    return this.restLeft >= 0;
+  }
 
   constructor(def: MoverDef) {
     super(def);
@@ -159,16 +166,20 @@ export class Mover extends Entity {
     const d = this.def;
     const T = Math.max(0.001, this.total / d.speed);
     const pause = d.pause ?? 0;
+    const rest = d.rest ?? pause;
     const mode = d.mode ?? 'pingpong';
+    this.restLeft = -1;
     if (!this.active) return 0;
     const t = time - this.startTime + (d.phase ?? 0);
     if (mode === 'once') return smooth(Math.min(1, Math.max(0, t / T)));
     if (mode === 'loop') return (((t % T) + T) % T) / T;
-    const cycle = 2 * (T + pause);
+    // out (T) → dwell at the far end (pause) → back (T) → dwell at path[0] (rest)
+    const cycle = 2 * T + pause + rest;
     const u = ((t % cycle) + cycle) % cycle;
     if (u < T) return smooth(u / T);
     if (u < T + pause) return 1;
     if (u < 2 * T + pause) return smooth(1 - (u - T - pause) / T);
+    this.restLeft = cycle - u;
     return 0;
   }
 
@@ -194,8 +205,18 @@ export class Mover extends Entity {
     this.moving = this.p.x !== this.prevP.x || this.p.y !== this.prevP.y || this.p.z !== this.prevP.z;
     if (this.body) phys.moveBody(this.body, this.p, this.q);
     if (this.def.lethal) {
-      this.warn = 1;
-      if (playerTouchesBox(ctx.player, this.p, this.h, undefined, 0.6)) ctx.kill('crushed');
+      if (this.def.telegraph) {
+        // dark while safely at rest, a rising glow for TELEGRAPH_TIME before it moves, lit while out
+        const before = this.warn;
+        this.warn = !this.atRest
+          ? 1
+          : this.restLeft < TELEGRAPH_TIME
+            ? 1 - this.restLeft / TELEGRAPH_TIME
+            : 0;
+        if (before === 0 && this.warn > 0 && this.atRest) ctx.signal('hazardWarn', this);
+      } else this.warn = 1;
+      // slightly smaller than the visible box: a graze at speed is not a death
+      if (playerTouchesBox(ctx.player, this.p, this.h, undefined, LETHAL_MOVER_GROW)) ctx.kill('crushed');
     } else if (this.def.mode === 'once') {
       this.warn = this.moving ? 1 : Math.max(0, this.warn - ctx.dt * 2);
     }

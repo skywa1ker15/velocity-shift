@@ -52,7 +52,7 @@ return b.data;
 ```
 
 Entity types: `mover` (moving/rising platforms, doors with `mode: 'once'` + `on`, shutters,
-crushers with `lethal`, sweeping beams with `lethal` + `ghost`), `rotator`, `collapse`, `blink`,
+crushers with `lethal` + `telegraph` (rest at `path[0]` for `rest` s, warn before dropping), sweeping beams with `lethal` + `ghost`), `rotator`, `collapse`, `blink`,
 `hazard`, `boost`, `jumppad`, `gravity`. All timing runs on the level clock, so it is identical on
 every run.
 

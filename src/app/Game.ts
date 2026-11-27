@@ -574,6 +574,7 @@ export class Game {
       if (kind === 'boost') audio.boost();
       else if (kind === 'jumppad') audio.jumpPad();
       else if (kind === 'telegraph' && d < 40) audio.warn();
+      else if (kind === 'hazardWarn' && d < 24) audio.hazardWarn(1 - d / 24);
       else if (kind === 'collapse' && d < 40) {
         audio.collapse();
         this.rig.shake(Math.max(0, 0.5 - d * 0.02));

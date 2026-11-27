@@ -250,6 +250,12 @@ export class AudioEngine {
   warn() {
     for (let i = 0; i < 3; i++) this.tone('sfx', 'square', 520, 500, 0.07, 0.09, i * 0.14);
   }
+  /** A crusher is about to drop: a short mechanical double tick, quieter with distance (0..1). */
+  hazardWarn(near: number) {
+    const g = 0.03 + 0.06 * Math.max(0, Math.min(1, near));
+    this.tone('sfx', 'square', 300, 240, 0.05, g);
+    this.tone('sfx', 'square', 300, 240, 0.05, g, 0.18);
+  }
   collapse() {
     this.burst('sfx', 'lowpass', 900, 80, 0.7, 0.55, 0.6);
     this.tone('sfx', 'sine', 70, 28, 0.6, 0.5);

@@ -35,7 +35,7 @@ see the README.
 | Wall-run walls begin on the take-off deck | removes the exposed leading face that players would clip at speed |
 | The carousel (Level 2) is rotating platforms, not rotating runnable walls | wall-running on a moving wall cannot be made reliable with a kinematic controller |
 | Ramps do not launch upward; jump pads do | keeps footing predictable on slopes |
-| Timed hazards in Level 3 are phased to the reference line | deterministic simulation makes this a stable regression test |
+| Level 3 crushers run as a green wave for a ~10 m/s sprint and telegraph before they drop | a hazard must reward the pace the level teaches; `tests/sim/hazards.test.ts` checks pass rates and windows at 8-12 m/s, so tuning cannot silently make it unfair |
 
 ## Cut or reduced (in the order the plan allowed)
 
