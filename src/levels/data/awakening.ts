@@ -205,6 +205,18 @@ export function build(): LevelData {
     [0, -2.4, 396],
     [0, -2.4, 408],
   );
+  // ----- destructibles (Phase B): fragile marble columns that slide apart, and floating relics
+  // that answer the blade
+  b.breakable('column', 1.5, 0, 19.9);
+  b.breakable('column', -1.5, 0, 37.5);
+  b.breakable('relic', 3.1, 0.6, 67.1);
+  b.breakable('column', -1.45, 1.2, 85.5);
+  b.breakable('column', -1.5, 2.2, 134.4);
+  b.breakable('relic', 1.5, 3.6, 162.9);
+  b.breakable('column', 0.36, 3.6, 189.7, { yaw: 0.45 });
+  b.breakable('column', -1.5, -4.4, 332.7);
+  b.breakable('column', 1.5, -4.4, 350.9);
+  b.breakable('relic', 1.56, -2.4, 396, { yaw: 0.3 });
   return b.data;
 }
 

@@ -13,6 +13,8 @@ import type { LevelData, LevelMeta } from '../levels/types';
 import { MovementController } from '../movement/MovementController';
 import { MoveState, type InputFrame } from '../movement/types';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
+import { bodyTouches, breakableCentre } from './breakables';
+import { Sword, SwordPhase, type SwordHit, type SwordTarget, type Slash } from './Sword';
 
 export interface RunStats {
   started: boolean;
@@ -37,6 +39,10 @@ export interface RunStats {
   speedSum: number;
   collected: string[];
   shortcuts: string[];
+  /** Sword: swings, objects cut by the blade, objects smashed by running into them. */
+  slashes: number;
+  cuts: number;
+  smashes: number;
 }
 
 export const newStats = (): RunStats => ({
@@ -62,6 +68,9 @@ export const newStats = (): RunStats => ({
   speedSum: 0,
   collected: [],
   shortcuts: [],
+  slashes: 0,
+  cuts: 0,
+  smashes: 0,
 });
 
 export interface SimEvents {
@@ -75,6 +84,10 @@ export interface SimEvents {
   prompt: { index: number };
   signal: { kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn'; entity: Entity };
   event: { name: string };
+  /** Sword state changes and swings (opened = the cutting window opened this tick). */
+  sword: { action: 'draw' | 'sheathe' | 'slash'; kind?: Slash; combo?: number; fromSheath?: boolean };
+  /** A destructible was cut by the blade (hit set) or smashed by the body. */
+  break: { index: number; by: 'sword' | 'body'; hit?: SwordHit };
 }
 
 const RESPAWN_TICKS = 30; // 0.25 s
@@ -96,6 +109,11 @@ export class Simulation {
   private fired = new Set<string>();
   private wallChain = 0;
   private ctx: EntityCtx;
+  readonly sword = new Sword();
+  /** Broken flag per breakable (index matches data.breakables). */
+  readonly broken: boolean[] = [];
+  private targets: (SwordTarget | null)[] = [];
+  private targetsLive: SwordTarget[] = [];
 
   constructor(
     readonly meta: LevelMeta,
@@ -130,6 +148,7 @@ export class Simulation {
       kill: (reason) => this.kill(reason),
       signal: (kind, entity) => this.events.emit('signal', { kind, entity }),
     };
+    this.targetsLive = (data.breakables ?? []).map((b) => breakableCentre(b));
     this.wireStats();
     this.physics.step();
     this.restart();
@@ -170,6 +189,9 @@ export class Simulation {
     this.fired.clear();
     this.collectedThisRun.clear();
     for (const e of this.entities) e.reset(this.physics, true);
+    this.broken.length = 0;
+    this.targets = this.targetsLive.slice();
+    for (let i = 0; i < this.targets.length; i++) this.broken.push(false);
     this.placeAtCheckpoint();
   }
 
@@ -190,6 +212,7 @@ export class Simulation {
   private placeAtCheckpoint() {
     const cp = this.data.checkpoints[this.checkpoint] ?? { p: this.meta.spawn.p, yaw: this.meta.spawn.yaw };
     this.player.reset(cp.p[0], cp.p[1] + 0.05, cp.p[2], cp.yaw);
+    this.sword.reset();
     this.dead = false;
     this.deadTicks = 0;
     this.wallChain = 0;
@@ -236,6 +259,7 @@ export class Simulation {
     if (this.dead) return;
 
     pl.tick(inp, SIM_DT);
+    this.tickSword(inp);
 
     // standing on a dynamic entity?
     if (pl.grounded && pl.groundId !== -1) {
@@ -263,6 +287,45 @@ export class Simulation {
       return;
     }
     this.checkVolumes();
+  }
+
+  private onHit = (h: SwordHit) => this.breakObject(h.target, 'sword', h);
+
+  private tickSword(inp: InputFrame) {
+    const sw = this.sword;
+    const before = sw.phase,
+      serial = sw.serial;
+    const opened = sw.tick(inp, this.player, SIM_DT, this.targets, this.onHit);
+    if (sw.serial !== serial) {
+      this.stats.slashes++;
+      if (sw.pose.fromSheath) this.events.emit('sword', { action: 'draw' });
+    } else if (before === SwordPhase.Sheathed && sw.phase === SwordPhase.Drawing)
+      this.events.emit('sword', { action: 'draw' });
+    if (sw.phase === SwordPhase.Sheathing && before !== SwordPhase.Sheathing)
+      this.events.emit('sword', { action: 'sheathe' });
+    if (opened)
+      this.events.emit('sword', {
+        action: 'slash',
+        kind: sw.pose.kind,
+        combo: sw.combo,
+        fromSheath: sw.pose.fromSheath,
+      });
+    // running into an intact object smashes it (crudely): never an obstacle, never a stop
+    const pl = this.player,
+      bs = this.data.breakables;
+    for (let i = 0; i < bs.length; i++) {
+      if (this.broken[i]) continue;
+      if (bodyTouches(bs[i], pl.pos.x, pl.pos.y, pl.pos.z, pl.height)) this.breakObject(i, 'body');
+    }
+  }
+
+  private breakObject(i: number, by: 'sword' | 'body', hit?: SwordHit) {
+    if (this.broken[i]) return;
+    this.broken[i] = true;
+    this.targets[i] = null;
+    if (by === 'sword') this.stats.cuts++;
+    else this.stats.smashes++;
+    this.events.emit('break', { index: i, by, hit });
   }
 
   private updateEntities() {

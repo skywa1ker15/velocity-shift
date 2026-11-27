@@ -20,6 +20,19 @@ import type { MovementController } from '../movement/MovementController';
 import { MoveState } from '../movement/types';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createCharacterMaterial, lathe, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
+import {
+  bladeDir,
+  DRAW_TIME,
+  drawDir,
+  readyDir,
+  SHEATHE_TIME,
+  SLASHES,
+  SwordPhase,
+  windupOf,
+  type Sword,
+} from '../gameplay/Sword';
+import { buildSword, SWORD } from './SwordModel';
+import { swingHilt } from '../fx/SlashFx';
 
 /** The runner's outfit (shared with the ghost figure). */
 export const outfit = {
@@ -75,6 +88,14 @@ function solveTwoBone(
 }
 const _s1 = new THREE.Vector3();
 const _s2 = new THREE.Vector3();
+const _sb = new THREE.Vector3();
+const _se = new THREE.Vector3();
+const _sz = new THREE.Vector3();
+const _sx = new THREE.Vector3();
+const _sh = new THREE.Vector3();
+const _sa = new THREE.Vector3();
+const _sr = new THREE.Vector3();
+const _sg = new THREE.Vector3();
 
 /** Place a Y-aligned segment mesh between two points. */
 function placeSegment(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3) {
@@ -175,6 +196,12 @@ export class Body {
   private rootLean = 0;
   private lateral = 0;
   private geos: THREE.BufferGeometry[] = [];
+  private sword: Sword | null = null;
+  private swordMesh!: THREE.Mesh;
+  /** Camera-space blade direction and tip of the drawn sword (for effects). */
+  readonly bladeTip = new THREE.Vector3();
+  readonly bladeBase = new THREE.Vector3();
+  swordShown = false;
   /** World position of the trailing hand / feet for particle effects. */
   readonly contact = new THREE.Vector3();
 
@@ -182,10 +209,21 @@ export class Body {
     this.mat = createCharacterMaterial();
     this.buildArms();
     this.buildLegs();
+    {
+      const g = buildSword().build(0.0028);
+      this.geos.push(g);
+      this.swordMesh = new THREE.Mesh(g, this.mat);
+      this.swordMesh.visible = false;
+      this.armRoot.add(this.swordMesh);
+    }
     viewScene.add(this.armRoot);
     worldScene.add(this.bodyRoot);
   }
 
+  /** The simulation's sword, whose state drives the sword arm (null: no sword). */
+  setSword(sw: Sword | null) {
+    this.sword = sw;
+  }
   setAccent(hex: number) {
     this.mat.userData.accent.value.set(hex);
   }
@@ -638,9 +676,29 @@ export class Body {
     const landK = this.landT < 0.34 ? (1 - this.landT / 0.34) * this.landAmt : 0;
     let stiff = 210;
 
+    const swordArm = this.swordPose(dt, sp);
     for (const a of this.arms) {
       const s = a.side;
       const t = a.target;
+      if (s > 0 && swordArm) {
+        // the sword hand: pose comes from the blade (see swordPose), only the IK runs here
+        t.copy(this.swordWrist);
+        a.tCurl = 1.05;
+        a.tSplay = 0;
+        a.tRoll = 0;
+        a.tBend = 0;
+        a.tPole = 0.5;
+        a.spring.k = this.swordStiff;
+        a.spring.d = 1.7 * Math.sqrt(this.swordStiff);
+        a.spring.update(t, dt);
+        a.curl = damp(a.curl, a.tCurl, 22, dt);
+        a.splay = damp(a.splay, 0, 22, dt);
+        a.pole = damp(a.pole, a.tPole, 10, dt);
+        this.solveArm(a);
+        a.hand.quaternion.copy(this.swordHandQ);
+        this.placeSword(a);
+        continue;
+      }
       const swing = Math.sin(this.phase + (s > 0 ? 0 : Math.PI));
       const fwd = Math.max(0, swing),
         back = Math.max(0, -swing);
@@ -774,6 +832,13 @@ export class Body {
           a.tRoll += this.lateral * 0.35;
         }
       }
+      // the free hand counter-swings against a sword stroke
+      if (swordArm && this.swordSwing > 0) {
+        t.x -= 0.07 * this.swordSwing;
+        t.y -= 0.04 * this.swordSwing;
+        t.z += 0.07 * this.swordSwing;
+        a.tCurl = Math.max(a.tCurl, 0.7);
+      }
       // landing: hands brace down and forward, fingers spread; heavy landings bring them together
       if (landK > 0 && grounded) {
         t.y -= 0.075 * landK;
@@ -794,38 +859,7 @@ export class Body {
       a.splay = damp(a.splay, a.tSplay, 15, dt);
       a.pole = damp(a.pole, a.tPole, 8, dt);
 
-      const hand = a.spring.p;
-      _d.set(s * a.pole, -1, 0.5); // elbow pole: down, out and slightly back
-      _b.copy(hand);
-      solveTwoBone(a.shoulder, _b, UPPER, FORE, _d, a.elbow);
-      placeSegment(a.upper, a.shoulder, a.elbow);
-      // forearm: explicit basis so its twist (and the hand's) is stable
-      const f = _a.subVectors(_b, a.elbow).normalize();
-      const r = _c.crossVectors(f, Y);
-      if (r.lengthSq() < 1e-4) r.set(1, 0, 0);
-      r.normalize();
-      const u = _d.crossVectors(r, f);
-      _m.makeBasis(r, f, u); // right-handed: +Z is the back of the arm (up when it points forward)
-      a.fore.quaternion.setFromRotationMatrix(_m);
-      a.fore.position.addVectors(a.elbow, _b).multiplyScalar(0.5);
-      _q.setFromAxisAngle(Y, a.roll);
-      a.hand.quaternion.copy(a.fore.quaternion).multiply(_q);
-      _q.setFromAxisAngle(X, a.bend);
-      a.hand.quaternion.multiply(_q);
-      a.hand.position.copy(_b);
-      for (let i = 0; i < 4; i++) {
-        const fg = a.fingers[i];
-        // fingers curl in a wave (index leads) and fan out when the hand opens
-        const c = clamp(a.curl * (1 + (i - 1.5) * 0.08), 0, 1.15);
-        fg.base.rotation.set(-c * 1.3, 0, fg.spread * (0.25 + a.splay * 1.1));
-        fg.tip.rotation.x = -c * 1.55;
-      }
-      a.thumb.base.rotation.set(
-        -a.curl * 0.55,
-        0,
-        a.thumb.spread * (0.75 + a.splay * 0.45) - s * a.curl * 0.3,
-      );
-      a.thumb.tip.rotation.x = -a.curl * 0.9;
+      this.solveArm(a);
     }
 
     // the whole upper body: sinks on landings, leans into speed, stays upright when the view rolls
@@ -839,6 +873,162 @@ export class Body {
     const counterBob = grounded ? Math.sin(this.phase * 2) * 0.005 * sp : 0;
     this.armRoot.position.set(0, -this.rootDip - counterBob, 0);
     this.armRoot.rotation.set(this.rootLean, 0, -camRoll * 0.45);
+  }
+
+  /** Two-bone IK for one arm and the default (forearm-following) hand orientation. */
+  private solveArm(a: Arm) {
+    const s = a.side;
+    const hand = a.spring.p;
+    _d.set(s * a.pole, -1, 0.5); // elbow pole: down, out and slightly back
+    _b.copy(hand);
+    solveTwoBone(a.shoulder, _b, UPPER, FORE, _d, a.elbow);
+    placeSegment(a.upper, a.shoulder, a.elbow);
+    // forearm: explicit basis so its twist (and the hand's) is stable
+    const f = _a.subVectors(_b, a.elbow).normalize();
+    const r = _c.crossVectors(f, Y);
+    if (r.lengthSq() < 1e-4) r.set(1, 0, 0);
+    r.normalize();
+    const u = _d.crossVectors(r, f);
+    _m.makeBasis(r, f, u); // right-handed: +Z is the back of the arm (up when it points forward)
+    a.fore.quaternion.setFromRotationMatrix(_m);
+    a.fore.position.addVectors(a.elbow, _b).multiplyScalar(0.5);
+    _q.setFromAxisAngle(Y, a.roll);
+    a.hand.quaternion.copy(a.fore.quaternion).multiply(_q);
+    _q.setFromAxisAngle(X, a.bend);
+    a.hand.quaternion.multiply(_q);
+    a.hand.position.copy(_b);
+    for (let i = 0; i < 4; i++) {
+      const fg = a.fingers[i];
+      const c = clamp(a.curl * (1 + (i - 1.5) * 0.08), 0, 1.15);
+      fg.base.rotation.set(-c * 1.3, 0, fg.spread * (0.25 + a.splay * 1.1));
+      fg.tip.rotation.x = -c * 1.55;
+    }
+    a.thumb.base.rotation.set(-a.curl * 0.55, 0, a.thumb.spread * (0.75 + a.splay * 0.45) - s * a.curl * 0.3);
+    a.thumb.tip.rotation.x = -a.curl * 0.9;
+  }
+
+  // ----- sword arm ------------------------------------------------------------------------
+  private swordWrist = new THREE.Vector3();
+  private swordHandQ = new THREE.Quaternion();
+  private swordQ = new THREE.Quaternion();
+  private swordStiff = 900;
+  /** 0..1 how hard the current stroke is swinging (drives the off-hand and effects). */
+  swordSwing = 0;
+  private bd: [number, number, number] = [0, 0, 0];
+  private bd2: [number, number, number] = [0, 0, 0];
+
+  /**
+   * Work out where the sword is this frame (camera space): blade direction, hilt position and
+   * edge direction, then the hand orientation that holds it and the wrist target for the IK.
+   * Returns false while the sword is on the back.
+   */
+  private swordPose(dt: number, sp: number): boolean {
+    const sw = this.sword;
+    if (!sw || sw.phase === SwordPhase.Sheathed) {
+      this.swordMesh.visible = false;
+      this.swordShown = false;
+      this.swordSwing = 0;
+      return false;
+    }
+    const b = this.bd,
+      e = this.bd2;
+    let w = 0; // 0 = resting guard hilt, 1 = swinging arc hilt
+    let visible = true;
+    let reach = 0; // 0..1 how far behind the shoulder the hand is (drawing / sheathing)
+    let swing = 0;
+    this.swordStiff = 700;
+    switch (sw.phase) {
+      case SwordPhase.Drawing:
+      case SwordPhase.Sheathing: {
+        let k = sw.phase === SwordPhase.Drawing ? sw.t / DRAW_TIME : 1 - sw.t / SHEATHE_TIME;
+        k = clamp(k, 0, 1);
+        drawDir(clamp((k - 0.25) / 0.75, 0, 1), b);
+        reach = 1 - clamp(k / 0.45, 0, 1);
+        visible = k > 0.28;
+        e[0] = 0;
+        e[1] = 0;
+        e[2] = -1;
+        this.swordStiff = 520;
+        break;
+      }
+      case SwordPhase.Ready: {
+        const r = readyDir();
+        b[0] = r[0];
+        b[1] = r[1];
+        b[2] = r[2];
+        e[0] = 0;
+        e[1] = 0.2;
+        e[2] = -1;
+        break;
+      }
+      case SwordPhase.Attack: {
+        const p = sw.pose,
+          sl = SLASHES[p.kind];
+        const wu = windupOf(p);
+        bladeDir(p, sw.t, b);
+        bladeDir(p, sw.t + 0.012, e);
+        e[0] -= b[0];
+        e[1] -= b[1];
+        e[2] -= b[2];
+        if (Math.hypot(e[0], e[1], e[2]) < 1e-4) {
+          e[0] = 0;
+          e[1] = 0;
+          e[2] = -1;
+        }
+        const tr = sw.t - wu - sl.active;
+        w =
+          sw.t < wu ? clamp(sw.t / (wu * 0.8), 0, 1) : tr < 0 ? 1 : 1 - clamp(tr / (sl.recover * 0.7), 0, 1);
+        swing = sw.t < wu ? 0 : tr < 0 ? 1 : 1 - clamp(tr / (sl.recover * 0.6), 0, 1);
+        if (p.fromSheath && sw.t < wu * 0.45) {
+          reach = 1 - sw.t / (wu * 0.45);
+          visible = sw.t > wu * 0.2;
+        }
+        this.swordStiff = 1700;
+        break;
+      }
+    }
+    this.swordSwing = swing;
+    _sb.set(b[0], b[1], b[2]).normalize();
+    // edge: perpendicular to the blade, along its travel
+    _se.set(e[0], e[1], e[2]);
+    _se.addScaledVector(_sb, -_se.dot(_sb));
+    if (_se.lengthSq() < 1e-8) _se.set(0, 0, -1).addScaledVector(_sb, _sb.z);
+    _se.normalize();
+    _sz.crossVectors(_se, _sb);
+    _m.makeBasis(_se, _sb, _sz);
+    this.swordQ.setFromRotationMatrix(_m);
+    // the hand: its -X runs up the blade, +Y (knuckles) along the edge
+    _sx.copy(_sb).negate();
+    _m.makeBasis(_sx, _se, _sz);
+    this.swordHandQ.setFromRotationMatrix(_m);
+
+    // where the hilt is: resting low at the right, or carried on an arc around the chest
+    const bob = Math.sin(this.phase * 2) * 0.012 * sp;
+    _sh.set(0.27, -0.3 + bob, -0.37);
+    this.bd[0] = _sb.x;
+    this.bd[1] = _sb.y;
+    this.bd[2] = _sb.z;
+    swingHilt(this.bd, _sa);
+    _sh.lerp(_sa, w);
+    // drawing: the hand reaches back over the shoulder to the hilt
+    if (reach > 0) _sh.lerp(_sr.set(0.2, 0.06, 0.08), reach);
+    // grip point → wrist
+    _sg.set(0, 0.075, -0.024).applyQuaternion(this.swordHandQ);
+    this.swordWrist.copy(_sh).sub(_sg);
+    this.swordMesh.visible = visible;
+    this.swordShown = visible;
+    return true;
+  }
+
+  private placeSword(a: Arm) {
+    // follow the actual (sprung) hand so blade and fist never separate
+    _sg.set(0, 0.075, -0.024).applyQuaternion(a.hand.quaternion);
+    _sh.copy(a.hand.position).add(_sg);
+    this.swordMesh.quaternion.copy(this.swordQ);
+    _sb.set(0, 1, 0).applyQuaternion(this.swordQ);
+    this.swordMesh.position.copy(_sh).addScaledVector(_sb, -SWORD.grip);
+    this.bladeBase.copy(this.swordMesh.position);
+    this.bladeTip.copy(this.swordMesh.position).addScaledVector(_sb, SWORD.bladeLength);
   }
 
   private updateLegs(

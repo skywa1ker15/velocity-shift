@@ -6,6 +6,9 @@
  *
  * The UI never calls into systems directly; it calls the small set of public methods here.
  */
+import { BreakableView, type BreakInfo } from '../render/BreakableView';
+import { SlashFx } from '../fx/SlashFx';
+import { SwordPhase } from '../gameplay/Sword';
 import * as THREE from 'three';
 import { AudioEngine } from '../audio/AudioEngine';
 import { CameraRig } from '../camera/CameraRig';
@@ -47,6 +50,9 @@ const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _p0 = new THREE.Vector3();
+const _vel = new THREE.Vector3();
+const WHITE = new THREE.Color(1, 1, 1);
+const WOOD_CHIP = new THREE.Color(0xd99a5c);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
@@ -97,6 +103,8 @@ export class Game {
   private menuSim: Simulation | null = null;
   private menuBot: Bot | null = null;
   private menuRunner = new Runner(false);
+  private slash = new SlashFx();
+  private breaks: BreakableView | null = null;
   private menuAcc = 0;
   private menuYaw = Math.PI;
   private menuCam = new THREE.Vector3();
@@ -111,7 +119,7 @@ export class Game {
     this.body = new Body(this.renderer.viewScene, this.renderer.scene);
     this.lines = new SpeedLines();
     this.stickers = new Stickers(200);
-    this.renderer.viewScene.add(this.lines.mesh);
+    this.renderer.viewScene.add(this.lines.mesh, this.slash.group);
     this.renderer.scene.add(this.stickers.mesh, this.sparks.points);
     this.ghost = new GhostPlayer(0xffffff);
     this.renderer.scene.add(this.ghost.group);
@@ -207,6 +215,7 @@ export class Game {
     const s = this.save.data;
     const suit = cosmeticFor(s, 'suit');
     this.accent.set(suit.color);
+    this.slash.setAccent(this.accent);
     this.body.setAccent(suit.color);
     this.ghost.setColor(suit.color);
     this.trailStyle = cosmeticFor(s, 'trail').style ?? 0;
@@ -251,6 +260,10 @@ export class Game {
   private clearLevel() {
     this.view?.dispose();
     this.view = null;
+    this.breaks?.dispose();
+    this.breaks = null;
+    this.slash.clear();
+    this.body.setSword(null);
     this.menuSim?.dispose();
     this.menuSim = null;
     this.menuBot = null;
@@ -289,7 +302,19 @@ export class Game {
       this.menuBot = new Bot(this.menuSim);
       this.menuSeeded = false;
       this.view = new LevelView(this.menuData, this.env, this.menuSim);
-      this.renderer.scene.add(this.view.group, this.menuRunner.group);
+      this.breaks = new BreakableView(this.menuData.breakables, this.env.palette, this.menuSim);
+      const br = this.breaks;
+      this.menuSim.events.on('break', ({ index, by, hit }) => {
+        const info = br.break(
+          index,
+          by,
+          hit,
+          _vel.set(this.menuSim!.player.vel.x, this.menuSim!.player.vel.y, this.menuSim!.player.vel.z),
+          this.menuCam,
+        );
+        if (info) this.breakFx(info, false);
+      });
+      this.renderer.scene.add(this.view.group, this.breaks.group, this.menuRunner.group);
       this.menuRunner.group.visible = true;
     }
     this.body.setVisible(false);
@@ -351,7 +376,10 @@ export class Game {
       this.sim = new Simulation(entry.meta, data);
       const owned = new Set(this.save.record(id).collectibles);
       this.view = new LevelView(data, this.env, this.sim, owned);
-      this.renderer.scene.add(this.view.group);
+      this.breaks = new BreakableView(data.breakables, this.env.palette, this.sim);
+      this.breaks.onCrumble = (at) => this.puffs(at, 5, 1.2, 0.45);
+      this.renderer.scene.add(this.view.group, this.breaks.group);
+      this.body.setSword(this.sim.sword);
       this.wireSim(this.sim);
       set({ loadProgress: 0.7, loadLabel: 'Compiling shaders' });
       await nextFrame();
@@ -749,6 +777,26 @@ export class Game {
         this.rig.shake(Math.max(0, 0.5 - d * 0.02));
       }
     });
+    sim.events.on('sword', ({ action, kind, fromSheath }) => {
+      if (action === 'draw') audio.swordDraw();
+      else if (action === 'sheathe') audio.swordSheathe();
+      else if (action === 'slash' && kind !== undefined) {
+        const sw = sim.sword;
+        audio.slash(kind, sw.attacking ? 0.5 + 0.5 * (kind === 1 ? 1 : kind === 3 ? 0.8 : 0.5) : 0.5);
+        this.slash.spawn(sw.pose, sw.serial);
+        if (fromSheath) this.impactFx = Math.max(this.impactFx, 0.3);
+      }
+    });
+    sim.events.on('break', ({ index, by, hit }) => {
+      const info = this.breaks?.break(index, by, hit, _vel.set(pl.vel.x, pl.vel.y, pl.vel.z), this.rig.eye);
+      if (!info) return;
+      this.breakFx(info, true);
+      if (by === 'sword') {
+        audio.cut(info.mat, info.power);
+        this.rig.onCut(info.power);
+        if (info.bullseye) audio.bullseye();
+      } else audio.smash(info.mat);
+    });
     sim.events.on('finish', () => {
       this.finishDelay = 0.9; // let the moment land before the results screen
       audio.finish(0);
@@ -764,6 +812,117 @@ export class Game {
       _v.y += 1.2;
       this.glints(_v, 12, 5, 0.4, this.accent, 1);
     });
+  }
+
+  /** Effects for a destroyed object, by material and by how it was destroyed. */
+  private breakFx(info: BreakInfo, near: boolean) {
+    const c = info.centre;
+    const sword = info.by === 'sword';
+    const toCam = _n.copy(this.renderer.camera.position).sub(c).normalize();
+    if (sword && near) {
+      // the cut itself, inked across the object: a white-hot slash mark and an accent echo
+      this.stickers.spawn(c, WHITE, {
+        sprite: Sprite.streak,
+        size: 0.8 + info.power * 0.5,
+        stretch: 3.6,
+        life: 0.16,
+        normal: toCam,
+        along: info.along,
+      });
+      this.stickers.spawn(c, this.accent, {
+        sprite: Sprite.streak,
+        size: 1.1 + info.power * 0.5,
+        stretch: 3,
+        life: 0.24,
+        normal: toCam,
+        along: info.along,
+        alpha: 0.65,
+      });
+      this.impactFx = Math.max(this.impactFx, 0.45 + info.power * 0.3);
+    }
+    this.stickers.spawn(c, sword ? this.accent : this.dust, {
+      sprite: Sprite.star,
+      frames: 4,
+      size: sword ? 0.7 : 0.6,
+      grow: 1.6,
+      life: 0.26,
+      normal: toCam,
+    });
+    const along = info.along;
+    switch (info.mat) {
+      case 'wood':
+        this.puffs(c, 5, 2.2, 0.4);
+        for (let i = 0; i < 6; i++) {
+          const a = i * 1.7 + this.time;
+          _w.set(along.x * 4 + Math.cos(a) * 2.5, 2.5 + (i % 3), along.z * 4 + Math.sin(a) * 2.5);
+          this.stickers.spawn(c, WOOD_CHIP, {
+            sprite: Sprite.tick,
+            size: 0.3,
+            life: 0.6,
+            vel: _w,
+            drag: 1.5,
+            gravity: 9,
+            rot: a,
+          });
+        }
+        break;
+      case 'stone':
+        this.puffs(c, 5, 2.4, 0.42);
+        this.glints(c, 6, 3, 0.3, this.accent, 1);
+        break;
+      case 'metal':
+        this.sparks.emit(c, along, this.count(18), WHITE, {
+          speed: 7,
+          spread: 1.2,
+          life: 0.4,
+          size: 0.05,
+          gravity: 9,
+        });
+        this.glints(c, 5, 3.5, 0.3, this.accent, 1);
+        break;
+      case 'glass':
+        this.glints(c, 12, 4.5, 0.32, WHITE, 1);
+        this.sparks.emit(c, along, this.count(10), this.accent, {
+          speed: 5,
+          spread: 1.4,
+          life: 0.45,
+          size: 0.04,
+          gravity: 10,
+        });
+        break;
+      case 'energy':
+        // the barrier bursts: a ring of light along the cut and a spray of charge
+        this.stickers.spawn(c, this.accent, {
+          sprite: Sprite.ring,
+          frames: 2,
+          size: 2.4,
+          grow: 2.4,
+          life: 0.4,
+          normal: toCam,
+        });
+        this.sparks.emit(c, along, this.count(30), this.accent, {
+          speed: 8,
+          spread: 2.6,
+          life: 0.5,
+          size: 0.06,
+          gravity: 2,
+        });
+        this.glints(c, 10, 5, 0.4, this.accent, 1);
+        break;
+    }
+    if (info.kind === 'relic') {
+      // the relic answers the blade: a shock ring and a fountain of gold light
+      this.stickers.spawn(c, this.accent, {
+        sprite: Sprite.ring,
+        frames: 2,
+        size: 1.6,
+        grow: 4,
+        life: 0.6,
+        normal: UP,
+      });
+      this.glints(c, 14, 2.2, 0.36, this.accent, 1);
+    }
+    if (info.bullseye) this.glints(c, 10, 3, 0.34, this.accent, 1);
   }
 
   /** Dust puffs thrown outward from a point (optionally biased along `dir`). */
@@ -858,19 +1017,21 @@ export class Game {
       // visual tests: the autopilot plays through the real game loop
       if (!this.dbgBot || (this.dbgBot as unknown as { sim: Simulation }).sim !== sim)
         this.dbgBot = new Bot(sim);
+      this.dbgBot.autoSlash = this.debugSlash;
       inp = this.dbgBot.step();
       this.input.setLook(inp.yaw, inp.pitch);
     }
     if (this.finishDelay >= 0) {
       // run is over: let the player coast, ignore input
       inp.moveX = inp.moveZ = 0;
-      inp.jumpPressed = inp.dashPressed = inp.slidePressed = false;
+      inp.jumpPressed = inp.dashPressed = inp.slidePressed = inp.attackPressed = inp.swordPressed = false;
     }
     sim.tick(inp);
     if (sim.stats.started && !sim.stats.finished) this.recorder.sample(sim.player);
   }
 
   private frame(alpha: number, dt: number) {
+    if (this.debugManual && !this.inManual) return;
     this.fpsAcc += dt;
     this.fpsFrames++;
     if (this.fpsAcc >= 0.5) {
@@ -921,6 +1082,9 @@ export class Game {
     this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov, this.motion);
     this.body.update(pl, this.rig.feet, this.rig.bobPhase, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
+    this.breaks?.update(dt);
+    const sw = sim.sword;
+    this.slash.update(dt, sw.serial, sw.phase === SwordPhase.Attack ? sw.t + alpha * SIM_DT : -1);
 
     const speed = pl.speed;
     this.dashFx = Math.max(0, this.dashFx - dt * 3.2);
@@ -1177,7 +1341,15 @@ export class Game {
   /** Simulated time step for automated tests (no pointer lock available in headless browsers). */
   debugAdvance(
     seconds: number,
-    keys: Partial<{ moveZ: number; moveX: number; jump: boolean; dash: boolean; slide: boolean }> = {},
+    keys: Partial<{
+      moveZ: number;
+      moveX: number;
+      jump: boolean;
+      dash: boolean;
+      slide: boolean;
+      attack: boolean;
+      sword: boolean;
+    }> = {},
   ) {
     if (!this.sim) return;
     const n = Math.round(seconds / SIM_DT);
@@ -1193,6 +1365,8 @@ export class Game {
         slideHeld: !!keys.slide,
         slidePressed: !!keys.slide && i === 0,
         dashPressed: !!keys.dash && i === 0,
+        attackPressed: !!keys.attack && i === 0,
+        swordPressed: !!keys.sword && i === 0,
       });
     }
   }
@@ -1202,6 +1376,72 @@ export class Game {
   debugFrozen = false;
   /** Visual tests: hand the controls to the autopilot. */
   debugAuto = false;
+  /** Visual tests: the autopilot swings at breakables. */
+  debugSlash = false;
+  /** Visual tests: the render loop pauses; debugStep() advances the game frame by frame. */
+  debugManual = false;
+  private inManual = false;
+
+  /**
+   * Visual tests: advance `ticks` simulation steps with the autopilot, then render one frame of
+   * matching length, so frame sequences come out smooth however slow the machine is.
+   * `until`: stop early once the sword is in this phase / breaks happen.
+   */
+  debugStep(
+    ticks: number,
+    keys?: Partial<{
+      moveZ: number;
+      moveX: number;
+      jump: boolean;
+      slide: boolean;
+      attack: boolean;
+      sword: boolean;
+    }>,
+  ) {
+    const sim = this.sim;
+    if (!sim) return null;
+    if (!this.dbgBot || (this.dbgBot as unknown as { sim: Simulation }).sim !== sim)
+      this.dbgBot = new Bot(sim);
+    const bot = this.dbgBot;
+    bot.autoSlash = this.debugSlash;
+    for (let i = 0; i < ticks && !sim.stats.finished; i++) {
+      let inp;
+      if (keys) {
+        // scripted input (presses on the first tick only); the look stays where it is
+        inp = {
+          moveX: keys.moveX ?? 0,
+          moveZ: keys.moveZ ?? 0,
+          yaw: this.input.yaw,
+          pitch: this.input.pitch,
+          jumpHeld: !!keys.jump,
+          jumpPressed: !!keys.jump && i === 0,
+          sprint: true,
+          slideHeld: !!keys.slide,
+          slidePressed: !!keys.slide && i === 0,
+          dashPressed: false,
+          attackPressed: !!keys.attack && i === 0,
+          swordPressed: !!keys.sword && i === 0,
+        };
+      } else {
+        inp = bot.step();
+        this.input.setLook(inp.yaw, inp.pitch);
+      }
+      sim.tick(inp);
+    }
+    this.debugFrozen = true;
+    this.inManual = true;
+    this.frame(1, ticks * SIM_DT);
+    this.inManual = false;
+    const sw = sim.sword;
+    return {
+      state: moveStateNames[sim.player.state],
+      sword: sw.phase,
+      t: sw.t,
+      cuts: sim.stats.cuts,
+      smashes: sim.stats.smashes,
+      pieces: this.breaks?.pieceCount ?? 0,
+    };
+  }
   /**
    * Automated visual tests: let the autopilot play until the player is in the named movement
    * state (held for `hold` seconds) or `maxSeconds` pass. Returns the state reached.
@@ -1212,6 +1452,7 @@ export class Game {
     if (!this.dbgBot || (this.dbgBot as unknown as { sim: Simulation }).sim !== sim)
       this.dbgBot = new Bot(sim);
     const bot = this.dbgBot;
+    bot.autoSlash = this.debugSlash;
     let held = 0;
     for (let i = 0; i < Math.round(maxSeconds / SIM_DT) && !sim.stats.finished; i++) {
       const inp = bot.step();

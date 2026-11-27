@@ -24,7 +24,13 @@ export class InputManager {
   onAction: (a: Action, down: boolean) => void = () => {};
 
   private down = new Set<string>();
-  private pressed: Record<'jump' | 'dash' | 'slide', boolean> = { jump: false, dash: false, slide: false };
+  private pressed: Record<'jump' | 'dash' | 'slide' | 'attack' | 'sword', boolean> = {
+    jump: false,
+    dash: false,
+    slide: false,
+    attack: false,
+    sword: false,
+  };
   private sprintLatch = false;
   private slideLatch = false;
   private capture: ((code: string) => void) | null = null;
@@ -39,6 +45,8 @@ export class InputManager {
     slideHeld: false,
     slidePressed: false,
     dashPressed: false,
+    attackPressed: false,
+    swordPressed: false,
   };
 
   constructor(
@@ -120,6 +128,8 @@ export class InputManager {
     if (this.enabled) {
       if (a === 'jump') this.pressed.jump = true;
       else if (a === 'dash') this.pressed.dash = true;
+      else if (a === 'attack') this.pressed.attack = true;
+      else if (a === 'sword') this.pressed.sword = true;
       else if (a === 'slide') {
         this.pressed.slide = true;
         if (this.settings.slideMode === 'toggle') this.slideLatch = !this.slideLatch;
@@ -163,7 +173,12 @@ export class InputManager {
 
   private releaseAll = () => {
     this.down.clear();
-    this.pressed.jump = this.pressed.dash = this.pressed.slide = false;
+    this.pressed.jump =
+      this.pressed.dash =
+      this.pressed.slide =
+      this.pressed.attack =
+      this.pressed.sword =
+        false;
     this.slideLatch = false;
   };
 
@@ -180,6 +195,7 @@ export class InputManager {
     if (!this.enabled) {
       f.moveX = f.moveZ = 0;
       f.jumpHeld = f.jumpPressed = f.sprint = f.slideHeld = f.slidePressed = f.dashPressed = false;
+      f.attackPressed = f.swordPressed = false;
       f.yaw = this.yaw;
       f.pitch = this.pitch;
       return f;
@@ -192,10 +208,17 @@ export class InputManager {
     f.jumpPressed = this.pressed.jump;
     f.dashPressed = this.pressed.dash;
     f.slidePressed = this.pressed.slide;
+    f.attackPressed = this.pressed.attack;
+    f.swordPressed = this.pressed.sword;
     const mode = this.settings.sprintMode;
     f.sprint = mode === 'auto' ? true : mode === 'hold' ? this.isDown('sprint') : this.sprintLatch;
     f.slideHeld = this.settings.slideMode === 'hold' ? this.isDown('slide') : this.slideLatch;
-    this.pressed.jump = this.pressed.dash = this.pressed.slide = false;
+    this.pressed.jump =
+      this.pressed.dash =
+      this.pressed.slide =
+      this.pressed.attack =
+      this.pressed.sword =
+        false;
     return f;
   }
 

@@ -34,6 +34,13 @@ export interface WorldUniforms {
   uPulse: { value: THREE.Vector4 };
   uPulseAmt: { value: number };
   uPlayer: { value: THREE.Vector3 };
+  /** Phase B look: coloured shadow fill, floor motif, safe-edge lip, neon scale. */
+  uShade: { value: THREE.Color };
+  uShadeAmt: { value: number };
+  uMotif: { value: number };
+  uMotifAmt: { value: number };
+  uLip: { value: number };
+  uGlow: { value: number };
 }
 
 export const worldUniforms: WorldUniforms = {
@@ -54,6 +61,12 @@ export const worldUniforms: WorldUniforms = {
   uPulse: { value: new THREE.Vector4(0, -9999, 0, -100) },
   uPulseAmt: { value: 0 },
   uPlayer: { value: new THREE.Vector3(0, -9999, 0) },
+  uShade: { value: new THREE.Color(0x404a70) },
+  uShadeAmt: { value: 0 },
+  uMotif: { value: 0 },
+  uMotifAmt: { value: 0 },
+  uLip: { value: 0 },
+  uGlow: { value: 1 },
 };
 
 /** Light bands for cel shading (shared by the world and the character). */
@@ -139,6 +152,12 @@ uniform float uSunPower;
 uniform vec4 uPulse;
 uniform float uPulseAmt;
 uniform vec3 uPlayer;
+uniform vec3 uShade;
+uniform float uShadeAmt;
+uniform float uMotif;
+uniform float uMotifAmt;
+uniform float uLip;
+uniform float uGlow;
 ${fogGLSL}
 float vsHash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
@@ -154,7 +173,59 @@ float vsNoise(vec3 x) {
 }
 vec3 vsEmissive = vec3(0.0);
 float vsInk = 0.0;      // 0..1 ink line coverage (applied after lighting so lines stay black)
-float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surface is in shadow`,
+float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surface is in shadow
+float vsH2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// line coverage of a value's distance to the nearest integer, anti-aliased, width w (metres)
+float vsLine(float x, float w) { float d = abs(fract(x + 0.5) - 0.5); float aa = fwidth(x) + 1e-5; return 1.0 - smoothstep(w, w + aa, d); }
+// ---- per-level floor motifs, painted on walkable tops in world space ----
+// returns (darken, lighten, glow) coverage
+vec3 vsMotif(vec2 p, float px) {
+  vec3 m = vec3(0.0);
+  float fade = clamp(0.035 / (px + 1e-4), 0.0, 1.0);   // motifs dissolve into flat tone far away
+  if (uMotif < 1.5) {
+    // Training: a gym floor. 1.25 m tiles with fine grout, every 4th line a bold lane line,
+    // and scattered lighter tiles
+    vec2 g = p / 1.25;
+    float grout = max(vsLine(g.x, 0.012), vsLine(g.y, 0.012));
+    float lane = max(vsLine(p.x / 5.0, 0.006), vsLine(p.y / 5.0, 0.006));
+    float lit = step(0.82, vsH2(floor(g)));
+    m = vec3(grout * 0.5 + lane * 0.2, lit * 0.6, 0.0);
+  } else if (uMotif < 2.5) {
+    // Awakening: worn marble. Warped veins, a rarer gilded vein that catches the sun
+    vec2 q = p * 0.33 + vec2(vsNoise(vec3(p * 0.4, 1.0)), vsNoise(vec3(p * 0.4, 7.0))) * 1.6;
+    float v1 = vsLine(q.x + q.y * 0.35 + vsNoise(vec3(q * 2.0, 3.0)) * 0.5, 0.018);
+    float v2 = vsLine((q.x - q.y) * 0.5 + 0.3, 0.008);
+    float slab = max(vsLine(p.x / 3.0, 0.004), vsLine(p.y / 3.0, 0.004));
+    m = vec3(v1 * 0.28 + slab * 0.45, 0.0, v2 * 0.5);
+  } else if (uMotif < 3.5) {
+    // Verticality: a hex lattice of light-catching seams
+    vec2 r = vec2(1.0, 1.7320508);
+    vec2 h = r * 0.5;
+    vec2 pp = p / 1.1;
+    vec2 a = mod(pp, r) - h;
+    vec2 b = mod(pp - h, r) - h;
+    vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+    vec2 ag = abs(gv);
+    float hd = 0.5 - max(dot(ag, normalize(vec2(1.0, 1.7320508))), ag.x);
+    float aa = fwidth(hd) + 1e-5;
+    float seam = 1.0 - smoothstep(0.018, 0.018 + aa, hd);
+    m = vec3(seam * 0.55, 0.0, seam * 0.22);
+  } else {
+    // Momentum: circuit traces with pads, pulses of light running along them
+    vec2 c = floor(p / 2.0);
+    float hsh = vsH2(c);
+    vec2 f = p / 2.0 - c;
+    float horiz = step(0.5, hsh);
+    float tline = horiz > 0.5 ? vsLine((f.y - 0.25 - hsh * 0.5) * 2.0, 0.025) : vsLine((f.x - 0.25 - hsh * 0.5) * 2.0, 0.025);
+    float pr = length(f - vec2(0.25 + hsh * 0.5));
+    float pad = (1.0 - smoothstep(0.045, 0.045 + fwidth(f.x) * 2.0, pr)) * smoothstep(0.025, 0.025 + fwidth(f.x) * 2.0, pr);
+    float along = horiz > 0.5 ? p.x : p.y;
+    float pulse = smoothstep(0.85, 1.0, fract(along * 0.12 - uTime * 0.6 + hsh * 7.0));
+    float edge = max(vsLine(p.x / 2.0, 0.004), vsLine(p.y / 2.0, 0.004));
+    m = vec3(edge * 0.45 + tline * 0.25, 0.0, (tline + pad) * (0.25 + pulse * 1.3));
+  }
+  return m * fade * uMotifAmt;
+}`,
       )
       .replace(
         '#include <color_fragment>',
@@ -176,6 +247,15 @@ float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surf
   // a soft painted gradient up every wall: darker at the foot
   if (abs(up) < 0.5 && boxFace) c *= 0.8 + 0.2 * smoothstep(0.0, 2.2, v);
 
+  // ---- floor identity + the safe-ground lip on walkable tops ----
+  float walk = smoothstep(0.75, 0.9, up) * (boxFace ? 1.0 : 0.0) * (1.0 - step(0.5, vFx.z));
+  if (walk > 0.0 && uMotif > 0.5) {
+    vec3 mo = vsMotif(vWPos.xz, px) * walk;
+    c = mix(c, c * 0.62, mo.x);
+    c = mix(c, c * 1.12 + 0.03, mo.y);
+    vsEmissive += uAccent * mo.z * 0.35 * uGlow;
+    c = mix(c, mix(c, uAccent, 0.5), mo.z * 0.5);
+  }
   if (boxFace) {
     // ---- ink: a black line along every block edge, never thinner than ~1.3 px ----
     float w = max(0.028, px * 1.3);
@@ -185,6 +265,9 @@ float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surf
     // an inner highlight line just inside the ink on lit tops: the "drawn" bevel
     float hl = smoothstep(w + px, w + px * 2.0, edge) * (1.0 - smoothstep(w * 2.4, w * 2.4 + px, edge));
     c += hl * uRim * (0.25 + 0.75 * max(up, 0.0)) * mix(vec3(1.0), uAccent, 0.3) * tiny;
+    // a painted band just inside the edge of walkable ground: reads as "safe to land"
+    float lipBand = smoothstep(w + px, w + px * 2.0, edge) * (1.0 - smoothstep(0.16, 0.16 + px * 1.5, edge));
+    c = mix(c, mix(c * 1.35 + 0.06, uAccent, 0.35), lipBand * walk * uLip * tiny * step(1.0, faceMin));
     // panel seams every 2.5 m as thin ink scratches
     vec2 cell = abs(fract(vec2(u - fw * 0.5, v - fh * 0.5) / 2.5 + 0.5) - 0.5) * 2.5;
     float seamD = min(cell.x, cell.y);
@@ -212,12 +295,12 @@ float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surf
     float paint = clamp(rail + chevron + guide * 0.7, 0.0, 1.0);
     c = mix(c, c * 0.72, inside * 0.6);
     c = mix(c, uAccent, paint);
-    vsEmissive += uAccent * paint * (0.35 + near * 0.9);
+    vsEmissive += uAccent * paint * (0.35 + near * 0.9) * uGlow;
     vsHatch *= 1.0 - paint;
   }
   // ---- glow strips / accent pieces ----
   if (vFx.y > 0.0) {
-    vsEmissive += diffuseColor.rgb * vFx.y * (1.5 + 0.35 * sin(uTime * 1.7 + vWPos.x * 0.3 + vWPos.z * 0.3));
+    vsEmissive += diffuseColor.rgb * vFx.y * uGlow * (1.5 + 0.35 * sin(uTime * 1.7 + vWPos.x * 0.3 + vWPos.z * 0.3));
     vsInk = 0.0;
     vsHatch = 0.0;
   }
@@ -259,6 +342,9 @@ float vsHatch = 0.0;    // 0..1 hatch stroke coverage, shown only where the surf
     / max(max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b) * 0.3183 * uSunPower, 0.0001);
   float shade = 1.0 - smoothstep(0.3, 0.5, sunLit);
   outgoingLight *= 1.0 - vsHatch * shade * 0.3;
+  // coloured fill in the shade: shadows become a designed tone, not just "darker", and dark
+  // levels keep readable mid-tones
+  outgoingLight += diffuseColor.rgb * uShade * uShadeAmt * (0.35 + 0.65 * shade) * 0.55;
   outgoingLight = mix(outgoingLight, uInk, vsInk * 0.92);
 }
 #include <opaque_fragment>`,

@@ -210,6 +210,16 @@ export function build(): LevelData {
     [0, 28, 326],
     [0, 28, 335],
   );
+  // ----- destructibles (Phase B): suspended panels and neon signs hung along the climb, in
+  // reach of a running, aerial or wall-run slash
+  b.breakable('panel', -1.5, 16.9, 129.4);
+  b.breakable('sign', -1.5, 28.9, 156.1);
+  b.breakable('panel', 1.7, 32.4, 185.1);
+  b.breakable('sign', 1.7, 36.3, 202.7);
+  b.breakable('panel', 1.7, 40.2, 220.3);
+  b.breakable('panel', -1.5, 42.9, 236.7);
+  b.breakable('sign', 1.6, 23.5, 268, { yaw: 0.19 });
+  b.breakable('panel', -1.8, 22.9, 309.6, { yaw: 0.44 });
   return b.data;
 }
 

@@ -12,6 +12,9 @@ export interface InputFrame {
   slideHeld: boolean;
   slidePressed: boolean;
   dashPressed: boolean;
+  /** Sword: attack (draws it first if needed) and draw / sheathe. */
+  attackPressed: boolean;
+  swordPressed: boolean;
 }
 
 export const emptyInput = (): InputFrame => ({
@@ -25,6 +28,8 @@ export const emptyInput = (): InputFrame => ({
   slideHeld: false,
   slidePressed: false,
   dashPressed: false,
+  attackPressed: false,
+  swordPressed: false,
 });
 
 export const enum MoveState {

@@ -56,7 +56,7 @@ test('boots to the title, then every menu screen opens and returns', async ({ pa
   await page.keyboard.press('Escape');
 
   await page.click('nav >> text=Controls');
-  await expect(page.locator('.bind-row')).toHaveCount(12);
+  await expect(page.locator('.bind-row')).toHaveCount(14); // 12 movement / system actions + sword slash + draw/sheathe
   await page.keyboard.press('Escape');
 
   await page.click('text=Achievements');

@@ -71,6 +71,11 @@ export class CameraRig {
     this.dip.kick(0.9);
     this.nod.kick(0.16);
   }
+  /** A blade connecting: a short visual nod and a small FOV squeeze (aim never moves). */
+  onCut(power: number) {
+    this.nod.kick(-0.06 - power * 0.08);
+    this.fovPunch.kick(-30 - power * 40);
+  }
   onJump() {
     this.dip.kick(0.5);
     this.nod.kick(0.12); // chin lifts as the legs drive

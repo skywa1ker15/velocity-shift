@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 3: Phase B, environment, sword combat and destructibles
+
+- **Environment and lighting:**
+  - Each level gets an identity layered on the shared inked shader: coloured shadow fill, a floor motif (Training tiles, Awakening marble, Verticality hex lattice, Momentum circuit traces), a safe-ground lip on walkable edges, a neon cap and a two-layer silhouette skyline in the sky.
+  - Pillars and other decor get their own structure colour, separate from the floors.
+  - Momentum's mid-tones are lifted and its bloom calmed.
+  - Awakening's floor is a warm sand, with cream pillars and violet shade.
+  - Verticality's platforms are lighter, and the hands are lit with neutralised light.
+- **The sword "Shift Edge":**
+  - An original code-built blade, carried in a back scabbard on the runner.
+  - Attack is LMB or F; it draws the sword if needed. X draws or sheathes. The sword sheathes itself after 5 s.
+  - Five slashes: horizontal, diagonal and vertical (the ground combo), a running draw-cut and an aerial crescent. Slide and wall-run variants are included.
+  - The logic is deterministic and lives in the simulation (`gameplay/Sword.ts`). The blade path is a pure function shared by hit detection and the first-person pose. The sword never changes player motion; this is covered by tests.
+- **Destructibles:**
+  - 36 objects across the four levels, in nine kinds.
+  - They never collide and are never required. A blade cut splits them along the real sweep plane (`render/convex.ts`); running into one smashes it into chunks.
+  - Behaviour per kind: columns slide apart, relics float and crumble, energy barriers burst.
+  - Placement is validated by tests: no overlap with level geometry, nothing next to a hazard or checkpoint, identical run times with or without slashing.
+- **Effects and audio:** illustrated face-on slash crescents, inked cut marks, and material-specific debris and sparks. Procedural draw, sheathe, slash, cut, smash and bullseye sounds.
+- The results screen shows sword cuts, and Training has an optional sword prompt.
+
 ## Phase 3 — Phase A: character and performance
 
 - Arms rebuilt with tapered anatomy: long pushed-up sleeve, rolled cuff, slim gauntlet, wrist bracer, knuckle plate, jointed fingers; fingertip accent pads removed.

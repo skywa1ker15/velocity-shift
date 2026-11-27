@@ -9,6 +9,7 @@ import { angleDelta } from '../core/math';
 import { emptyInput, MoveState, type InputFrame, type RayHit } from '../movement/types';
 import { Mover } from '../entities/Entities';
 import type { Simulation } from './Simulation';
+import { breakableCentre } from './breakables';
 
 export class Bot {
   index = 0;
@@ -24,6 +25,8 @@ export class Bot {
   private deaths = 0;
   private hit = {} as RayHit;
   stuckTicks = 0;
+  /** Swing at breakables within reach ahead (demo / visual tests; never changes the route). */
+  autoSlash = false;
 
   constructor(private sim: Simulation) {
     this.inp.yaw = sim.meta.spawn.yaw;
@@ -52,6 +55,34 @@ export class Bot {
   }
 
   step(): InputFrame {
+    const out = this.stepMove();
+    out.attackPressed = this.autoSlash && this.wantsSlash();
+    return out;
+  }
+
+  private wantsSlash(): boolean {
+    const sim = this.sim,
+      pl = sim.player;
+    if (sim.dead || sim.sword.attacking) return false;
+    const bs = sim.data.breakables;
+    const fx = -Math.sin(pl.yaw),
+      fz = -Math.cos(pl.yaw);
+    // aim for the moment the blade's reach meets the object, given how fast we close on it
+    const lead = Math.max(0, pl.speed) * 0.12;
+    for (let i = 0; i < bs.length; i++) {
+      if (sim.broken[i]) continue;
+      const c = breakableCentre(bs[i]);
+      const dx = c.x - pl.pos.x,
+        dy = c.y - (pl.pos.y + pl.height - 0.16),
+        dz = c.z - pl.pos.z;
+      const d = Math.hypot(dx, dy, dz);
+      if (d > 2.6 + lead || d < 0.6) continue;
+      if ((dx * fx + dz * fz) / Math.max(0.01, Math.hypot(dx, dz)) > 0.55) return true;
+    }
+    return false;
+  }
+
+  private stepMove(): InputFrame {
     const sim = this.sim,
       pl = sim.player,
       inp = this.inp,

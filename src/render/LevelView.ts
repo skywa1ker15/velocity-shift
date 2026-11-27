@@ -47,6 +47,8 @@ export class LevelView {
   private collectibles: THREE.Mesh[] = [];
   private disposables: { dispose(): void }[] = [];
   private palette: Record<MatId, THREE.Color>;
+  /** Non-colliding architecture painted 'base' gets its own colour so it separates from floors. */
+  private structure: THREE.Color;
   private shardGeo = new THREE.OctahedronGeometry(1, 0);
   private gemMat: THREE.MeshBasicMaterial;
   private inkMat = new THREE.MeshBasicMaterial({ color: 0x0b0d14, side: THREE.BackSide, fog: false });
@@ -59,6 +61,7 @@ export class LevelView {
     owned: Set<string> = new Set(),
   ) {
     const p = env.palette;
+    this.structure = new THREE.Color(env.look.structure);
     this.palette = {
       base: new THREE.Color(p.base),
       alt: new THREE.Color(p.alt),
@@ -141,7 +144,7 @@ export class LevelView {
   private buildDecor() {
     const b = new GeoBuilder();
     for (const d of this.data.decor) {
-      const color = this.palette[d.mat];
+      const color = d.mat === 'base' ? this.structure : this.palette[d.mat];
       const fx = this.fxOf(d.mat, false, d.glow);
       const rot = d.r ? new THREE.Quaternion().setFromEuler(_e.set(d.r[0], d.r[1], d.r[2], 'XYZ')) : null;
       const moving = !!d.spin || !!d.bob;

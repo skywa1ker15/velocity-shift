@@ -9,6 +9,8 @@
 import { quatFromAxisAngle, quatMul, quatRotate, type Vec3Tuple } from '../core/math';
 import type {
   BotPoint,
+  BreakableDef,
+  BreakableKind,
   CheckpointDef,
   DecorDef,
   DecorShape,
@@ -39,6 +41,7 @@ export class LevelBuilder {
     shortcuts: [],
     finish: { p: [0, -99999, 0], s: [1, 1, 1] },
     bot: [],
+    breakables: [],
   };
 
   // ----- primitives ---------------------------------------------------------------------
@@ -215,6 +218,13 @@ export class LevelBuilder {
 
   shortcut(id: string, p: Vec3Tuple, s: Vec3Tuple, hidden = false) {
     this.data.shortcuts.push({ id, p, s, hidden });
+  }
+
+  /** A destructible prop. Ground kinds take the floor height; hanging kinds their centre. */
+  breakable(kind: BreakableKind, x: number, y: number, z: number, o: Partial<BreakableDef> = {}) {
+    const id = o.id ?? `${kind}-${this.data.breakables.length}`;
+    const ground = kind === 'panel' || kind === 'sign' ? o.ground : (o.ground ?? y);
+    this.data.breakables.push({ ...o, id, kind, p: [x, y, z], ground });
   }
 
   /** Append waypoints for the test bot (the intended main line). */

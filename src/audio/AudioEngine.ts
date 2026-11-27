@@ -256,6 +256,75 @@ export class AudioEngine {
     this.tone('sfx', 'square', 300, 240, 0.05, g);
     this.tone('sfx', 'square', 300, 240, 0.05, g, 0.18);
   }
+  // ----- sword ----------------------------------------------------------------------------
+  /** Steel leaving the scabbard: a rising scrape and a ring. */
+  swordDraw() {
+    this.burst('sfx', 'bandpass', 2200 * this.vary(0.1), 5200, 0.22, 0.16, 3.5);
+    this.tone('sfx', 'triangle', 1580 * this.vary(0.03), 1620, 0.35, 0.05, 0.12);
+  }
+  swordSheathe() {
+    this.burst('sfx', 'bandpass', 4200 * this.vary(0.1), 1900, 0.26, 0.14, 3);
+    this.tone('sfx', 'square', 260, 200, 0.05, 0.08, 0.27); // the hilt seats with a click
+  }
+  /** A swing through the air: heavier swings are lower and longer. kind 0..4, power 0..1. */
+  slash(kind: number, power: number) {
+    const base = [2600, 1700, 2200, 2000, 2900][kind] ?? 2400;
+    const dur = 0.12 + power * 0.08;
+    this.burst('sfx', 'bandpass', base * this.vary(0.08), base * 0.35, dur, 0.2 + power * 0.16, 1.8);
+    this.burst('sfx', 'highpass', 5200, 3200, dur * 0.6, 0.06 + power * 0.05, 0.7);
+    if (kind === 1) this.tone('sfx', 'sine', 140, 60, 0.18, 0.18); // the finisher has weight
+  }
+  /** The blade going through something, by material. */
+  cut(mat: string, power: number) {
+    const v = 0.6 + power * 0.4;
+    switch (mat) {
+      case 'wood':
+        this.burst('sfx', 'bandpass', 900 * this.vary(0.12), 380, 0.16, 0.42 * v, 1.6);
+        this.tone('sfx', 'triangle', 190 * this.vary(), 120, 0.1, 0.22 * v);
+        this.burst('sfx', 'highpass', 3000, 1500, 0.08, 0.12 * v, 1, 0.05); // splinters
+        break;
+      case 'stone':
+        this.burst('sfx', 'lowpass', 1500, 160, 0.4, 0.42 * v, 0.8);
+        this.tone('sfx', 'sine', 95 * this.vary(), 48, 0.35, 0.36 * v);
+        this.tone('sfx', 'triangle', 880, 860, 0.5, 0.05 * v, 0.03); // a struck-stone ring
+        break;
+      case 'metal':
+        this.tone('sfx', 'square', 1240 * this.vary(0.04), 1180, 0.32, 0.08 * v);
+        this.tone('sfx', 'triangle', 1870 * this.vary(0.04), 1800, 0.45, 0.07 * v);
+        this.burst('sfx', 'highpass', 6000, 3000, 0.1, 0.18 * v);
+        break;
+      case 'glass':
+        for (let i = 0; i < 4; i++)
+          this.tone(
+            'sfx',
+            'sine',
+            (2400 + i * 620) * this.vary(0.08),
+            2000,
+            0.12 + i * 0.04,
+            0.05 * v,
+            i * 0.028,
+          );
+        this.burst('sfx', 'highpass', 7000, 4000, 0.2, 0.2 * v);
+        break;
+      case 'energy':
+        this.tone('sfx', 'sawtooth', 120, 1400, 0.22, 0.1 * v);
+        this.burst('sfx', 'bandpass', 600, 7000, 0.35, 0.3 * v, 0.9);
+        this.tone('sfx', 'sine', 880, 220, 0.4, 0.12 * v, 0.04);
+        break;
+    }
+  }
+  /** Running straight through something: a duller crash, no blade ring. */
+  smash(mat: string) {
+    this.burst('sfx', 'lowpass', mat === 'glass' ? 5000 : 1100, 140, 0.26, 0.4, 0.7);
+    this.tone('sfx', 'sine', 80, 40, 0.18, 0.3);
+    if (mat === 'glass') this.burst('sfx', 'highpass', 6000, 3500, 0.25, 0.16);
+  }
+  /** Bullseye on a training target. */
+  bullseye() {
+    this.tone('sfx', 'sine', 1320, 1320, 0.25, 0.1, 0.06);
+    this.tone('sfx', 'sine', 1980, 1980, 0.3, 0.08, 0.12);
+  }
+
   collapse() {
     this.burst('sfx', 'lowpass', 900, 80, 0.7, 0.55, 0.6);
     this.tone('sfx', 'sine', 70, 28, 0.6, 0.5);

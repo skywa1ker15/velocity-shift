@@ -27,6 +27,9 @@ import { Sky } from './Sky';
 import { worldUniforms } from './WorldMaterial';
 import { tiers, type Tier, type TierName } from './quality';
 
+const _white = new THREE.Color(1, 1, 1);
+const _grey = new THREE.Color(0.35, 0.35, 0.38);
+
 export class Renderer {
   readonly gl: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -216,10 +219,12 @@ export class Renderer {
     this.hemi.color.set(l.skyAmbient);
     this.hemi.groundColor.set(l.groundAmbient);
     this.hemi.intensity = l.ambient;
-    this.viewSun.color.set(l.sun);
+    // the hands are lit by a neutralised version of the level light, so the glove palette stays
+    // true (a magenta sun would otherwise turn cream gloves pink)
+    this.viewSun.color.set(l.sun).lerp(_white, 0.55);
     this.viewSun.intensity = l.sunIntensity * 1.1;
-    this.viewHemi.color.set(l.skyAmbient);
-    this.viewHemi.groundColor.set(l.groundAmbient);
+    this.viewHemi.color.set(l.skyAmbient).lerp(_white, 0.45);
+    this.viewHemi.groundColor.set(l.groundAmbient).lerp(_grey, 0.4);
     this.viewHemi.intensity = l.ambient * 1.6;
 
     const u = worldUniforms;
@@ -235,6 +240,13 @@ export class Renderer {
     u.uRim.value = env.surface.rim;
     u.uInk.value.set(env.ink ?? 0x0b0d14);
     u.uSunPower.value = Math.max(this.sun.color.r, this.sun.color.g, this.sun.color.b) * l.sunIntensity;
+    const k = env.look;
+    u.uShade.value.set(k.shade);
+    u.uShadeAmt.value = k.shadeAmt;
+    u.uMotif.value = k.motif;
+    u.uMotifAmt.value = k.motifAmt;
+    u.uLip.value = k.lip;
+    u.uGlow.value = k.glow;
     this.applyEnvPost();
   }
 

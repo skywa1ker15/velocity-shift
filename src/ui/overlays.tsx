@@ -180,6 +180,7 @@ export function Results() {
               <Stat label="Wall-runs" value={`${st.wallRuns} · ${st.wallTime.toFixed(1)} s`} />
               <Stat label="Slides" value={`${st.slides} · ${Math.round(st.slideDistance)} m`} />
               <Stat label="Double jumps" value={String(st.doubleJumps)} />
+              <Stat label="Sword cuts" value={`${st.cuts ?? 0} · ${st.slashes ?? 0} swings`} />
               <Stat label="Deaths" value={String(st.deaths)} />
             </div>
           </section>

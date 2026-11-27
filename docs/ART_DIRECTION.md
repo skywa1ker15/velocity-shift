@@ -86,3 +86,11 @@ figures (timers and numbers). Buttons and panels use a clipped-corner diagonal.
 - Don't use the accent colour for anything that is not interactive or route-relevant.
 - Don't let bloom wash out a scene: only emissive strips should glow.
 - Don't shake the camera for ordinary actions.
+
+
+## Phase B: level identity, the sword and destructibles
+
+- **Level looks** live in `EnvPreset.look`: the shade fill colour, structure colour, floor motif, lip, glow cap and skyline. Floor motifs are drawn only on walkable tops and fade with distance, so they never compete with hazard stripes or wall-run chevrons.
+- **The sword** is a slim single-edged blade with a forward-swept tanto point, a stepped spine notch (the "shift") and a light channel up the fuller. It has an asymmetric hex guard with a swept quillon, accent grip wraps and a glowing pommel. Between swings it rests on the right shoulder so the view stays clear, and the recovery passes through a low guard so the blade never crosses the eye.
+- **Slash arcs** are drawn face-on to the camera along the blade tip's real screen path. A first-person swing plane passes near the eye, so the true swept surface would read as a line. The arcs have a white-hot cutting edge, an accent body with dry-brush streaks and an ink border.
+- **Cuts** split objects along the blade's sweep plane. Fresh faces glow in the accent colour and cool over about a second. Pieces are kinematic, live about 2 s and are capped at 28.

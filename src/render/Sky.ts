@@ -25,6 +25,12 @@ export class Sky {
         uAurora: { value: 0 },
         uAuroraColor: { value: new THREE.Color() },
         uTime: { value: 0 },
+        uSkyFar: { value: new THREE.Color() },
+        uSkyNear: { value: new THREE.Color() },
+        uSkyH: { value: 0.08 },
+        uSpires: { value: 0 },
+        uWindows: { value: 0 },
+        uAccentSky: { value: new THREE.Color() },
       },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
@@ -37,6 +43,8 @@ export class Sky {
         varying vec3 vDir;
         uniform vec3 uTop, uHorizon, uBottom, uSun, uCloudColor, uAuroraColor, uSunDir;
         uniform float uSunGlow, uClouds, uStars, uAurora, uTime;
+        uniform vec3 uSkyFar, uSkyNear, uAccentSky;
+        uniform float uSkyH, uSpires, uWindows;
         float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
         float noise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -44,6 +52,27 @@ export class Sky {
           return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
         }
         float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * noise(p); p = p * 2.03 + 11.7; a *= 0.5; } return s; }
+        // one silhouette layer of distant towers around the horizon: returns coverage, writes
+        // the tower's top (for rim light) and a window mask
+        float skyline(float az, float h, float n, float hmax, float seed, out float rim, out float win) {
+          float x = az * n;
+          float cell = floor(x);
+          float f = fract(x);
+          float r = hash(vec2(cell, seed));
+          float r2 = hash(vec2(cell, seed + 9.1));
+          float gap = step(0.78, r2);                       // some cells are empty sky
+          float wdt = 0.55 + r * 0.4;
+          float inside = step(abs(f - 0.5), wdt * 0.5) * (1.0 - gap);
+          float top = -0.02 + hmax * (0.25 + 0.75 * r * r);
+          // spires: the top narrows to a point
+          float sp = uSpires * step(0.45, r2) * (1.0 - abs(f - 0.5) / (wdt * 0.5));
+          float peak = top + sp * hmax * 0.6 * r2;
+          float cov = inside * step(h, mix(top, peak, uSpires * step(0.45, r2)));
+          rim = inside * (1.0 - smoothstep(0.0, 0.004, abs(h - top))) * (1.0 - uSpires * step(0.45, r2));
+          vec2 wg = vec2(f * 14.0, h * 900.0);
+          win = cov * step(0.72, hash(floor(wg) + cell)) * step(0.25, fract(wg.x)) * step(0.35, fract(wg.y)) * step(h, top - 0.004);
+          return cov;
+        }
         void main() {
           vec3 d = normalize(vDir);
           float h = d.y;
@@ -89,6 +118,23 @@ export class Sky {
             float lit = 0.8 + 0.4 * pow(max(dot(d, uSunDir), 0.0), 3.0);
             col = mix(col, mix(uCloudColor * 0.8, uCloudColor * 1.12, core) * lit, body * smoothstep(-0.12, 0.08, h) * 0.8);
           }
+          // distant skyline, two layers: far towers sink into the horizon haze, near ones are
+          // a darker cut-out with a rim of light and (at night) lit windows
+          if (uSkyH > 0.001 && h > -0.06 && h < uSkyH * 1.8) {
+            float az = atan(d.x, d.z);
+            float rimF, winF, rimN, winN;
+            float far = skyline(az, h, 64.0, uSkyH * 0.7, 3.0, rimF, winF);
+            float near = skyline(az + 0.37, h, 38.0, uSkyH, 17.0, rimN, winN);
+            vec3 farC = mix(uSkyFar, uHorizon, 0.25);
+            col = mix(col, farC, far * 0.9);
+            col += uHorizon * rimF * 0.25 * far;
+            col += uAccentSky * winF * uWindows * 0.5;
+            col = mix(col, uSkyNear, near);
+            col += mix(uHorizon, uSun, 0.5) * rimN * 0.55;
+            col += uAccentSky * winN * uWindows * 0.9;
+            // haze sits over the base of both layers
+            col = mix(col, uHorizon, smoothstep(0.02, -0.05, h) * 0.6 * max(far, near));
+          }
           // sun disc + bloom halo
           float sd = max(dot(d, uSunDir), 0.0);
           // a graphic sun: flat disc, one drawn halo ring, restrained glow
@@ -117,6 +163,13 @@ export class Sky {
     u.uStars.value = s.stars;
     u.uAurora.value = s.aurora;
     u.uAuroraColor.value.set(s.auroraColor);
+    const k = env.look.skyline;
+    u.uSkyFar.value.set(k.far);
+    u.uSkyNear.value.set(k.near);
+    u.uSkyH.value = k.height;
+    u.uSpires.value = k.spires;
+    u.uWindows.value = k.windows;
+    u.uAccentSky.value.set(env.palette.accent);
   }
 
   update(time: number, camera: THREE.Camera) {

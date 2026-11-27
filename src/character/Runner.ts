@@ -11,6 +11,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { clamp, damp } from '../core/math';
 import { createCharacterMaterial, lathe, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
 import { outfit as o } from './Body';
+import { buildSheathed } from './SwordModel';
 
 const rbox = (x: number, y: number, z: number, r: number) =>
   new RoundedBoxGeometry(x, y, z, 1, Math.min(r, x / 2, y / 2, z / 2));
@@ -173,6 +174,17 @@ export class Runner {
       parent.add(seg);
       parent = seg;
       this.scarf.push(seg);
+    }
+    // the sword rides on the back in its scabbard: hilt over the right shoulder, tip at the left
+    // hip, so it is always within reach of the right hand
+    {
+      const g = buildSheathed().build(0.005);
+      this.geos.push(g);
+      const sheath = new THREE.Mesh(g, this.mat);
+      sheath.castShadow = !ghost;
+      sheath.position.set(0.13, 0.5, 0.18);
+      sheath.rotation.set(0.12, 0, -0.6);
+      this.chest.add(sheath);
     }
     this.hips.add(this.chest);
     for (const side of [1, -1] as const) {

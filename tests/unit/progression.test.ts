@@ -32,6 +32,7 @@ const fakeSaveSystem = (data: SaveData) =>
     save() {},
   }) as any;
 const data = (): LevelData => ({
+  breakables: [],
   solids: [],
   decor: [],
   entities: [],

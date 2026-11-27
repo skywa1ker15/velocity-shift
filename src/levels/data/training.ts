@@ -185,5 +185,22 @@ export function build(): LevelData {
     [0, -7, 346],
     [0, -7, 356],
   );
+  // ----- destructibles (Phase B): practice targets, barriers and crates beside the line. They
+  // never collide and never block it: slash them on the move, or just run through.
+  b.breakable('target', -1.5, 0, 3.4);
+  b.breakable('target', 1.5, 0, 20.9);
+  b.breakable('barrier', -1.6, 0, 50.6);
+  b.prompt(
+    [0, 1.5, 48.5],
+    [W, 4, 9],
+    'attack',
+    'Slash on the run: the sword draws itself. Optional: running through works too',
+  );
+  b.breakable('crate', -1.5, 0, 92.4);
+  b.breakable('target', 1.5, 1, 112);
+  b.breakable('crate', 0.4, 1, 134.1, { yaw: -0.35 });
+  b.breakable('barrier', 1.7, 1, 210, { yaw: 0.69 });
+  b.breakable('crate', 1.5, -7, 324.6);
+  b.breakable('target', -1.5, -7, 344.4);
   return b.data;
 }

@@ -38,6 +38,8 @@ export type Keys = Partial<
   jump?: boolean; // press this tick
   dash?: boolean;
   slide?: boolean; // press + hold
+  attack?: boolean; // press this tick
+  sword?: boolean;
 };
 
 export class Driver {
@@ -53,7 +55,9 @@ export class Driver {
   run(seconds: number, keys: Keys = {}) {
     const n = Math.max(1, Math.round(seconds * 120));
     for (let i = 0; i < n; i++)
-      this.tick(i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined });
+      this.tick(
+        i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined, attack: false, sword: false },
+      );
     return this;
   }
   tick(keys: Keys = {}) {
@@ -69,6 +73,8 @@ export class Driver {
     if (keys.jump) i.jumpHeld = true;
     i.dashPressed = !!keys.dash;
     i.slidePressed = !!keys.slide;
+    i.attackPressed = !!keys.attack;
+    i.swordPressed = !!keys.sword;
     if (keys.slide) i.slideHeld = true;
     this.sim.tick(i);
     const s = this.pl.state;
@@ -78,7 +84,9 @@ export class Driver {
   until(pred: () => boolean, keys: Keys = {}, max = 10): number {
     const n = Math.round(max * 120);
     for (let i = 0; i < n; i++) {
-      this.tick(i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined });
+      this.tick(
+        i === 0 ? keys : { ...keys, jump: false, dash: false, slide: undefined, attack: false, sword: false },
+      );
       if (pred()) return (i + 1) / 120;
     }
     return -1;

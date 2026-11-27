@@ -1,7 +1,18 @@
 /** Rebindable actions and their defaults. Codes are KeyboardEvent.code values or Mouse0..Mouse4. */
 
 export type Action =
-  'forward' | 'back' | 'left' | 'right' | 'jump' | 'sprint' | 'slide' | 'dash' | 'restart' | 'pause';
+  | 'forward'
+  | 'back'
+  | 'left'
+  | 'right'
+  | 'jump'
+  | 'sprint'
+  | 'slide'
+  | 'dash'
+  | 'attack'
+  | 'sword'
+  | 'restart'
+  | 'pause';
 
 export type Bindings = Record<Action, string[]>;
 
@@ -14,6 +25,8 @@ export const actionLabels: Record<Action, string> = {
   sprint: 'Sprint',
   slide: 'Slide',
   dash: 'Dash',
+  attack: 'Sword slash (draws the sword)',
+  sword: 'Draw / sheathe sword',
   restart: 'Restart checkpoint (hold: level)',
   pause: 'Pause',
 };
@@ -27,6 +40,8 @@ export const actionOrder: Action[] = [
   'sprint',
   'slide',
   'dash',
+  'attack',
+  'sword',
   'restart',
   'pause',
 ];
@@ -41,6 +56,8 @@ export const defaultBindings: Bindings = {
   sprint: ['ShiftLeft'],
   slide: ['KeyC', 'Mouse1'],
   dash: ['KeyQ', 'KeyE'],
+  attack: ['Mouse0', 'KeyF'],
+  sword: ['KeyX'],
   restart: ['KeyR'],
   pause: ['KeyP'],
 };

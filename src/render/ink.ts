@@ -178,6 +178,8 @@ export interface CharacterMaterial extends THREE.MeshToonMaterial {
     glove: { value: THREE.Color };
     sleeve: { value: THREE.Color };
     trim: { value: THREE.Color };
+    /** Scales accent glow (destructible pieces cool down after a cut). */
+    glowK: { value: number };
   };
 }
 
@@ -198,7 +200,8 @@ export function createCharacterMaterial(opts: { ghost?: boolean } = {}): Charact
   const glove = { value: new THREE.Color(0x39425c) };
   const sleeve = { value: new THREE.Color(0x2b3656) };
   const trim = { value: new THREE.Color(0x14171f) };
-  mat.userData = { accent, fade, glove, sleeve, trim };
+  const glowK = { value: 1 };
+  mat.userData = { accent, fade, glove, sleeve, trim, glowK };
   const ghost = !!opts.ghost;
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uAccent = accent;
@@ -206,6 +209,7 @@ export function createCharacterMaterial(opts: { ghost?: boolean } = {}): Charact
     shader.uniforms.uGlove = glove;
     shader.uniforms.uSleeve = sleeve;
     shader.uniforms.uTrim = trim;
+    shader.uniforms.uGlowK = glowK;
     shader.uniforms.uInk = worldUniforms.uInk;
     shader.uniforms.uSunPower = worldUniforms.uSunPower;
     shader.vertexShader = shader.vertexShader
@@ -222,6 +226,7 @@ uniform vec3 uSleeve;
 uniform vec3 uTrim;
 uniform vec3 uInk;
 uniform float uFade;
+uniform float uGlowK;
 uniform float uSunPower;`,
       )
       .replace(
@@ -238,7 +243,7 @@ if (vInfo.y < -0.5) {
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-totalEmissiveRadiance += uAccent * max(vInfo.y, 0.0) * 1.6;`,
+totalEmissiveRadiance += uAccent * max(vInfo.y, 0.0) * 1.6 * uGlowK;`,
       )
       .replace(
         '#include <opaque_fragment>',

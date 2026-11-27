@@ -167,6 +167,23 @@ export interface ShortcutDef {
   hidden?: boolean;
 }
 
+/** A destructible prop (see gameplay/breakables.ts). Never collides; never required. */
+export type BreakableKind =
+  'target' | 'barrier' | 'crate' | 'column' | 'relic' | 'panel' | 'sign' | 'energy' | 'pylon';
+export interface BreakableDef {
+  id: string;
+  kind: BreakableKind;
+  /** Placement point: the ground under it, or the centre for hanging kinds (panel, sign). */
+  p: Vec3Tuple;
+  /** Rotation about Y; at 0 the object faces -Z. */
+  yaw?: number;
+  scale?: number;
+  /** Floor height debris lands on (omitted: debris falls away). */
+  ground?: number;
+  /** Hanging kinds: length of the cables / chains up to the anchor. */
+  hang?: number;
+}
+
 /** Waypoint for the automated test bot (also documents the intended main line). */
 export interface BotPoint {
   p: Vec3Tuple;
@@ -207,6 +224,7 @@ export interface LevelData {
   shortcuts: ShortcutDef[];
   finish: { p: Vec3Tuple; s: Vec3Tuple };
   bot: BotPoint[];
+  breakables: BreakableDef[];
 }
 
 export interface LevelMeta {

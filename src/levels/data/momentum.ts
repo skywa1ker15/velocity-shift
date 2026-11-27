@@ -219,6 +219,17 @@ export function build(): LevelData {
     [0, H + 3, 538, 'j', 2.5],
     [0, H + 2, 563],
   );
+  // ----- destructibles (Phase B): neon pylons, energy barriers and cargo beside the high-speed
+  // lines (none in the crusher hall)
+  b.breakable('pylon', 1.6, -10, 83.1);
+  b.breakable('energy', -0.5, -10.5, 109.5, { yaw: 0.15, scale: 0.7 });
+  b.breakable('pylon', -2.2, -10.5, 172.5);
+  b.breakable('energy', -3.2, -20.5, 248.7, { yaw: 0.13, scale: 0.7 });
+  b.breakable('pylon', 1.45, -20.5, 266);
+  b.breakable('crate', 3.6, -10.5, 115.5);
+  b.breakable('pylon', -0.7, -30.5, 425.9);
+  b.breakable('energy', 1.6, -30.5, 473.1, { yaw: -0.11, scale: 0.7 });
+  b.breakable('pylon', -1.55, -30.5, 522.8);
   return b.data;
 }
 
