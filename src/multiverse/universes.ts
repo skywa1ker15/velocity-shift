@@ -630,6 +630,11 @@ export const HOME: Record<string, UniverseId> = {
   awakening: 'painted',
   verticality: 'neon',
   momentum: 'synth',
+  breakpoint: 'comic',
+  inkfalls: 'ink',
+  faceted: 'lowpoly',
+  blockfall: 'voxel',
+  core: 'corrupt',
 };
 export const homeOf = (levelId: string): UniverseId => {
   const h = HOME[levelId] ?? 'anime';

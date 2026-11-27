@@ -9,7 +9,9 @@
  */
 import { beforeAll, describe, expect, test } from 'vitest';
 import { TELEGRAPH_TIME } from '../../src/entities/Entities';
+import { envPresets } from '../../src/environment/presets';
 import { levels } from '../../src/levels/registry';
+import { homeOf } from '../../src/multiverse/universes';
 import type { LevelData } from '../../src/levels/types';
 import { medalFor } from '../../src/progression/Progression';
 import { initPhysics } from '../../src/physics/PhysicsWorld';
@@ -91,8 +93,12 @@ describe.each(levels.map((l) => [l.meta.id, l] as const))('level %s', (id, entry
   });
 });
 
-test('there are three courses plus training, each with its own look', () => {
-  expect(levels.filter((l) => !l.meta.training)).toHaveLength(3);
+test('there are eight courses plus training, each with its own look and home universe', () => {
+  expect(levels.filter((l) => !l.meta.training)).toHaveLength(8);
   expect(levels.filter((l) => l.meta.training)).toHaveLength(1);
-  expect(new Set(levels.map((l) => l.meta.env)).size).toBe(4);
+  expect(new Set(levels.map((l) => l.meta.env)).size).toBe(levels.length);
+  for (const l of levels) expect(envPresets[l.meta.env], l.meta.id).toBeDefined();
+  expect(new Set(levels.map((l) => homeOf(l.meta.id))).size).toBe(levels.length);
+  // indices are the unlock order
+  levels.forEach((l, i) => expect(l.meta.index).toBe(i));
 });

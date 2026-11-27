@@ -1,0 +1,35 @@
+== awakening
+classic                  {"ms":126.3,"calls":127,"triangles":20916,"geometries":157,"textures":18,"programs":53}
+voxel                    {"ms":148.6,"calls":127,"triangles":47152,"geometries":157,"textures":18,"programs":52}
+corrupt                  {"ms":152.4,"calls":127,"triangles":25408,"geometries":157,"textures":18,"programs":52}
+mid-shift neon→painted   {"ms":172.1,"calls":128,"triangles":32160,"geometries":157,"textures":18,"programs":52}
+== momentum
+classic                  {"ms":166.8,"calls":149,"triangles":17645,"geometries":174,"textures":18,"programs":56}
+voxel                    {"ms":199.2,"calls":149,"triangles":41391,"geometries":174,"textures":18,"programs":55}
+corrupt                  {"ms":175.1,"calls":150,"triangles":21599,"geometries":174,"textures":18,"programs":55}
+mid-shift neon→painted   {"ms":230.3,"calls":151,"triangles":29563,"geometries":174,"textures":18,"programs":55}
+== breakpoint
+classic                  {"ms":145.9,"calls":96,"triangles":13370,"geometries":126,"textures":18,"programs":53}
+voxel                    {"ms":153.1,"calls":96,"triangles":35752,"geometries":126,"textures":18,"programs":52}
+corrupt                  {"ms":177.6,"calls":96,"triangles":17108,"geometries":126,"textures":18,"programs":52}
+mid-shift neon→painted   {"ms":188.8,"calls":97,"triangles":24524,"geometries":126,"textures":18,"programs":52}
+== inkfalls
+classic                  {"ms":123.1,"calls":117,"triangles":13042,"geometries":141,"textures":18,"programs":53}
+voxel                    {"ms":153.9,"calls":117,"triangles":33756,"geometries":141,"textures":18,"programs":52}
+corrupt                  {"ms":149.8,"calls":117,"triangles":17020,"geometries":141,"textures":18,"programs":52}
+mid-shift neon→painted   {"ms":181.3,"calls":118,"triangles":25580,"geometries":141,"textures":18,"programs":52}
+== faceted
+classic                  {"ms":124.7,"calls":101,"triangles":13016,"geometries":128,"textures":18,"programs":53}
+voxel                    {"ms":139.6,"calls":101,"triangles":33844,"geometries":128,"textures":18,"programs":52}
+corrupt                  {"ms":145.2,"calls":101,"triangles":16776,"geometries":128,"textures":18,"programs":52}
+mid-shift neon→painted   {"ms":164.2,"calls":102,"triangles":23188,"geometries":128,"textures":18,"programs":52}
+== blockfall
+classic                  {"ms":106.5,"calls":69,"triangles":13628,"geometries":97,"textures":18,"programs":55}
+voxel                    {"ms":143,"calls":69,"triangles":33448,"geometries":97,"textures":18,"programs":54}
+corrupt                  {"ms":130.4,"calls":69,"triangles":18012,"geometries":97,"textures":18,"programs":54}
+mid-shift neon→painted   {"ms":152.3,"calls":70,"triangles":24864,"geometries":97,"textures":18,"programs":54}
+== core
+classic                  {"ms":150,"calls":101,"triangles":15176,"geometries":132,"textures":18,"programs":55}
+voxel                    {"ms":161.5,"calls":101,"triangles":35488,"geometries":132,"textures":18,"programs":54}
+corrupt                  {"ms":152.6,"calls":101,"triangles":18976,"geometries":132,"textures":18,"programs":54}
+mid-shift neon→painted   {"ms":195.3,"calls":102,"triangles":26768,"geometries":132,"textures":18,"programs":54}

@@ -55,6 +55,11 @@ describe('destructible placement', () => {
       awakening: ['column', 'relic'],
       verticality: ['panel', 'sign'],
       momentum: ['pylon', 'energy', 'crate'],
+      breakpoint: ['crate', 'sign'],
+      inkfalls: ['column', 'relic'],
+      faceted: ['panel', 'crate'],
+      blockfall: ['crate', 'energy'],
+      core: ['pylon', 'energy'],
     };
     for (const { meta, data } of loaded) {
       expect(data.breakables.length, meta.id).toBeGreaterThanOrEqual(8);

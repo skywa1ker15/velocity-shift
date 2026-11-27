@@ -75,6 +75,12 @@ Combine with `+` (`jj+d`). The fifth value is the arrival radius.
 Because the simulation is deterministic, timed hazards can be tuned (their `phase`) so the
 reference line passes on the first attempt; the test then guards that line against regressions.
 
+## Hidden routes are tested
+
+`tests/sim/hidden-routes.test.ts` holds a second bot line per course that takes the hidden route.
+It must reach the hidden zone and pick up that route's shard. The usual way onto a beam above the
+lane is a wall-run, a kick-off, then a double jump (a kick-off alone gains only 1–2 m).
+
 ## Workflow
 
 1. Lay out decks and walls with the reach table; add the bot line.

@@ -44,8 +44,8 @@ test('boots to the title, then every menu screen opens and returns', async ({ pa
   await expect(page.locator('.logo').first()).toBeVisible();
 
   await page.click('text=Level Select');
-  await expect(page.locator('.lv-card')).toHaveCount(4);
-  await expect(page.locator('.lv-card.locked')).toHaveCount(2); // levels 2 and 3 start locked
+  await expect(page.locator('.lv-card')).toHaveCount(9);
+  await expect(page.locator('.lv-card.locked')).toHaveCount(7); // only training and level 1 start open
   await page.keyboard.press('Escape');
 
   await page.click('nav >> text=Settings');
@@ -169,11 +169,20 @@ test('progress and settings persist across a reload', async ({ page }) => {
   expect(saved.ach).toContain('first-steps');
 });
 
-test('all three courses load, render and tick without errors', async ({ page }) => {
-  test.setTimeout(240_000);
+test('all eight courses load, render and tick without errors', async ({ page }) => {
+  test.setTimeout(480_000);
   await boot(page);
   await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true }));
-  for (const id of ['awakening', 'verticality', 'momentum']) {
+  for (const id of [
+    'awakening',
+    'verticality',
+    'momentum',
+    'breakpoint',
+    'inkfalls',
+    'faceted',
+    'blockfall',
+    'core',
+  ]) {
     await startLevel(page, id);
     await page.evaluate(() => (window as any).__vs.debugAdvance(1.5, { moveZ: 1 }));
     const s = await state(page);

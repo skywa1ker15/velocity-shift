@@ -261,4 +261,134 @@ export const envPresets: Record<string, EnvPreset> = {
   },
 };
 
+/** Phase E courses: each starts from an existing preset and gets its own sky, light and palette. */
+const derive = (from: EnvPreset, id: string, o: Partial<EnvPreset>): EnvPreset => ({ ...from, ...o, id });
+const E = envPresets;
+envPresets.breakpoint = derive(E.awakening, 'breakpoint', {
+  sky: {
+    ...E.awakening.sky,
+    top: 0x2f7fe0,
+    horizon: 0x9fd8ff,
+    bottom: 0x6aa6e8,
+    sun: 0xfff6d0,
+    sunDir: [-0.2, 0.9, -0.3],
+    sunGlow: 0.5,
+    clouds: 0.55,
+    cloudColor: 0xffffff,
+    stars: 0,
+    aurora: 0,
+  },
+  fog: { color: 0xa9d6ff, density: 0.0032, base: -20, falloff: 0.03 },
+  light: { sun: 0xfff3d6, sunIntensity: 2.8, skyAmbient: 0xbfe0ff, groundAmbient: 0x6a5a3a, ambient: 1.6 },
+  palette: {
+    base: 0xf3e4b0,
+    alt: 0x3fb7c9,
+    dark: 0x1f2a44,
+    accent: 0xff4f2e,
+    glass: 0xffffff,
+    hazard: 0xff2e2e,
+  },
+});
+envPresets.inkfalls = derive(E.verticality, 'inkfalls', {
+  sky: {
+    ...E.verticality.sky,
+    top: 0x9a9a96,
+    horizon: 0xe9e6dc,
+    bottom: 0xcfccc2,
+    sun: 0xffffff,
+    sunDir: [0.3, 0.6, -0.7],
+    sunGlow: 0.2,
+    clouds: 0.4,
+    cloudColor: 0xf4f2ea,
+    stars: 0,
+    aurora: 0,
+  },
+  fog: { color: 0xdcd8cc, density: 0.006, base: -40, falloff: 0.02 },
+  light: { sun: 0xffffff, sunIntensity: 2.2, skyAmbient: 0xe6e3da, groundAmbient: 0x4a4844, ambient: 1.5 },
+  palette: {
+    base: 0xe8e4d8,
+    alt: 0xb9b4a6,
+    dark: 0x1c1c22,
+    accent: 0xc8322a,
+    glass: 0xffffff,
+    hazard: 0xc8322a,
+  },
+});
+envPresets.faceted = derive(E.awakening, 'faceted', {
+  sky: {
+    ...E.awakening.sky,
+    top: 0x5a86c8,
+    horizon: 0xffd2a0,
+    bottom: 0xe8b08a,
+    sun: 0xffe0a8,
+    sunDir: [0.6, 0.35, -0.7],
+    sunGlow: 0.6,
+    clouds: 0.35,
+    cloudColor: 0xffe8d0,
+    stars: 0,
+    aurora: 0,
+  },
+  fog: { color: 0xf0c8a4, density: 0.004, base: -20, falloff: 0.03 },
+  light: { sun: 0xffe2b8, sunIntensity: 2.6, skyAmbient: 0xa8c0e8, groundAmbient: 0x6a4a3a, ambient: 1.5 },
+  palette: {
+    base: 0xd9c7a6,
+    alt: 0x7fb08a,
+    dark: 0x3a3048,
+    accent: 0xff8a3c,
+    glass: 0xfff4e0,
+    hazard: 0xff5a2e,
+  },
+});
+envPresets.blockfall = derive(E.training, 'blockfall', {
+  sky: {
+    ...E.training.sky,
+    top: 0x3a8cff,
+    horizon: 0xbfe6ff,
+    bottom: 0x8ac4ff,
+    sun: 0xffffff,
+    sunDir: [0.3, 0.8, -0.5],
+    sunGlow: 0.4,
+    clouds: 0.6,
+    cloudColor: 0xffffff,
+    stars: 0,
+    aurora: 0,
+  },
+  fog: { color: 0xbfe0ff, density: 0.0035, base: -30, falloff: 0.025 },
+  light: { sun: 0xffffff, sunIntensity: 2.7, skyAmbient: 0xc8e4ff, groundAmbient: 0x4a6a3a, ambient: 1.6 },
+  palette: {
+    base: 0x9a9a9a,
+    alt: 0x6abf4a,
+    dark: 0x3a2a1e,
+    accent: 0xffc83c,
+    glass: 0xe0f4ff,
+    hazard: 0xff4a2e,
+  },
+});
+envPresets.core = derive(E.momentum, 'core', {
+  sky: {
+    ...E.momentum.sky,
+    top: 0x050308,
+    horizon: 0x2a0a18,
+    bottom: 0x030205,
+    sun: 0xff3c5a,
+    sunDir: [0, 0.4, -0.9],
+    sunGlow: 0.5,
+    clouds: 0.15,
+    cloudColor: 0x3a0a1c,
+    stars: 0.6,
+    aurora: 0.5,
+    auroraColor: 0x16ff73,
+  },
+  fog: { color: 0x1a0812, density: 0.005, base: -25, falloff: 0.03 },
+  light: { sun: 0xffc0cc, sunIntensity: 2.2, skyAmbient: 0x7a3a5a, groundAmbient: 0x14100a, ambient: 1.4 },
+  palette: {
+    base: 0x5a5a66,
+    alt: 0x3a3a48,
+    dark: 0x0e0c12,
+    accent: 0x16ff73,
+    glass: 0xe0ffe8,
+    hazard: 0xff1a3c,
+  },
+});
+
 export const getEnv = (id: string): EnvPreset => envPresets[id] ?? envPresets.training;

@@ -1,5 +1,12 @@
 # Changelog
 
+## Phase E – five new courses
+
+- Breakpoint (Comic), Ink Falls (Ink), Faceted (Low-Poly), Blockfall (Voxel) and Corrupted Core (Corrupt), unlocking in order after Momentum. Each has its own focus, environment preset, home universe, checkpoints, shards, hidden route, objectives, themed destructibles, calibrated medals and real-render preview art. Built entirely from existing mechanics; no physics changes.
+- New test `tests/sim/hidden-routes.test.ts`: the autopilot proves each hidden route is reachable (new courses plus The Awakening). Writing it found and fixed three unreachable hidden routes in the new courses.
+- Tests updated for eight courses (level registry, destructibles, level-select and all-courses e2e).
+- Evidence and measurements: `docs/phase-e/`.
+
 ## Phase D: Character, first-person and movement animation
 
 - **D5, jump, air and landing.** Take-off: the arms load for an instant and the view lifts, both scaled by how fast you are going (the jump itself is never delayed). In the air: arms drive up on the way up, hands open and drift at the top of the arc, spread wide and flutter on a long fall, and sweep back slightly at high speed; a long fall adds a faint wind flutter to the view. Landing anticipation: a single read-only ground ray works out when the ground arrives, and over the last ~0.3 s the hands reach down and out, the legs extend and the view lowers a touch. Landings come in sizes: soft (barely registers, recovers fast), medium (brace and dip), hard (hands slam wide, body sinks deep, a sideways stagger, slower recovery). Hard landings throw universe-coloured sparks. All scaled by Motion intensity; the simulation is untouched.
