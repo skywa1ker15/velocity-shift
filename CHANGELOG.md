@@ -1,5 +1,11 @@
 # Changelog
 
+## Phase D: Character, first-person and movement animation
+
+- **D1, skinned first-person arms.** Each arm is now one continuous inked mesh bound to a 19-bone skeleton (upper arm, forearm, a mid-forearm twist bone that carries half the hand's roll, hand, and three phalanges per finger and thumb). Elbows, wrists and knuckles bend smoothly instead of hinging behind a ball. The old arm was about 13 rigid pieces; both arms are now two draws. Measured (software GL, medium): draw calls 141-148 -> 126-128, geometries 181 -> 157, triangles +2k, shader programs +2 (skinned variants); frame time within noise.
+- **New arm design**: a long sleeve with a bold stitched accent band and a rolled cuff, a gauntlet bracer with a swept "shift fin" along the back of the forearm, a glove with a bone-white knuckle plate and lit knuckle line, and accent-painted fingertips. Outline weight now varies per part (heavy on the sleeve, fine on the fingers).
+- All ten universes restyle the skinned arm through the existing character shader; the sword grip follows the new hand. See docs/phase-d for before/after images.
+
 ## Phase 3: Multiverse art and graphics overhaul
 
 - **Ten visual universes**, each a full rendering identity: Hand-Drawn (the original look), Neon District, Issue #1 (comic), Facet Valley (low-poly), The Bloom (psychedelic), Blockworld (voxel), Ink, Elderwild (painted fantasy), Outrun (synthwave) and ERR_REALITY (corruption). Each has its own surface rendering, sky, character and arm treatment, seeded 3D background scenery, light, fog, grading, screen treatment, movement effects, HUD theme and music voicing. See docs/ART_DIRECTION.md.

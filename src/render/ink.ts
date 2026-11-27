@@ -22,6 +22,7 @@ const _m = new THREE.Matrix4();
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
+const _sk: number[] = new Array(8).fill(0);
 
 /** Compose a transform from position, Euler rotation and scale. */
 export function xf(x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx): THREE.Matrix4 {
@@ -44,6 +45,13 @@ export interface PartOpts {
   tone?: 'glove' | 'sleeve' | 'trim';
   /** Detail that sits inside the silhouette: it gets no outline hull (saves half its triangles). */
   noInk?: boolean;
+  /** Outline thickness multiplier for this piece (default 1): bold on big forms, fine on fingers. */
+  inkW?: number;
+  /**
+   * Skinning: called once per vertex with its position (after the piece's matrix) and an array to
+   * fill with up to four [boneIndex, weight] pairs (indices at 0,2,4,6, weights at 1,3,5,7).
+   */
+  skin?: (x: number, y: number, z: number, out: number[]) => void;
 }
 
 const TONE_CODE = { glove: -2, sleeve: -3, trim: -4 } as const;
@@ -79,6 +87,10 @@ export class PartBuilder {
   private col: number[] = [];
   private info: number[] = [];
   private idx: number[] = [];
+  private skinI: number[] = [];
+  private skinW: number[] = [];
+  private inkS: number[] = [];
+  private skinned = false;
   private count = 0;
   /** Vertex and index ranges of each added piece, and whether it takes part in the outline. */
   private pieces: { v0: number; v1: number; i0: number; i1: number; ink: boolean }[] = [];
@@ -100,6 +112,17 @@ export class PartBuilder {
       this.nor.push(_n.x, _n.y, _n.z);
       this.col.push(_c.r, _c.g, _c.b);
       this.info.push(0, glow);
+      this.inkS.push(o.inkW ?? 1);
+      if (o.skin) {
+        this.skinned = true;
+        _sk.fill(0);
+        o.skin(_v.x, _v.y, _v.z, _sk);
+        this.skinI.push(_sk[0], _sk[2], _sk[4], _sk[6]);
+        this.skinW.push(_sk[1], _sk[3], _sk[5], _sk[7]);
+      } else {
+        this.skinI.push(0, 0, 0, 0);
+        this.skinW.push(1, 0, 0, 0);
+      }
     }
     const index = geo.getIndex();
     if (index) for (let i = 0; i < index.count; i++) this.idx.push(base + index.getX(i));
@@ -135,16 +158,19 @@ export class PartBuilder {
       let h = n;
       const hp: number[] = [];
       const hn: number[] = [];
+      const hs: number[] = [];
       for (let i = 0; i < n; i++) {
         const k = keys[i];
         if (k === null) continue;
         const a = acc.get(k)!;
         const l = Math.hypot(a[0], a[1], a[2]) || 1;
+        const w = ink * this.inkS[i];
         hp.push(
-          this.pos[i * 3] + (a[0] / l) * ink,
-          this.pos[i * 3 + 1] + (a[1] / l) * ink,
-          this.pos[i * 3 + 2] + (a[2] / l) * ink,
+          this.pos[i * 3] + (a[0] / l) * w,
+          this.pos[i * 3 + 1] + (a[1] / l) * w,
+          this.pos[i * 3 + 2] + (a[2] / l) * w,
         );
+        hs.push(i);
         hn.push(-a[0] / l, -a[1] / l, -a[2] / l);
         hullIndex[i] = h++;
       }
@@ -159,6 +185,19 @@ export class PartBuilder {
       for (let i = n; i < h; i++) {
         this.col.push(0, 0, 0);
         this.info.push(1, 0);
+        const src = hs[i - n];
+        this.skinI.push(
+          this.skinI[src * 4],
+          this.skinI[src * 4 + 1],
+          this.skinI[src * 4 + 2],
+          this.skinI[src * 4 + 3],
+        );
+        this.skinW.push(
+          this.skinW[src * 4],
+          this.skinW[src * 4 + 1],
+          this.skinW[src * 4 + 2],
+          this.skinW[src * 4 + 3],
+        );
       }
       this.idx.push(...hullTris);
     }
@@ -167,6 +206,10 @@ export class PartBuilder {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('aInfo', new THREE.Float32BufferAttribute(this.info, 2));
+    if (this.skinned) {
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.skinI, 4));
+      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.skinW, 4));
+    }
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     return g;

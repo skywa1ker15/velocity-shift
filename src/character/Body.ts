@@ -19,7 +19,7 @@ import { clamp, damp } from '../core/math';
 import type { MovementController } from '../movement/MovementController';
 import { MoveState } from '../movement/types';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { createCharacterMaterial, lathe, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
+import { createCharacterMaterial, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
 import {
   bladeDir,
   DRAW_TIME,
@@ -32,6 +32,7 @@ import {
   type Sword,
 } from '../gameplay/Sword';
 import { buildSword, SWORD } from './SwordModel';
+import { buildArm, type ArmRig, type FingerRig } from './ArmRig';
 import { swingHilt } from '../fx/SlashFx';
 
 /** The runner's outfit (shared with the ghost figure). */
@@ -57,6 +58,8 @@ const _c = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _q3 = new THREE.Quaternion();
 
 /** Solve a two-bone chain: returns the elbow/knee position in `out`. */
 function solveTwoBone(
@@ -124,18 +127,16 @@ class Spring3 {
   }
 }
 
-interface Finger {
-  base: THREE.Group;
-  tip: THREE.Group;
-  spread: number;
-}
+type Finger = FingerRig;
 
 interface Arm {
   side: 1 | -1;
+  rig: ArmRig;
   shoulder: THREE.Vector3;
-  upper: THREE.Mesh;
-  fore: THREE.Mesh;
-  hand: THREE.Group;
+  upper: THREE.Bone;
+  fore: THREE.Bone;
+  twist: THREE.Bone;
+  hand: THREE.Bone;
   spring: Spring3;
   target: THREE.Vector3;
   elbow: THREE.Vector3;
@@ -196,6 +197,7 @@ export class Body {
   private rootLean = 0;
   private lateral = 0;
   private geos: THREE.BufferGeometry[] = [];
+  private skeletons: THREE.Skeleton[] = [];
   private sword: Sword | null = null;
   private swordMesh!: THREE.Mesh;
   /** Camera-space blade direction and tip of the drawn sword (for effects). */
@@ -246,246 +248,24 @@ export class Body {
 
   // ----- construction -------------------------------------------------------------------
   private buildArms() {
-    const o = outfit;
-    // Forearm anatomy, measured along the arm from the elbow (y = -0.135) to the wrist (+0.135):
-    // a long pushed-up sleeve to just past the middle, a rolled cuff, then a slim gauntlet that
-    // narrows to the wrist. `gaunt` is relative to the start of the gauntlet (S).
-    const cuffY = 0.03;
-    const S = cuffY + 0.012;
-    const gaunt: [number, number][] = [
-      [0.036, 0],
-      [0.0365, 0.014],
-      [0.032, 0.045],
-      [0.0275, 0.075],
-      [0.026, 0.092],
-      [0.0, 0.098],
-    ];
-    const gr = (y: number) => {
-      for (let i = 1; i < gaunt.length; i++)
-        if (y <= gaunt[i][1]) {
-          const k = (y - gaunt[i - 1][1]) / (gaunt[i][1] - gaunt[i - 1][1]);
-          return lerp(gaunt[i - 1][0], gaunt[i][0], clamp(k, 0, 1));
-        }
-      return gaunt[gaunt.length - 1][0];
-    };
-    const shift = (pts: [number, number][], dy: number) =>
-      pts.map(([r, y]) => [r, y + dy] as [number, number]);
     for (const side of [1, -1] as const) {
-      // upper arm: a tapered jacket sleeve, broad at the shoulder, narrowing to the elbow
-      const uh = UPPER / 2;
-      const upper = this.mesh(
-        new PartBuilder().add(
-          lathe(
-            [
-              [0.052, -uh - 0.01],
-              [0.06, -uh + 0.05],
-              [0.052, 0],
-              [0.047, uh - 0.03],
-              [0.049, uh + 0.015],
-            ],
-            9,
-            1,
-            0.92,
-          ),
-          null,
-          o.jacket,
-          { tone: 'sleeve' },
-        ),
-        0.004,
-      );
-
-      // forearm (local +Y runs toward the hand, local +Z is the back of the arm, facing the camera)
-      const half = FORE / 2;
-      const fb = new PartBuilder()
-        .add(
-          lathe(
-            [
-              [0.045, -half - 0.02],
-              [0.0495, -0.1],
-              [0.0465, -0.03],
-              [0.0435, cuffY - 0.01],
-            ],
-            10,
-            1,
-            0.9,
-          ),
-          null,
-          o.jacket,
-          { tone: 'sleeve' },
-        )
-        // rolled cuff
-        .add(
-          lathe(
-            [
-              [0.0425, cuffY - 0.014],
-              [0.0495, cuffY - 0.01],
-              [0.0515, cuffY],
-              [0.0495, cuffY + 0.01],
-              [0.039, cuffY + 0.014],
-            ],
-            10,
-            1,
-            0.9,
-          ),
-          null,
-          o.cuff,
-          { tone: 'sleeve' },
-        )
-        .add(lathe(shift(gaunt, S), 10, 1, 0.9), null, o.glove, { tone: 'glove' })
-        // wrist strap
-        .add(new THREE.CylinderGeometry(0.0275, 0.0275, 0.007, 10, 1), xf(0, S + 0.082), o.strap, {
-          tone: 'trim',
-          noInk: true,
-        });
-      // a slim bracer band that follows the arm, with an accent light ring at its lower edge
-      const plate: [number, number][] = [];
-      for (let y = 0.034; y <= 0.07; y += 0.018) plate.push([gr(y) + 0.0045, y]);
-      fb.add(lathe(shift(plate, S), 10, 1, 0.9), null, o.guard, { tone: 'trim' }).add(
-        lathe(
-          [
-            [gr(0.032) + 0.0058, S + 0.032],
-            [gr(0.032) + 0.0058, S + 0.037],
-          ],
-          10,
-          1,
-          0.9,
-        ),
-        null,
-        o.guard,
-        { accent: true, noInk: true },
-      );
-      const fore = this.mesh(fb, 0.0035);
-
-      // hand: local +Y points along the fingers, local +Z is the back of the hand, -Z the palm
-      const hand = new THREE.Group();
-      const palm = this.mesh(
-        new PartBuilder()
-          // tapered palm: slim at the wrist, wide across the knuckles
-          .add(
-            lathe(
-              [
-                [0.028, -0.004],
-                [0.034, 0.02],
-                [0.0405, 0.05],
-                [0.0445, 0.078],
-                [0.0425, 0.094],
-                [0.03, 0.1],
-                [0.0, 0.102],
-              ],
-              12,
-              1,
-              0.42,
-            ),
-            null,
-            o.glove,
-            { tone: 'glove' },
-          )
-          // knuckle guard on the back of the hand
-          .add(
-            lathe(
-              [
-                [0.0425, 0.05],
-                [0.0485, 0.066],
-                [0.0505, 0.08],
-                [0.0475, 0.094],
-              ],
-              8,
-              1,
-              0.5,
-              -0.95,
-              1.9,
-            ),
-            null,
-            o.guard,
-            { tone: 'trim' },
-          )
-          .add(
-            lathe(
-              [
-                [0.0455, 0.072],
-                [0.047, 0.078],
-              ],
-              3,
-              1,
-              0.5,
-              -0.55,
-              1.1,
-            ),
-            null,
-            o.guard,
-            { glow: 1, noInk: true },
-          )
-          // wrist ball: hides the joint when the hand bends against the forearm
-          .add(new THREE.SphereGeometry(0.03, 8, 6), xf(0, 0.002, 0, 0, 0, 0, 1, 0.9, 0.75), o.glove, {
-            tone: 'glove',
-          })
-          // thumb mound
-          .add(
-            new THREE.SphereGeometry(0.022, 8, 5),
-            xf(side * -0.034, 0.032, -0.008, 0, 0, 0, 1, 1.3, 0.8),
-            o.glove,
-            { tone: 'glove' },
-          ),
-        0.003,
-      );
-      hand.add(palm);
-      const makeFinger = (len: number, r: number, parent: THREE.Object3D): Finger => {
-        const base = new THREE.Group();
-        const l1 = 0.036 * len,
-          l2 = 0.026 * len,
-          l3 = 0.021 * len;
-        base.add(
-          this.mesh(
-            new PartBuilder().add(new THREE.CapsuleGeometry(r, l1, 2, 6), xf(0, l1 / 2), o.glove, {
-              tone: 'glove',
-            }),
-            0.0026,
-          ),
-        );
-        const tip = new THREE.Group();
-        tip.position.y = l1 + 0.002;
-        tip.add(
-          this.mesh(
-            new PartBuilder().add(
-              new THREE.CapsuleGeometry(r * 0.94, l2 + l3 * 0.6, 2, 6),
-              xf(0, (l2 + l3 * 0.6) / 2),
-              o.glove,
-              {
-                tone: 'glove',
-              },
-            ),
-            0.0026,
-          ),
-        );
-        base.add(tip);
-        parent.add(base);
-        return { base, tip, spread: 0 };
-      };
-      const fingers: Finger[] = [];
-      const lens = [0.9, 1, 0.95, 0.78];
-      for (let i = 0; i < 4; i++) {
-        // index finger sits on the thumb side
-        const f = makeFinger(lens[i], 0.0105, hand);
-        f.base.position.set(side * (i - 1.5) * 0.0214, 0.09, 0.001);
-        f.spread = -side * (i - 1.5) * 0.16;
-        fingers.push(f);
-      }
-      const thumb = makeFinger(1.05, 0.0122, hand);
-      thumb.base.position.set(side * -0.05, 0.034, 0.012);
-      thumb.spread = side * 0.75;
-
-      this.armRoot.add(upper, fore, hand);
+      const rig = buildArm(side, this.mat);
+      this.geos.push(rig.geometry);
+      this.skeletons.push(rig.skeleton);
+      this.armRoot.add(rig.group);
       const arm: Arm = {
         side,
+        rig,
         shoulder: new THREE.Vector3(side * 0.235, -0.275, 0.03),
-        upper,
-        fore,
-        hand,
+        upper: rig.upper,
+        fore: rig.fore,
+        twist: rig.twist,
+        hand: rig.hand,
         spring: new Spring3(),
         target: new THREE.Vector3(),
         elbow: new THREE.Vector3(),
-        fingers,
-        thumb,
+        fingers: rig.fingers,
+        thumb: rig.thumb,
         roll: 0,
         bend: 0,
         curl: 0.8,
@@ -696,6 +476,7 @@ export class Body {
         a.pole = damp(a.pole, a.tPole, 10, dt);
         this.solveArm(a);
         a.hand.quaternion.copy(this.swordHandQ);
+        this.finishHand(a);
         this.placeSword(a);
         continue;
       }
@@ -882,7 +663,6 @@ export class Body {
     _d.set(s * a.pole, -1, 0.5); // elbow pole: down, out and slightly back
     _b.copy(hand);
     solveTwoBone(a.shoulder, _b, UPPER, FORE, _d, a.elbow);
-    placeSegment(a.upper, a.shoulder, a.elbow);
     // forearm: explicit basis so its twist (and the hand's) is stable
     const f = _a.subVectors(_b, a.elbow).normalize();
     const r = _c.crossVectors(f, Y);
@@ -891,20 +671,49 @@ export class Body {
     const u = _d.crossVectors(r, f);
     _m.makeBasis(r, f, u); // right-handed: +Z is the back of the arm (up when it points forward)
     a.fore.quaternion.setFromRotationMatrix(_m);
-    a.fore.position.addVectors(a.elbow, _b).multiplyScalar(0.5);
+    a.fore.position.copy(a.elbow);
+    // upper arm: aims shoulder → elbow, with the forearm's side axis so the elbow does not twist
+    const du = _sa.subVectors(a.elbow, a.shoulder).normalize();
+    const ru = _sr.copy(r).addScaledVector(du, -r.dot(du));
+    if (ru.lengthSq() < 1e-6) ru.copy(r);
+    ru.normalize();
+    const uu = _sg.crossVectors(ru, du);
+    _m.makeBasis(ru, du, uu);
+    a.upper.quaternion.setFromRotationMatrix(_m);
+    a.upper.position.copy(a.shoulder);
     _q.setFromAxisAngle(Y, a.roll);
     a.hand.quaternion.copy(a.fore.quaternion).multiply(_q);
     _q.setFromAxisAngle(X, a.bend);
     a.hand.quaternion.multiply(_q);
     a.hand.position.copy(_b);
+    this.finishHand(a);
+  }
+
+  /**
+   * Everything that hangs off the final hand orientation: the mid-forearm twist bone (half of the
+   * hand's roll, so the forearm winds smoothly instead of kinking at the wrist) and the fingers.
+   */
+  private finishHand(a: Arm) {
+    const s = a.side;
+    // roll of the hand about the forearm axis: swing-twist split of the relative rotation
+    _q.copy(a.fore.quaternion).invert().multiply(a.hand.quaternion);
+    const tw = _q2.set(0, _q.y, 0, _q.w);
+    if (tw.lengthSq() < 1e-8) tw.identity();
+    else tw.normalize();
+    _q3.identity().slerp(tw, 0.5);
+    a.twist.quaternion.copy(a.fore.quaternion).multiply(_q3);
+    a.twist.position.addVectors(a.elbow, a.hand.position).multiplyScalar(0.5);
     for (let i = 0; i < 4; i++) {
-      const fg = a.fingers[i];
+      const [p, m, d] = a.fingers[i].bones;
       const c = clamp(a.curl * (1 + (i - 1.5) * 0.08), 0, 1.15);
-      fg.base.rotation.set(-c * 1.3, 0, fg.spread * (0.25 + a.splay * 1.1));
-      fg.tip.rotation.x = -c * 1.55;
+      p.rotation.set(-c * 1.05, 0, a.fingers[i].spread * (0.25 + a.splay * 1.1));
+      m.rotation.x = -c * 1.25;
+      d.rotation.x = -c * 0.7;
     }
-    a.thumb.base.rotation.set(-a.curl * 0.55, 0, a.thumb.spread * (0.75 + a.splay * 0.45) - s * a.curl * 0.3);
-    a.thumb.tip.rotation.x = -a.curl * 0.9;
+    const [p, m, d] = a.thumb.bones;
+    p.rotation.set(-a.curl * 0.45, 0, a.thumb.spread * (0.75 + a.splay * 0.45) - s * a.curl * 0.3);
+    m.rotation.x = -a.curl * 0.55;
+    d.rotation.x = -a.curl * 0.45;
   }
 
   // ----- sword arm ------------------------------------------------------------------------
@@ -1144,6 +953,7 @@ export class Body {
 
   dispose() {
     for (const g of this.geos) g.dispose();
+    for (const sk of this.skeletons) sk.dispose();
     this.mat.dispose();
     this.shadowMat.dispose();
     this.armRoot.removeFromParent();
