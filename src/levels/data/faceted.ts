@@ -1,8 +1,12 @@
 /**
  * LEVEL 6 — FACETED
  * A folded-paper valley where the ground keeps moving. Drifting stones, a turning carousel, stones
- * that blink in and out together, a launch pad up to the high terrace and a wall chain to the
- * finish: a course about timing, not speed. Home universe: Low-Poly.
+ * that blink in and out together, a launch pad up to the high terrace and a wall chain: a course
+ * about timing. Then the valley folds (Level 6, left/right rotation), in square paper tubes where
+ * whichever face is under you is the floor: a tube that folds left 90° as you run, one that folds
+ * right through 180°, the Crossing — a slot where gravity pulls to the nearer wall, so you jump
+ * across and it flips 180° in mid-air — and a last tube that unfolds upright, with a wall-run over
+ * a gap inside it and collapsing tiles out to the finish. Home universe: Low-Poly.
  */
 import { LevelBuilder } from '../LevelBuilder';
 import type { LevelData } from '../types';
@@ -106,8 +110,59 @@ export function build(): LevelData {
   b.wall(-3.0, T - 2, 223, 0.8, 9, 21); // 212.5..233.5
   b.wall(3.0, T - 2, 238.5, 0.8, 9, 14); // 231.5..245.5
   b.plat(0, T, 260, 14, 25); // 247.5..272.5
-  b.finish(0, T, 264, 12);
-  b.gate(0, T, 272, 10, 8);
+  b.checkpoint(0, T, 251);
+
+  // ===== F. The folds (left/right rotation) =================================================
+  // Square paper tubes, 4 m inside. Each tube's own gravity always pulls to its "floor" face (the
+  // one with the lit centre line), so as a tube rolls the world turns around you and the floor
+  // stays your floor; the static stretches between tubes continue the same orientation, so every
+  // hand-over is seamless. Each turn finishes well inside its tube even at a dash.
+  b.prompt(
+    [0, T + 1.5, 262],
+    [14, 4, 10],
+    'forward',
+    'The valley folds from here. Whatever is under you is the floor',
+  );
+  // (1) fold left: a quarter turn to the left as you run (gravity ends up pulling toward +X)
+  tube(b, 'fold1', 272.5, 322.5, { steps: [{ t: 1.6, rot: [0, 0, 1, 90] }] });
+  b.trigger([0, T + 2, 274], [4, 4, 2], 'fold1');
+  corridor(b, 322.5, 352.5, [{ dir: 1 }]);
+  b.checkpoint(0, T, 326);
+  // (2) fold right through 180°: from the left wall, over the top (upside down halfway), to the
+  // right wall
+  tube(b, 'fold2', 352.5, 402.5, { r0: 90, steps: [{ t: 2.2, rot: [0, 0, 1, 180] }] });
+  b.trigger([0, T + 2, 354], [4, 4, 2], 'fold2');
+  b.prompt([0, T + 2, 340], [4, 4, 8], 'forward', 'Next fold: all the way over, to the other side');
+  // (3) the Crossing: gravity pulls to whichever wall is nearer. Each wall has a gap; jump before
+  // it and you cross the middle, gravity flips 180° in mid-air and you land on the far wall
+  // Where gravity flips sits 0.75 m off the centre toward the wall you are leaving, so a full jump
+  // crosses with room to spare and even a tapped one does; just running on a wall never reaches it.
+  corridor(b, 402.5, 470, [
+    { dir: -1, holes: [[418, 424]] },
+    { dir: 1, holes: [[442, 448]] },
+  ]);
+  crossing(b, 402.5, 433, -0.75); // first crossing: right wall → left wall
+  crossing(b, 433, 470, 0.75); // second crossing: left wall → right wall
+  b.checkpoint(-1, T, 406);
+  b.checkpoint(-1, T, 462); // back on the right-hand wall after the second crossing
+  b.prompt([0, T + 2, 410], [4, 4, 6], 'jump', 'Jump across before the gap: gravity flips to the other wall');
+  // (4) unfold: back upright, then wall-run the tube's side over the gap in its floor; the tiles
+  // outside give way under you
+  tube(b, 'unfold', 470, 520, {
+    r0: -90,
+    steps: [{ t: 1.6, rot: [0, 0, 1, 90] }],
+    gap: [504, 512],
+    wallrun: true,
+  });
+  b.trigger([0, T + 2, 471], [4, 4, 2], 'unfold');
+  b.prompt([0, T + 2, 464], [4, 4, 6], 'jump', 'Unfold, then run the wall over the gap');
+  b.plat(0, T, 525, 8, 10); // 520..530
+  b.checkpoint(0, T, 523);
+  for (let i = 0; i < 4; i++)
+    b.entity({ type: 'collapse', p: [0, T - 0.3, 533 + i * 6], s: [6, 0.6, 5.8], delay: 0.9, mat: 'alt' });
+  b.plat(0, T, 569, 14, 30); // 554..584
+  b.finish(0, T, 566, 12);
+  b.gate(0, T, 583, 10, 8);
 
   scenery(b);
 
@@ -151,7 +206,24 @@ export function build(): LevelData {
     [2.2, T + 1, 236.5],
     [2.2, T + 1, 242.5, 'wj'],
     [0, T, 255],
-    [0, T, 264],
+    [0, T, 271],
+    // inside the tubes: points on the tube's axis do not move as it turns
+    [0, T + 2, 290, undefined, 2.5],
+    [0, T + 2, 350, undefined, 2.5],
+    [0, T + 2, 400, undefined, 2.5],
+    [-2, T + 2, 410, undefined, 2.5],
+    [-2, T + 2, 416.6, 'j', 2.5],
+    [2, T + 2, 430, undefined, 2.5],
+    [2, T + 2, 440.6, 'j', 2.5],
+    [-2, T + 2, 455, undefined, 2.5],
+    [0, T + 2, 480, undefined, 2.5],
+    [1.4, T, 499],
+    [1.4, T, 502.5, 'j', 0.8],
+    [1.6, T + 1, 507.5, undefined, 1.2],
+    [1.6, T + 1, 511.5, 'wj', 1.2],
+    [0, T, 523, undefined, 2],
+    [0, T, 545],
+    [0, T, 566],
   );
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('panel', 1.5, 0 + 1.9, 8);
@@ -164,12 +236,123 @@ export function build(): LevelData {
   b.breakable('crate', 1.5, T, 214);
   b.breakable('panel', -1.5, T + 1.9, 256);
   b.breakable('crate', 1.5, T, 266);
+  b.breakable('crate', -1.5, T, 527);
+  b.breakable('panel', 1.5, T + 1.9, 560);
   return b.data;
+}
+
+/**
+ * A square paper tube, 4 m inside, along z0..z1 with its pivot on the axis. Its local -Y face is
+ * the floor (lit centre line) and its own gravity always pulls toward it. `r0`: starting roll in
+ * degrees about Z; `gap`: a hole in the floor face (world z range); `wallrun`: the side faces can
+ * be wall-run (and are painted so).
+ */
+function tube(
+  b: LevelBuilder,
+  id: string,
+  z0: number,
+  z1: number,
+  o: {
+    r0?: number;
+    steps: { t: number; rot: [number, number, number, number] }[];
+    gap?: [number, number];
+    wallrun?: boolean;
+  },
+) {
+  const len = z1 - z0,
+    zc = (z0 + z1) / 2;
+  type Part = {
+    p: [number, number, number];
+    s: [number, number, number];
+    mat?: 'base' | 'alt' | 'accent' | 'dark';
+    wallrun?: boolean;
+  };
+  const parts: Part[] = [];
+  const floor = (a: number, c: number) => {
+    parts.push({ p: [0, -2.5, (a + c) / 2 - zc], s: [6, 1, c - a] });
+    parts.push({ p: [0, -1.97, (a + c) / 2 - zc], s: [0.3, 0.06, c - a - 0.4], mat: 'accent' });
+  };
+  if (o.gap) {
+    floor(z0, o.gap[0]);
+    floor(o.gap[1], z1);
+  } else floor(z0, z1);
+  parts.push({ p: [2.5, 0, 0], s: [1, 4, len], mat: 'alt', wallrun: !!o.wallrun });
+  parts.push({ p: [-2.5, 0, 0], s: [1, 4, len], mat: 'alt', wallrun: !!o.wallrun });
+  parts.push({ p: [0, 2.5, 0], s: [6, 1, len], mat: 'base' });
+  for (const x of [-1.9, 1.9]) parts.push({ p: [x, 1.9, 0], s: [0.12, 0.12, len], mat: 'accent' });
+  for (let z = -len / 2 + 3; z < len / 2; z += 6)
+    for (const k of [-1, 1]) {
+      // ribs: thin frames round the outside of the tube
+      parts.push({ p: [0, k * 3.1, z], s: [6.4, 0.2, 0.3], mat: 'dark' });
+      parts.push({ p: [k * 3.1, 0, z], s: [0.2, 6.4, 0.3], mat: 'dark' });
+    }
+  b.entity({
+    type: 'structure',
+    id,
+    on: id,
+    p: [0, T + 2, zc],
+    r: o.r0 ? [0, 0, (o.r0 * Math.PI) / 180] : undefined,
+    warn: 0.75,
+    steps: o.steps,
+    parts,
+  });
+  b.entity({ type: 'field', mode: 'structure', link: id, p: [0, 0, 0], s: [4, 4, len] });
+}
+
+/**
+ * A static stretch of the same square section, already turned. One side given: the whole width
+ * pulls toward that wall. Two sides: walls only (see `crossing` for their gravity).
+ * `holes`: gaps in that side's wall (world z ranges).
+ */
+function corridor(
+  b: LevelBuilder,
+  z0: number,
+  z1: number,
+  sides: { dir: -1 | 1; holes?: [number, number][] }[],
+) {
+  const len = z1 - z0,
+    zc = (z0 + z1) / 2;
+  b.solid({ p: [0, T - 0.5, zc], s: [6, 1, len], mat: 'base' });
+  b.solid({ p: [0, T + 4.5, zc], s: [6, 1, len], mat: 'base' });
+  for (const dir of [-1, 1] as const) {
+    const side = sides.find((sd) => sd.dir === dir);
+    const holes = side?.holes ?? [];
+    let a = z0;
+    for (const [h0, h1] of [...holes, [z1, z1] as [number, number]]) {
+      if (h0 > a) {
+        b.solid({ p: [dir * 2.5, T + 2, (a + h0) / 2], s: [1, 4, h0 - a], mat: 'alt', wallrun: false });
+        if (side) b.strip([dir * 1.97, T + 2, (a + h0) / 2], [0.06, 0.3, h0 - a - 0.4], 1);
+      }
+      a = h1;
+    }
+  }
+  if (sides.length === 1)
+    b.entity({ type: 'field', mode: 'dir', dir: [sides[0].dir, 0, 0], p: [0, T + 2, zc], s: [4, 4, len] });
+}
+
+/** Two-sided gravity over z0..z1: pulls toward -X left of `split`, toward +X right of it. */
+function crossing(b: LevelBuilder, z0: number, z1: number, split: number) {
+  const len = z1 - z0,
+    zc = (z0 + z1) / 2;
+  b.entity({
+    type: 'field',
+    mode: 'dir',
+    dir: [-1, 0, 0],
+    p: [(-2 + split) / 2, T + 2, zc],
+    s: [split + 2, 4, len],
+  });
+  b.entity({
+    type: 'field',
+    mode: 'dir',
+    dir: [1, 0, 0],
+    p: [(2 + split) / 2, T + 2, zc],
+    s: [2 - split, 4, len],
+  });
 }
 
 function scenery(b: LevelBuilder) {
   // folded hills: big faceted blocks tilted at angles either side of the valley
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 32; i++) {
     const side = i % 2 ? 1 : -1;
     const z = i * 19;
     const s = 18 + (i % 4) * 7;
@@ -185,6 +368,6 @@ function scenery(b: LevelBuilder) {
   }
   b.monolith(-110, -60, 180, 50, 160, 50, 'dark');
   b.monolith(120, -60, 260, 60, 180, 50, 'dark');
-  for (let i = 0; i < 28; i++)
+  for (let i = 0; i < 54; i++)
     b.shard(((i * 31) % 50) - 25, 10 + (i % 4) * 5, i * 11, 1 + (i % 3) * 0.6, i % 4 ? 'alt' : 'accent', 0.3);
 }

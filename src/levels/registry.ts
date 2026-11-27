@@ -147,12 +147,18 @@ export const levels: LevelEntry[] = [
       index: 6,
       name: 'FACETED',
       subtitle: 'Level 6',
-      description: 'A folded-paper valley where the ground keeps moving. A course about timing, not speed.',
+      description:
+        'A folded-paper valley where the ground keeps moving, until the valley itself folds: left, right, and over the top.',
       env: 'faceted',
       music: 'training',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
+      layout: 2, // rebuilt with the folds (bests reset)
       killY: -40,
-      medals: { bronze: 54, silver: 38.5, gold: 29.5, platinum: 25.5 },
+      bounds: [
+        [-60, -40, -30],
+        [60, 60, 640],
+      ],
+      medals: { bronze: 104, silver: 74, gold: 57, platinum: 49 },
       objectives: [
         { id: 'fa-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'fa-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

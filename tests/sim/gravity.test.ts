@@ -361,3 +361,41 @@ describe('launches', () => {
     expect(await bounce(20)).toBeGreaterThan((await bounce(2)) + 5);
   });
 });
+
+describe('walls of moving structures', () => {
+  // Rapier's character controller could refuse every sliding step against a collider on a
+  // kinematic body, freezing a player who ran or wall-ran along a structure's wall (found in
+  // Faceted's tubes). Such a wall must behave like a static one.
+  async function along(kind: 'static' | 'structure') {
+    const d = await makeSim((b) => {
+      b.plat(0, 0, 10, 4, 30); // -5..25
+      if (kind === 'static') b.solid({ p: [2.5, 2, 40], s: [1, 4, 60], mat: 'alt', wallrun: true });
+      else
+        b.entity({
+          type: 'structure',
+          id: 'w',
+          p: [0, 2, 40],
+          steps: [],
+          parts: [{ p: [2.5, 0, 0], s: [1, 4, 60], wallrun: true }],
+        });
+    });
+    let ranAlong = 0,
+      wallRun = 0;
+    for (let i = 0; i < 120 * 4 && d.pl.pos.y > -3; i++) {
+      const p = d.pl.pos;
+      // drift into the wall from z 15, then jump at the deck's edge and wall-run
+      d.tick({ moveZ: 1, sprint: true, moveX: p.z > 15 ? -0.3 : 0, jump: p.z > 24.4 && d.pl.grounded });
+      if (d.pl.grounded && p.x > 1.6 && p.z > 18) ranAlong++;
+      if (d.pl.state === MoveState.WallRun) wallRun = Math.max(wallRun, p.z);
+    }
+    return { ranAlong, wallRun };
+  }
+  test('running and wall-running along a structure wall go as far as along a static one', async () => {
+    const st = await along('static');
+    const mv = await along('structure');
+    expect(st.ranAlong).toBeGreaterThan(20);
+    expect(st.wallRun).toBeGreaterThan(33);
+    expect(mv.ranAlong).toBeGreaterThan(st.ranAlong - 3);
+    expect(mv.wallRun).toBeGreaterThan(st.wallRun - 1);
+  });
+});

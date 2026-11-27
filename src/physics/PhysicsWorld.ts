@@ -197,7 +197,32 @@ export class PhysicsWorld implements CollisionWorld {
     t.y = dy;
     t.z = dz;
     this.kcc.computeColliderMovement(this.player, t, undefined, QUERY_GROUPS);
-    const m = this.kcc.computedMovement();
+    let m = this.kcc.computedMovement();
+    // Against the walls of a moving structure (a collider on a kinematic body) the controller can
+    // refuse a sliding step outright while the capsule rests in that wall's contact skin, freezing
+    // a wall-run or a run along the wall. As in a turned frame: if a step makes almost no progress
+    // against such a wall, ease out of the skin along it and take the step again. (Static level
+    // geometry never takes this path, so every course without structures is unchanged.)
+    const want = Math.hypot(dx, dy, dz);
+    if (want > 1e-4 && Math.hypot(m.x, m.y, m.z) < want * 0.2 && this.kcc.numComputedCollisions() > 0) {
+      const col = this.kcc.computedCollision(0);
+      if (
+        col &&
+        Math.abs(col.normal1.y) < 0.7 &&
+        col.collider &&
+        this.meta.get(col.collider.handle)?.motion
+      ) {
+        const nudge = 0.03,
+          nx = col.normal1.x,
+          ny = col.normal1.y,
+          nz = col.normal1.z;
+        const t0 = this.player.translation();
+        this.player.setTranslation({ x: t0.x + nx * nudge, y: t0.y + ny * nudge, z: t0.z + nz * nudge });
+        this.kcc.computeColliderMovement(this.player, t, undefined, QUERY_GROUPS);
+        const m2 = this.kcc.computedMovement();
+        m = { x: m2.x + nx * nudge, y: m2.y + ny * nudge, z: m2.z + nz * nudge } as typeof m;
+      }
+    }
     out.x = feet.x + m.x;
     out.y = feet.y + m.y;
     out.z = feet.z + m.z;

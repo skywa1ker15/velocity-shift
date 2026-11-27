@@ -428,6 +428,9 @@ export class LevelView {
     _p.set(dir[0], dir[1], dir[2]).normalize();
     const qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), _p);
     const sideways = Math.abs(_p.x) > Math.abs(_p.y); // pull along X: chevrons on the top and bottom faces
+    // in a narrow tube or slot the faces are the surfaces you run on: no chevrons there (tubes mark
+    // their floor with a lit centre line instead)
+    if (Math.min(d.s[0], d.s[1]) <= 4.5) return;
     const nz = Math.max(1, Math.min(6, Math.round(d.s[2] / 6)));
     const na = Math.max(1, Math.min(3, Math.round((sideways ? d.s[0] : d.s[1]) / 6)));
     for (const face of [-1, 1])

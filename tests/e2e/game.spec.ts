@@ -383,3 +383,51 @@ test("Level 5: holding W down Ink Falls' Cascade (real keyboard, real-time) ride
   expect(s.z).toBeGreaterThanOrEqual(462);
   expect(lowestOnSlab).toBeLessThan(-40); // stood on slabs that had fallen 20 m and more
 });
+
+test("Level 6: Faceted's Crossing with the real keyboard (W held, Space at each gap) flips gravity 180° twice", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'faceted');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 406) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        x: p.pos.x,
+        z: p.pos.z,
+        ux: u.x,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let s = await pl();
+  let jumps = 0,
+    onLeft = false,
+    backOnRight = false;
+  for (let i = 0; i < 3000 && s.z < 465 && s.deaths === 0; i++) {
+    s = await pl();
+    // a person presses Space as each gap comes up, several metres before it (any jump from the
+    // checkpoint to the gap's edge crosses; reading the game from the browser is itself slow)
+    if (s.grounded && ((jumps === 0 && s.z > 411) || (jumps === 1 && s.z > 435))) {
+      await page.keyboard.press('Space');
+      jumps++;
+    }
+    if (s.grounded && s.ux < -0.99 && s.x > 1.9) onLeft = true;
+    if (onLeft && s.grounded && s.ux > 0.99 && s.x < -1.9 && s.z > 450) backOnRight = true;
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(onLeft).toBe(true);
+  expect(backOnRight).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(465);
+});

@@ -63,8 +63,8 @@ function hold(d: Driver, keys: Keys, zEnd: number, seconds = 30, onTick?: (s: Sa
   return out;
 }
 
-const RUN: Keys = { moveZ: 1, sprint: false };
-const SPRINT: Keys = { moveZ: 1, sprint: true };
+const RUN: Keys = { moveZ: 1, moveX: 0, sprint: false };
+const SPRINT: Keys = { moveZ: 1, moveX: 0, sprint: true };
 
 describe('Level 3, Momentum: the first Dynamic World act', () => {
   test('the turntable bridge swings into place ahead of a dashing sprinter from the crusher exit', async () => {
@@ -303,5 +303,87 @@ describe('Level 5, Ink Falls: the gorge comes apart', () => {
     const g = s.filter((p) => p.grounded && p.z > 399 && p.z < 455).map((p) => p.y);
     for (let i = 1; i < g.length; i++) expect(g[i]).toBeLessThanOrEqual(g[i - 1] + 0.05);
     expect(Math.min(...g)).toBeLessThan(C - 20);
+  });
+});
+
+describe('Level 6, Faceted: the folds (left and right rotation)', () => {
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(1) fold left: %s stays on the tube floor as it turns 90° left', async (_n, keys) => {
+    const { d, deaths } = await at('faceted', 251);
+    const s = hold(d, keys, 335, 30);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(335);
+    const end = s.filter((p) => p.z > 315);
+    for (const p of end) expect(p.up.x).toBeLessThan(-0.99); // gravity now pulls toward +X
+    expect(
+      s.filter((p) => p.z > 276).filter((p) => p.grounded).length / s.filter((p) => p.z > 276).length,
+    ).toBeGreaterThan(0.9);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(2) fold right through 180°: %s goes over the top to the other wall', async (_n, keys) => {
+    const { d, deaths } = await at('faceted', 326);
+    const s = hold(d, keys, 405, 30);
+    expect(deaths()).toBe(0);
+    expect(Math.min(...s.map((p) => p.up.y))).toBeLessThan(-0.9); // upside down on the way over
+    for (const p of s.filter((q) => q.z > 396)) expect(p.up.x).toBeGreaterThan(0.99); // now pulls toward -X
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(3) the Crossing: %s jumps across twice, gravity flipping 180° each time', async (_n, keys) => {
+    const { d, deaths } = await at('faceted', 406);
+    let jumps = 0;
+    const s = hold(d, keys, 465, 30, (p) => {
+      if (p.grounded && ((jumps === 0 && p.z > 416.2) || (jumps === 1 && p.z > 440.2)))
+        return (jumps++, { jump: true });
+    });
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(465);
+    expect(s.some((p) => p.grounded && p.z > 425 && p.z < 438 && p.x > 1.9 && p.up.x < -0.99)).toBe(true);
+    expect(s.some((p) => p.grounded && p.z > 452 && p.x < -1.9 && p.up.x > 0.99)).toBe(true);
+  });
+
+  test('(3) a tapped jump (released at once, so cut short) still crosses both times', async () => {
+    const { d, deaths } = await at('faceted', 406);
+    let jumps = 0;
+    hold(d, SPRINT, 465, 30, (p) => {
+      if (p.grounded && ((jumps === 0 && p.z > 416.2) || (jumps === 1 && p.z > 440.2)))
+        return (jumps++, { jump: true });
+      return { jumpHeld: false };
+    });
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(465);
+  });
+
+  test('(3) the gaps are real: no jump, no crossing', async () => {
+    const { d, deaths } = await at('faceted', 406);
+    hold(d, SPRINT, 430, 10);
+    d.run(2, SPRINT);
+    expect(deaths()).toBeGreaterThan(0);
+  });
+
+  test.each([
+    ['a wall-run', true],
+    ['a double jump', false],
+  ])('(4) unfold, then %s over the floor gap and out over the falling tiles', async (_n, wallrun) => {
+    const { sim, d, deaths } = await at('faceted', 462);
+    let jumped = 0;
+    hold(d, SPRINT, 590, 30, (p) => {
+      if (p.z > 496 && p.z < 512 && wallrun) {
+        const k: Keys = { moveX: p.z < 503 ? -0.6 : -0.15 };
+        if (jumped === 0 && p.grounded && p.z > 502.3) return (jumped++, { ...k, jump: true });
+        return k;
+      }
+      if (!wallrun && p.z > 502.8 && jumped === 0 && p.grounded) return (jumped++, { jump: true });
+      if (!wallrun && jumped === 1 && !p.grounded && d.pl.vel.y < 0) return (jumped++, { jump: true });
+    });
+    expect(deaths()).toBe(0);
+    expect(sim.stats.finished).toBe(true);
   });
 });
