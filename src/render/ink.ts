@@ -10,6 +10,8 @@
  * halftone dots in the shade, accent-coloured paint and glow.
  */
 import * as THREE from 'three';
+import { charDecl } from '../multiverse/character';
+import { mv, mvGLSL } from '../multiverse/uniforms';
 import { toonRamp, worldUniforms } from './WorldMaterial';
 
 const _v = new THREE.Vector3();
@@ -187,7 +189,13 @@ export interface CharacterMaterial extends THREE.MeshToonMaterial {
  * Toon material for the character. `fade` < 1 turns the piece into a translucent "echo"
  * (used by the ghost): flat accent tint, ink kept.
  */
-export function createCharacterMaterial(opts: { ghost?: boolean } = {}): CharacterMaterial {
+export function createCharacterMaterial(
+  opts: {
+    ghost?: boolean;
+    /** First-person viewmodel: follows the universe the camera is in rather than a world position. */
+    view?: boolean;
+  } = {},
+): CharacterMaterial {
   const mat = new THREE.MeshToonMaterial({
     vertexColors: true,
     gradientMap: toonRamp(),
@@ -212,9 +220,26 @@ export function createCharacterMaterial(opts: { ghost?: boolean } = {}): Charact
     shader.uniforms.uGlowK = glowK;
     shader.uniforms.uInk = worldUniforms.uInk;
     shader.uniforms.uSunPower = worldUniforms.uSunPower;
+    shader.uniforms.uTime = worldUniforms.uTime;
+    shader.uniforms.uViewModel = { value: opts.view ? 1 : 0 };
+    Object.assign(shader.uniforms, mv);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nattribute vec2 aInfo;\nvarying vec2 vInfo;`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvInfo = aInfo;`);
+      .replace(
+        '#include <common>',
+        `#include <common>\nattribute vec2 aInfo;\nvarying vec2 vInfo;\nvarying vec3 vMvW;`,
+      )
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvInfo = aInfo;`)
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+{
+  vec4 mvw = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  mvw = instanceMatrix * mvw;
+  #endif
+  vMvW = (modelMatrix * mvw).xyz;
+}`,
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -227,7 +252,8 @@ uniform vec3 uTrim;
 uniform vec3 uInk;
 uniform float uFade;
 uniform float uGlowK;
-uniform float uSunPower;`,
+uniform float uSunPower;
+${ghost ? '' : mvGLSL + charDecl}`,
       )
       .replace(
         '#include <color_fragment>',
@@ -264,12 +290,22 @@ totalEmissiveRadiance += uAccent * max(vInfo.y, 0.0) * 1.6 * uGlowK;`,
       ? `outgoingLight = mix(uAccent * 1.3, outgoingLight, 0.25);
   diffuseColor.a = uFade * 0.5;
   if (vInfo.x > 0.5) { outgoingLight = uAccent * 2.0; diffuseColor.a = uFade * 0.9; }`
-      : `if (vInfo.x > 0.5) outgoingLight = uInk;`
+      : `if (vInfo.x > 0.5) outgoingLight = uInk;
+  // ---- other universes re-render the same facts in their own style ----
+  float mvm = uViewModel > 0.5 ? uInB : (uUniOn > 0.5 ? mvMask(mvSdf(vMvW)) : 0.0);
+  if (uUniA > 0.5 || (uUniB > 0.5 && mvm > 0.001)) {
+    vec3 glowC = uAccent * max(vInfo.y, 0.0) * uGlowK;
+    float litC = clamp(lit, 0.0, 1.0);
+    vec3 ca = outgoingLight, cb = outgoingLight;
+    if (uUniA > 0.5 && mvm < 0.999) ca = mvChar(uUniA, diffuseColor.rgb, litC, rimK, vInfo.x, glowC, normal, uPalA, uSunA, uAmbA);
+    if (uUniB > 0.5 && mvm > 0.001) cb = mvChar(uUniB, diffuseColor.rgb, litC, rimK, vInfo.x, glowC, normal, uPalB, uSunB, uAmbB);
+    outgoingLight = mix(ca, cb, mvm);
+  }`
   }
 }
 #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => (ghost ? 'vs-char-ghost' : 'vs-char');
+  mat.customProgramCacheKey = () => (ghost ? 'vs-char-ghost' : opts.view ? 'vs-char-view' : 'vs-char');
   return mat;
 }

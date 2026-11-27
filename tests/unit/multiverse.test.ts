@@ -184,3 +184,57 @@ describe('director', () => {
     expect(mv.uSkyA.value[0].getHex()).toBe(env.sky.top);
   });
 });
+
+describe('scenery', () => {
+  it('builds for every level, is deterministic, and never comes near anything the player can touch', async () => {
+    const { levels } = await import('../../src/levels/registry');
+    const { Scenery } = await import('../../src/multiverse/Scenery');
+    for (const entry of levels) {
+      const data = (await entry.load()).build();
+      const env = getEnv(entry.meta.env);
+      const a = new Scenery(entry.meta.id, data, env);
+      const b = new Scenery(entry.meta.id, data, env);
+      expect(a.triangles).toBeGreaterThan(1000);
+      expect(a.triangles).toBe(b.triangles);
+      expect(a.triangles).toBeLessThan(160_000);
+      // rotation-proof bounds of every solid and of every stop on a mover's path
+      const boxes: number[][] = [];
+      const add = (p: number[], s: number[], rotated: boolean) => {
+        const r = Math.hypot(s[0], s[1], s[2]) / 2;
+        const h = rotated ? [r, r, r] : [s[0] / 2, s[1] / 2, s[2] / 2];
+        boxes.push([p[0] - h[0], p[0] + h[0], p[1] - h[1], p[1] + h[1], p[2] - h[2], p[2] + h[2]]);
+      };
+      for (const s of data.solids) add(s.p, s.s, !!(s.q || s.r));
+      for (const e of data.entities as unknown as { p?: number[]; s?: number[]; path?: number[][] }[]) {
+        if (e.p && e.s) add(e.p, e.s, false);
+        if (e.s && e.path) for (const pt of e.path) add(pt, e.s, false);
+      }
+      let min = Infinity;
+      let firstA = 0,
+        firstB = 0;
+      a.group.children.forEach((child, ci) => {
+        const pos = (child as THREE.Mesh).geometry.getAttribute('position');
+        const other = (b.group.children[ci] as THREE.Mesh).geometry.getAttribute('position');
+        firstA += pos.getX(0) + pos.getY(7) + pos.getZ(pos.count - 1);
+        firstB += other.getX(0) + other.getY(7) + other.getZ(other.count - 1);
+        for (let i = 0; i < pos.count; i += 3) {
+          const x = pos.getX(i),
+            y = pos.getY(i),
+            z = pos.getZ(i);
+          for (const bx of boxes) {
+            const dx = Math.max(bx[0] - x, 0, x - bx[1]),
+              dy = Math.max(bx[2] - y, 0, y - bx[3]),
+              dz = Math.max(bx[4] - z, 0, z - bx[5]);
+            const d = Math.hypot(dx, dy, dz);
+            if (d < min) min = d;
+          }
+        }
+      });
+      expect(firstA).toBe(firstB);
+      // props bob by 0.6 m and twist about their anchor as they unfold: keep a real margin
+      expect(min, entry.meta.id + ' scenery clearance').toBeGreaterThan(4);
+      a.dispose();
+      b.dispose();
+    }
+  }, 60_000);
+});

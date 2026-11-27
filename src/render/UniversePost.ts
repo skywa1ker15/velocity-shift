@@ -9,6 +9,7 @@ import { Uniform, Vector2 } from 'three';
 import { NO_SCREEN, type ScreenLook } from '../multiverse/universes';
 
 const frag = /* glsl */ `
+uniform float uRain;
 uniform float uHalftone, uScan, uPixel, uFringe, uGrain, uPosterize, uPaper, uGlitch, uHueDrift, uT, uBurst;
 uniform vec2 uRes;
 float uvH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -57,7 +58,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     vec2 g = mat2(0.7071, -0.7071, 0.7071, 0.7071) * (uv * uRes) / (4.0 * s);
     float dotR = length(fract(g) - 0.5);
     float cover = smoothstep(0.0, 0.08, (1.0 - lum) * 0.62 - dotR);
-    col = mix(col, col * 0.42, cover * uHalftone * smoothstep(0.75, 0.3, lum));
+    col = mix(col, col * 0.42, cover * uHalftone * (1.0 - smoothstep(0.3, 0.75, lum)));
   }
   if (uScan > 0.001) {
     float line = 0.5 + 0.5 * sin(uv.y * uRes.y * 3.14159 / max(1.0, floor(uRes.y / 360.0)));
@@ -67,6 +68,21 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   if (uPaper > 0.001) {
     float fibre = uvN(uv * uRes * vec2(0.09, 0.42)) * 0.6 + uvN(uv * uRes * 0.5) * 0.4;
     col *= 1.0 - uPaper * 0.1 * (1.0 - fibre);
+  }
+  if (uRain > 0.001) {
+    // rain: two layers of slanted streaks falling past the lens
+    for (int i = 0; i < 2; i++) {
+      float fi = float(i);
+      vec2 q = uv * vec2(uRes.x / uRes.y, 1.0) * (22.0 + fi * 16.0);
+      q.x += q.y * 0.12;
+      q.y += uT * (9.0 + fi * 5.0);
+      vec2 id = floor(q * vec2(1.0, 0.12));
+      float on = step(0.72, uvH(id + fi * 31.0));
+      float x = abs(fract(q.x) - 0.5);
+      float len = fract(q.y * 0.12);
+      float streak = (1.0 - smoothstep(0.02, 0.06, x)) * smoothstep(0.0, 0.2, len) * (1.0 - smoothstep(0.55, 0.9, len));
+      col += vec3(0.55, 0.7, 0.9) * streak * on * uRain * (0.1 - fi * 0.03);
+    }
   }
   if (uGrain > 0.001) {
     float g = uvH(uv * uRes + fract(uT * 7.0) * 91.7) - 0.5;
@@ -87,6 +103,7 @@ export class UniverseEffect extends Effect {
       blendFunction: BlendFunction.NORMAL,
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map<string, Uniform>([
+        ['uRain', new Uniform(0)],
         ['uHalftone', new Uniform(0)],
         ['uScan', new Uniform(0)],
         ['uPixel', new Uniform(0)],
@@ -117,6 +134,7 @@ export class UniverseEffect extends Effect {
     const u = this.uniforms,
       o = this.look,
       i = this.intensity;
+    u.get('uRain')!.value = o.rain;
     u.get('uHalftone')!.value = o.halftone;
     u.get('uScan')!.value = o.scan * i;
     u.get('uPixel')!.value = o.pixel;

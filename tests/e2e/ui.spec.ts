@@ -279,3 +279,39 @@ test('multiverse: a shift completes mid-run without touching the simulation or l
   expect(after.textures).toBeLessThanOrEqual(before.textures + 2);
   expect((await page.evaluate(() => (window as any).__vs.multiverse.describe())).here).toBe(home);
 });
+
+test('multiverse: every universe renders on a level, and a shift between each pair of neighbours completes', async ({
+  page,
+}) => {
+  await boot(page);
+  await page.evaluate(() => {
+    const g = (window as any).__vs;
+    g.mvSeed = 3;
+    g.multiverse.enabled = false; // drive the universes by hand
+  });
+  await startLevel(page, 'awakening');
+  const ids: string[] = await page.evaluate(async () => {
+    const g = (window as any).__vs;
+    return g.universeIds();
+  });
+  expect(ids.length).toBeGreaterThanOrEqual(6);
+  for (const id of ids) {
+    await page.evaluate((u) => (window as any).__vs.multiverse.snap(u), id);
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => (window as any).__vs.multiverse.describe().here)).toBe(id);
+    expect(await page.evaluate(() => document.documentElement.dataset.universe)).toBe(id);
+  }
+  // chain shifts through the whole library; any shader error fails the test through the console check
+  for (const id of ids) {
+    await page.evaluate((u) => (window as any).__vs.debugShift(u), id);
+    await page.waitForFunction(
+      () =>
+        (window as any).__vs.multiverse.describe().blend > 0.9 ||
+        !(window as any).__vs.multiverse.describe().shifting,
+      null,
+      {
+        timeout: 60_000,
+      },
+    );
+  }
+});

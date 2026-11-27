@@ -206,7 +206,7 @@ export class Body {
   readonly contact = new THREE.Vector3();
 
   constructor(viewScene: THREE.Scene, worldScene: THREE.Scene) {
-    this.mat = createCharacterMaterial();
+    this.mat = createCharacterMaterial({ view: true });
     this.buildArms();
     this.buildLegs();
     {

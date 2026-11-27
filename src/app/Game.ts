@@ -18,7 +18,8 @@ import { getEnv, type EnvPreset } from '../environment/presets';
 import { Motes, Sparks, SpeedLines, Sprite, Stickers } from '../fx/Fx';
 import { worldUniforms } from '../render/WorldMaterial';
 import { Director } from '../multiverse/Director';
-import type { UniverseId } from '../multiverse/universes';
+import { Scenery } from '../multiverse/Scenery';
+import { UNIVERSE_IDS, type UniverseId } from '../multiverse/universes';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -268,6 +269,8 @@ export class Game {
     this.view = null;
     this.breaks?.dispose();
     this.breaks = null;
+    this.scenery?.dispose();
+    this.scenery = null;
     this.slash.clear();
     this.body.setSword(null);
     this.menuSim?.dispose();
@@ -300,6 +303,14 @@ export class Game {
     },
   });
   private universeStreak = 0;
+  /** Each universe's background architecture for the loaded level. */
+  scenery: Scenery | null = null;
+
+  private buildScenery(levelId: string, data: LevelData) {
+    this.scenery?.dispose();
+    this.scenery = new Scenery(levelId, data, this.env, this.renderer.tier.particles >= 1 ? 1 : 0.6);
+    this.renderer.scene.add(this.scenery.group);
+  }
   /** Tests / debugging: use this seed for the next runs instead of a fresh random one. */
   mvSeed: number | null = null;
 
@@ -307,6 +318,11 @@ export class Game {
   private beginMultiverse(levelId: string, checkpoints: number) {
     const seed = this.mvSeed ?? Math.floor(Math.random() * 0x7fffffff);
     this.multiverse.begin(levelId, this.env, seed, checkpoints);
+  }
+
+  /** Debug / tests: every universe in the library. */
+  universeIds() {
+    return [...UNIVERSE_IDS];
   }
 
   /** Debug: shift to a universe from a point just ahead of the camera. */
@@ -430,6 +446,7 @@ export class Game {
       this.breaks = new BreakableView(data.breakables, this.env.palette, this.sim);
       this.breaks.onCrumble = (at) => this.puffs(at, 5, 1.2, 0.45);
       this.renderer.scene.add(this.view.group, this.breaks.group);
+      this.buildScenery(id, data);
       this.body.setSword(this.sim.sword);
       this.wireSim(this.sim);
       set({ loadProgress: 0.7, loadLabel: 'Compiling shaders' });
@@ -1180,6 +1197,7 @@ export class Game {
     this.carry.set(pl.vel.x * 0.8, 0, pl.vel.z * 0.8);
     worldUniforms.uPlayer.value.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
     this.multiverse.update(dt, this.rig.eye, _n.set(fwdX, 0, fwdZ));
+    this.scenery?.update();
     this.ghost.update(
       sim.runTime,
       this.settings.ghost && sim.stats.started && !sim.stats.finished,
