@@ -1,5 +1,25 @@
 # Changelog
 
+## Progressive level design: the world learns to move
+
+- **A progression across the nine courses.** Levels 1–2 are unchanged; each later course keeps its own sections and identity and adds one new idea, introduced on its own and then combined:
+  - **Level 3, Momentum:** the first dynamic world (turntable bridge, gravity chute, the Roll);
+  - **Level 4, Breakpoint:** gravity manipulation (light, launch, huge fall and spring, heavy, sideways, reverse, combined);
+  - **Level 5, Ink Falls:** destruction (toppling pillar, braces you break, the Cascade of falling slabs);
+  - **Level 6, Faceted:** left/right rotation (fold left 90°, fold right 180° over the top, the Crossing's mid-air 180° flips, unfold with a wall-run);
+  - **Level 7, Blockfall:** up/down rotation (run up a face and over, down a face, the Turnover across a ceiling);
+  - **Level 8, Corrupted Core:** everything at once (Breach, Twist & Climb, the Core Plunge);
+  - **Level 9, Shift Point:** kept, plus a finale (Barrel Roll, Grand Climb, Falling Summit, Last Slingshot).
+- Medal times recalibrated on every rebuilt course. Courses carry a layout version: best times, medals and ghosts set on an old layout are cleared once, while shards, objectives and achievements are kept.
+- **Engine additions:**
+  - `pipe` gravity fields and curved profile surfaces (floors that curl into walls and ceilings);
+  - shared rolling tubes;
+  - breakables that fire level events;
+  - quiet fields;
+  - gravity chevrons that line a volume's sides instead of filling it.
+- **Fix:** running or wall-running along the wall of a moving structure could freeze the player. Static geometry is unaffected.
+- **Tests:** 62 progression tests (every mechanic at a plain run and a sprint, with negative cases) and a real-keyboard end-to-end test per mechanic family. Report and evidence: `docs/progression/`.
+
 ## Phase G: Dynamic World and extreme movement
 
 - **Gravity frames.** Gravity can point in any direction: sideways, reverse, diagonal, zero, low or heavy, wells, rotating fields, and fields that follow a moving structure. Every move (sprint, slide, wall-run, vault, dash, double jump) works unchanged on walls and ceilings. Momentum is exact through every turn; frame turns are eased and rate-capped and roll about the facing direction, while gravity itself is never delayed. Courses without gravity changes run the original code path (reference runs unchanged to the tick).

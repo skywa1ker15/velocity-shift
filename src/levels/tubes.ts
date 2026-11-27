@@ -18,7 +18,7 @@ export function tube(
   z1: number,
   o: {
     r0?: number;
-    steps: { t: number; rot: [number, number, number, number] }[];
+    steps: { t: number; rot: [number, number, number, number]; ease?: 'linear' | 'smooth' | 'in' | 'out' }[];
     gap?: [number, number];
     wallrun?: boolean;
   },

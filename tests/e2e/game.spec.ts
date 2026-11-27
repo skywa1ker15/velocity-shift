@@ -511,3 +511,46 @@ test("Level 8: holding W through Corrupted Core's Breach (real keyboard, real-ti
   expect(s.z).toBeGreaterThanOrEqual(336);
   expect(s.y).toBeCloseTo(-18, 0);
 });
+
+test("Level 9: holding W through Shift Point's Barrel Roll and Grand Climb (real keyboard, real-time)", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'shiftpoint');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 486) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        y: p.pos.y,
+        z: p.pos.z,
+        uy: u.y,
+        uz: u.z,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let s = await pl();
+  let inverted = false,
+    face = false;
+  for (let i = 0; i < 4000 && s.z < 640 && s.deaths === 0; i++) {
+    s = await pl();
+    if (s.grounded && s.uy < -0.99 && s.z > 506 && s.z < 620) inverted = true; // upside down in the roll
+    if (s.grounded && s.uz < -0.99 && s.y > 20) face = true; // high on the 20 m face
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(inverted).toBe(true);
+  expect(face).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(640);
+  expect(s.y).toBeCloseTo(34, 0);
+});

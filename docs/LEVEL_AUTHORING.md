@@ -109,6 +109,35 @@ Rules that keep it fair and stable:
 - Checkpoints before every set-piece, lined up with what follows (respawn and run straight).
 - A level whose gravity can point anywhere should set `bounds` (falling up is also out).
 
+## Progression tools (Levels 3–9)
+
+```ts
+import { arc, ceilingAt, faceAt, floorAt, type Lane } from '../profile';
+import { tube } from '../tubes';
+const L: Lane = [-3, 3];
+// pitch: a floor that curls up into a 6 m face and over the top (angles: see profile.ts)
+floorAt(b, L, 0, 260, 270);
+arc(b, L, 5, 270, 5, 0, 90, 'inside'); // floor → wall
+faceAt(b, L, 275, 5, 11, -1); // run up it
+arc(b, L, 11, 280, 5, -90, -180, 'outside'); // over the crest (R ≥ v²/g ≈ 5 m)
+// roll: a square tube whose own gravity keeps you on its floor face as it turns
+tube(b, baseY, 'fold', 272.5, 322.5, { steps: [{ t: 1.6, rot: [0, 0, 1, 90] }] });
+// destructible architecture: break it (sword or body) to fire an event; always pair with a trigger
+b.breakable('column', 0, y, z, { scale: 1.4, fires: 'tower' });
+b.trigger([0, y + 1.5, zEdge], [6, 4, 4], 'tower'); // in front of whatever it opens: no soft-lock
+// fields can draw nothing when the surface already shows the way
+b.entity({ type: 'field', mode: 'pipe', center, axis: [1, 0, 0], inward: false, quiet: true, p, s });
+```
+
+Rules learned the hard way:
+
+- **Start fields at the deck's edge.** A walker stepping off must be caught at once, not after 2 m of ordinary gravity.
+- **Reverse gravity over a collapsible ceiling must reach far above it.** Falling up through a broken panel has to be a fall into the sky; otherwise the player hovers forever at the field's edge.
+- **Keep fast full rolls slow and steady.** About 1.3 rad/s at a constant rate (`ease: 'linear'`) works; split a 360° roll into halves.
+- **Keep lanes centred on where the player naturally runs.**
+- **Give a crossing's gravity-flip point margin for a tapped jump.**
+- **Bump `meta.layout` whenever you rebuild a course,** so stale bests and ghosts reset.
+
 ## Hidden routes are tested
 
 `tests/sim/hidden-routes.test.ts` holds a second bot line per course that takes the hidden route.

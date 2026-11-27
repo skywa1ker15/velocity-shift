@@ -5,16 +5,24 @@
  *   C  the Wall Run: sideways gravity — the wall becomes the floor
  *   D  the Falling Bridge: sections drop behind you while a tower topples across the chasm
  *   E  Gravity Chaos: a slingshot ring through low gravity, then reverse gravity — run the ceiling
- *   F  the carousel and the finish
+ *   F  the carousel: a calm beat before the end
+ *   G  the finale (everything the game has taught, at its biggest): the Barrel Roll, a tube that
+ *      turns a full 360° while you sprint; the Grand Climb, a floor that curls up a 20 m face and
+ *      over the summit; the Falling Summit, a bridge whose slabs all drop away under you; and the
+ *      Last Slingshot, a ring that throws you into low gravity to float down to the finish
  * Home universe: Psyche. Every moving or falling element telegraphs first; collapses are timed to
  * fall behind a 7 m/s runner, not only a sprinter.
  */
 import { LevelBuilder } from '../LevelBuilder';
 import type { LevelData } from '../types';
+import { arc, faceAt, floorAt, type Lane } from '../profile';
+import { tube } from '../tubes';
 
 const D = -4; // bridge deck
 const E = -6; // after the slingshot
 const H = 4; // after the ceiling run
+const SU = H + 30; // the summit of the Grand Climb
+const LP = SU - 22; // the Last Slingshot's platform
 
 export function build(): LevelData {
   const b = new LevelBuilder();
@@ -148,8 +156,62 @@ export function build(): LevelData {
     ],
   });
   b.plat(0, H, 493.5, 16, 22); // 482.5..504.5
-  b.finish(0, H, 497, 12);
-  b.gate(0, H, 504, 10, 8);
+  b.checkpoint(0, H, 486);
+
+  // ===== G. The finale =====================================================================
+  // (1) the Barrel Roll: a full turn while you sprint, in two halves at a steady rate (each half
+  // finishes well inside its tube even at a dash), upside down for a moment in between
+  tube(b, H, 'barrel1', 504.5, 554.5, { steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
+  b.trigger([0, H + 2, 506], [4, 4, 2], 'barrel1');
+  b.prompt([0, H + 1.5, 496], [16, 4, 8], 'forward', 'One full turn. Do not stop running');
+  // the upside-down stretch between the halves: the same square section, gravity pulling up
+  b.solid({ p: [0, H - 0.5, 562.25], s: [6, 1, 15.5], mat: 'base' });
+  b.solid({ p: [0, H + 4.5, 562.25], s: [6, 1, 15.5], mat: 'base' });
+  for (const x of [-2.5, 2.5]) b.solid({ p: [x, H + 2, 562.25], s: [1, 4, 15.5], mat: 'alt' });
+  b.strip([0, H + 3.97, 562.25], [0.3, 0.06, 15], 1);
+  b.entity({ type: 'field', mode: 'dir', dir: [0, 1, 0], p: [0, H + 2, 562.25], s: [4, 4, 15.5] }); // z 554.5..570
+  b.checkpoint(0, H, 558);
+  tube(b, H, 'barrel2', 570, 620, { r0: 180, steps: [{ t: 2.4, rot: [0, 0, 1, 180], ease: 'linear' }] });
+  b.trigger([0, H + 2, 571.5], [4, 4, 2], 'barrel2');
+  // (2) the Grand Climb: the floor curls up a 20 m face and over the summit
+  const L: Lane = [-3, 3];
+  floorAt(b, L, H, 620, 625.5);
+  b.checkpoint(0, H, 622.5);
+  arc(b, L, H + 5, 625.5, 5, 0, 90, 'inside');
+  faceAt(b, L, 630.5, H + 5, H + 25, -1);
+  arc(b, L, H + 25, 635.5, 5, -90, -180, 'outside');
+  b.plat(0, SU, 640.5, 6, 10, { h: 32, mat: 'base' }); // the summit, z 635.5..645.5
+  b.checkpoint(0, SU, 638.5);
+  // (3) the Falling Summit: six slabs out from the summit all drop at once, far ones first, as you
+  // top out, so the bridge becomes a stair falling away under you (every hop is down)
+  b.trigger([0, SU + 1.5, 637], [6, 4, 2], 'summit'); // as you top out
+  for (let i = 0; i < 6; i++) {
+    const drop = 5 + 3 * i;
+    b.entity({
+      type: 'structure',
+      id: `summit${i}`,
+      on: 'summit',
+      p: [0, SU, 649.5 + 8 * i],
+      warn: 0.75,
+      delay: 0.9 - 0.15 * i,
+      steps: [{ t: drop / 6, move: [0, -drop, 0], ease: 'linear' }],
+      parts: [
+        { p: [0, -0.4, 0], s: [6, 0.8, 7] },
+        { p: [0, 0.01, -3.1], s: [5.6, 0.02, 0.2], mat: 'accent' },
+      ],
+    });
+  }
+  b.prompt([0, SU + 1.5, 639.5], [6, 4, 4], 'forward', 'The summit is coming down. Run');
+  // (4) the Last Slingshot: through the ring into low gravity and down to the finish
+  b.plat(0, LP, 706.5, 12, 24); // 694.5..718.5
+  b.checkpoint(0, LP, 698.5);
+  b.entity({ type: 'impulse', p: [0, LP + 2, 714.5], s: [6, 6, 3], dir: [0, 1, 1], add: 4, min: 24 });
+  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, 20, 745.5], s: [16, 40, 60] }); // z 715.5..775.5
+  b.prompt([0, LP + 1.5, 703.5], [12, 4, 6], 'jump', 'Through the ring, and fly');
+  b.plat(0, H, 775.5, 20, 40); // 755.5..795.5
+  b.finish(0, H, 773.5, 14);
+  b.gate(0, H, 794.5, 10, 8);
+  b.ring(0, H + 14, 773.5, 16, 0.8, [0, 0, 0], [0, 0, 0.25], 'accent', 1);
 
   scenery(b);
 
@@ -185,7 +247,24 @@ export function build(): LevelData {
     [0, H, 478, undefined, 1.6],
     [0, H, 480.3, 'j', 1],
     [0, H, 490],
-    [0, H, 497],
+    [0, H, 503],
+    // inside the tubes: points on the axis do not move as they turn
+    [0, H + 2, 520, undefined, 2.5],
+    [0, H + 2, 568, undefined, 2.5],
+    [0, H + 2, 617, undefined, 2.5],
+    [0, H, 622.5, undefined, 2.5],
+    [0, H + 1.5, 629, undefined, 2.5],
+    [0, H + 15, 630.5, undefined, 2.5],
+    [0, H + 28.5, 632, undefined, 2.5],
+    [0, SU, 640.5, undefined, 2.5],
+    [0, SU, 645.5],
+    [0, SU - 6, 657.5, undefined, 30],
+    [0, SU - 12, 673.5, undefined, 30],
+    [0, SU - 18, 687.5, undefined, 30],
+    [0, LP, 700.5, undefined, 3],
+    [0, LP, 712.5],
+    [0, H, 767.5, undefined, 5],
+    [0, H, 773.5],
   );
   // destructibles beside the line
   b.breakable('relic', 2.6, 0, 8);
@@ -198,21 +277,24 @@ export function build(): LevelData {
   b.breakable('column', -3, E, 370);
   b.breakable('relic', 3, H, 446);
   b.breakable('column', 4, H, 500);
+  b.breakable('relic', -1.5, SU, 643);
+  b.breakable('column', 1.5, LP, 705.5);
+  b.breakable('relic', -3, H, 783.5);
   return b.data;
 }
 
 function scenery(b: LevelBuilder) {
   // impossible architecture: towers hanging at angles, rings, floating slabs
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 28; i++) {
     const side = i % 2 ? 1 : -1;
     const z = -10 + i * 30;
     b.decor('box', [side * (34 + (i % 3) * 10), 10 + (i % 4) * 8, z], [12, 50, 12], i % 3 ? 'base' : 'alt', {
       r: [0.4 * side, i * 0.3, 0.6 * side],
     });
   }
-  for (let i = 0; i < 6; i++)
+  for (let i = 0; i < 9; i++)
     b.ring(i % 2 ? 40 : -40, 30, 40 + i * 85, 26, 1, [1.2, i * 0.5, 0.3], [0.02, 0.03, 0], 'accent', 0.6);
-  for (let i = 0; i < 40; i++)
+  for (let i = 0; i < 62; i++)
     b.shard(
       ((i * 37) % 70) - 35,
       ((i * 11) % 40) - 10,

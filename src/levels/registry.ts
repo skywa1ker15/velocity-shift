@@ -229,16 +229,17 @@ export const levels: LevelEntry[] = [
       name: 'SHIFT POINT',
       subtitle: 'Level 9',
       description:
-        'The world will not hold still. Halls turn, walls become floors, bridges fall and gravity reverses.',
+        'The world will not hold still. Halls turn, walls become floors, bridges fall, gravity reverses, and then it all turns over at once.',
       env: 'shiftpoint',
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
       killY: -60,
+      layout: 2, // the finale added (bests reset)
       bounds: [
         [-70, -60, -30],
-        [70, 80, 560],
+        [70, 80, 830],
       ],
-      medals: { bronze: 82, silver: 59, gold: 46, platinum: 40 },
+      medals: { bronze: 126, silver: 91, gold: 71, platinum: 61.5 },
       objectives: [
         { id: 'sp-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'sp-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

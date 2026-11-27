@@ -568,3 +568,52 @@ describe('Level 8, Corrupted Core: Meltdown (everything at once)', () => {
     },
   );
 });
+
+describe('Level 9, Shift Point: the finale', () => {
+  const H = 4,
+    SU = 34,
+    LP = 12;
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('the Barrel Roll: %s stays on the floor through a full 360°', async (_n, keys) => {
+    const { d, deaths } = await at('shiftpoint', 486);
+    const s = hold(d, keys, 622, 30);
+    expect(deaths()).toBe(0);
+    const inside = s.filter((p) => p.z > 506 && p.z < 620);
+    // every way up, in turn: sideways, upside down, the other side, upright again
+    expect(inside.some((p) => p.up.x < -0.99)).toBe(true);
+    expect(inside.some((p) => p.up.y < -0.99)).toBe(true);
+    expect(inside.some((p) => p.up.x > 0.99)).toBe(true);
+    expect(s[s.length - 1].up.y).toBeGreaterThan(0.99);
+    expect(inside.filter((p) => p.grounded).length / inside.length).toBeGreaterThan(0.9);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])(
+    'the Grand Climb and the Falling Summit: %s goes up 20 m, over, and down the falling stair',
+    async (_n, keys) => {
+      const { d, deaths } = await at('shiftpoint', 622.5);
+      const s = hold(d, keys, 700, 30);
+      expect(deaths()).toBe(0);
+      expect(s.some((p) => p.grounded && p.up.z < -0.99 && p.y > H + 20)).toBe(true); // high on the face
+      const stair = s.filter((p) => p.grounded && p.z > 646 && p.z < 692).map((p) => p.y);
+      for (let i = 1; i < stair.length; i++) expect(stair[i]).toBeLessThanOrEqual(stair[i - 1] + 0.05);
+      expect(Math.max(...stair)).toBeGreaterThan(SU - 1);
+      expect(s[s.length - 1].y).toBeCloseTo(LP, 0);
+    },
+  );
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('the Last Slingshot: %s flies through the ring and floats down to the finish', async (_n, keys) => {
+    const { sim, d, deaths } = await at('shiftpoint', 698.5);
+    hold(d, keys, 790, 20);
+    expect(deaths()).toBe(0);
+    expect(sim.stats.finished).toBe(true);
+  });
+});
