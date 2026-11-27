@@ -101,12 +101,14 @@ export const levels: LevelEntry[] = [
       index: 4,
       name: 'BREAKPOINT',
       subtitle: 'Level 4',
-      description: 'Noon in the printed city. Crates, bars and beams: keep your flow through the clutter.',
+      description:
+        'Noon in the printed city. Keep your flow through the clutter, then hold on: each block bends gravity a new way.',
       env: 'breakpoint',
       music: 'awakening',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
+      layout: 2, // rebuilt with the gravity blocks (bests reset)
       killY: -45,
-      medals: { bronze: 58, silver: 41, gold: 31.5, platinum: 27.5 },
+      medals: { bronze: 110, silver: 78, gold: 60, platinum: 52 },
       objectives: [
         { id: 'bp-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'bp-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

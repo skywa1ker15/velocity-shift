@@ -421,18 +421,21 @@ export class LevelView {
         }
       return;
     }
-    // chevrons along the pull, in a grid across the volume (structure fields: local "down")
+    // chevrons along the pull (structure fields: local "down"), on the two side faces of the volume
+    // that are neither across the course (it runs along Z) nor the faces the pull points at — so
+    // they line the space you move through and are never in the line you run or on what you stand on
     const dir = d.mode === 'structure' ? [0, -1, 0] : (d.dir ?? [0, -1, 0]);
     _p.set(dir[0], dir[1], dir[2]).normalize();
     const qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), _p);
-    const nx = Math.max(1, Math.min(4, Math.round(d.s[0] / 6))),
-      ny = Math.max(1, Math.min(4, Math.round(d.s[1] / 6))),
-      nz = Math.max(1, Math.min(6, Math.round(d.s[2] / 6)));
-    for (let i = 0; i < nx; i++)
-      for (let j = 0; j < ny; j++)
+    const sideways = Math.abs(_p.x) > Math.abs(_p.y); // pull along X: chevrons on the top and bottom faces
+    const nz = Math.max(1, Math.min(6, Math.round(d.s[2] / 6)));
+    const na = Math.max(1, Math.min(3, Math.round((sideways ? d.s[0] : d.s[1]) / 6)));
+    for (const face of [-1, 1])
+      for (let j = 0; j < na; j++)
         for (let k = 0; k < nz; k++) {
-          const x = ((i + 0.5) / nx - 0.5) * d.s[0],
-            y = ((j + 0.5) / ny - 0.5) * d.s[1],
+          const across = ((j + 0.5) / na - 0.5) * (sideways ? d.s[0] : d.s[1]);
+          const x = sideways ? across : face * (hx - 0.4),
+            y = sideways ? face * (hy - 0.4) : across,
             z = ((k + 0.5) / nz - 0.5) * d.s[2];
           for (const side of [-1, 1]) {
             const arm = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), side * 0.7);

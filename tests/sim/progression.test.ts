@@ -131,3 +131,103 @@ describe('Level 3, Momentum: the first Dynamic World act', () => {
     },
   );
 });
+
+describe('Level 4, Breakpoint: the gravity blocks, one at a time', () => {
+  const L = -8,
+    R = 10,
+    E = -6,
+    F = -20,
+    G = -24,
+    U = -10;
+
+  test.each([
+    ['a sprint and one jump', SPRINT, false],
+    ['a plain run with the double jump', RUN, true],
+  ])('(1) light gravity: %s floats the 20 m gap', async (_n, keys, dbl) => {
+    const { d, deaths } = await at('breakpoint', 276);
+    let jumped = 0;
+    const s = hold(d, keys, 334, 20, (p) => {
+      if (jumped === 0 && p.z > 306.2) return (jumped++, { jump: true });
+      if (dbl && jumped === 1 && !p.grounded && d.pl.vel.y < 0) return (jumped++, { jump: true });
+    });
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(334);
+    expect(Math.min(...s.filter((p) => p.z > 327).map((p) => p.y))).toBeGreaterThan(L - 0.5);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(2) the launch pad puts %s on the roof', async (_n, keys) => {
+    const { d, deaths } = await at('breakpoint', 331);
+    const s = hold(d, keys, 366, 20);
+    expect(deaths()).toBe(0);
+    expect(s[s.length - 1].y).toBeCloseTo(R, 0);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(3) %s off the roof falls 42 m and the spring throws it over the ledge', async (_n, keys) => {
+    const { d, deaths } = await at('breakpoint', 358);
+    const s = hold(d, keys, 430, 30);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(430);
+    expect(Math.min(...s.map((p) => p.y))).toBeLessThan(-30); // it really was the long way down
+    expect(s[s.length - 1].y).toBeCloseTo(E, 0);
+  });
+
+  test.each([
+    ['from a run', RUN],
+    ['from a sprint', SPRINT],
+  ])('(4) heavy gravity: a slide down the chute %s clears the gap', async (_n, keys) => {
+    const { d, deaths } = await at('breakpoint', 424);
+    const s = hold(d, keys, 500, 20, (p) => {
+      if (p.z > 435.5 && p.z < 437) return { slide: true };
+      if (p.z > 467 && p.z < 469) return { jump: p.grounded, slideHeld: false };
+    });
+    expect(deaths()).toBe(0);
+    expect(Math.max(...s.map((p) => p.speed))).toBeGreaterThan(25);
+    expect(s[s.length - 1].y).toBeCloseTo(F, 0);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])(
+    '(5) sideways gravity: %s stepping off the edge lands on the billboard and back down',
+    async (_n, keys) => {
+      const { d, deaths } = await at('breakpoint', 502);
+      const s = hold(d, keys, 585, 30);
+      expect(deaths()).toBe(0);
+      expect(d.pl.pos.z).toBeGreaterThanOrEqual(585);
+      expect(s.some((p) => p.grounded && p.up.x < -0.99 && Math.abs(p.x - 7.5) < 0.1)).toBe(true);
+      expect(s[s.length - 1].up.y).toBeGreaterThan(0.99);
+      expect(s[s.length - 1].y).toBeCloseTo(G, 0);
+    },
+  );
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(6) reverse gravity: %s falls up onto the overpass, runs it and drops back', async (_n, keys) => {
+    const { d, deaths } = await at('breakpoint', 580);
+    const s = hold(d, keys, 668, 30);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(668);
+    const under = s.filter((p) => p.grounded && p.up.y < -0.99);
+    expect(under.length / 120).toBeGreaterThan(2); // seconds of running upside down
+    for (const p of under) expect(p.y).toBeCloseTo(U, 0);
+    expect(s[s.length - 1].y).toBeCloseTo(G, 0);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(7) launch + light gravity: %s floats to the finish', async (_n, keys) => {
+    const { sim, d, deaths } = await at('breakpoint', 664);
+    hold(d, keys, 740, 20);
+    expect(deaths()).toBe(0);
+    expect(sim.stats.finished).toBe(true);
+  });
+});

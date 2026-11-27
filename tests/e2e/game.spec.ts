@@ -311,3 +311,44 @@ test("Level 3: holding W through Momentum's Roll (real keyboard, real-time) ride
   s = await pl();
   expect(s.uy).toBeGreaterThan(0.99);
 });
+
+test("Level 4: holding W through Breakpoint's overpass (real keyboard, real-time) runs its underside upside down", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'breakpoint');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 580) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        y: p.pos.y,
+        z: p.pos.z,
+        uy: u.y,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let upsideDown = false;
+  let s = await pl();
+  for (let i = 0; i < 3000 && s.z < 668 && s.deaths === 0; i++) {
+    s = await pl();
+    if (s.grounded && s.uy < -0.99 && Math.abs(s.y + 10) < 0.2) upsideDown = true;
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(upsideDown).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(668);
+  await page.waitForTimeout(500);
+  s = await pl();
+  expect(s.uy).toBeGreaterThan(0.99);
+});
