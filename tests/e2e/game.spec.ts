@@ -352,3 +352,34 @@ test("Level 4: holding W through Breakpoint's overpass (real keyboard, real-time
   s = await pl();
   expect(s.uy).toBeGreaterThan(0.99);
 });
+
+test("Level 5: holding W down Ink Falls' Cascade (real keyboard, real-time) rides the falling slabs to the bottom", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'inkfalls');
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 379) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      return { y: p.pos.y, z: p.pos.z, grounded: p.grounded, deaths: (window as any).__vs.sim.stats.deaths };
+    });
+  await page.keyboard.down('KeyW');
+  let s = await pl();
+  let lowestOnSlab = 0;
+  for (let i = 0; i < 3000 && s.z < 462 && s.deaths === 0; i++) {
+    s = await pl();
+    if (s.grounded && s.z > 399 && s.z < 455) lowestOnSlab = Math.min(lowestOnSlab, s.y);
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(s.z).toBeGreaterThanOrEqual(462);
+  expect(lowestOnSlab).toBeLessThan(-40); // stood on slabs that had fallen 20 m and more
+});

@@ -231,3 +231,77 @@ describe('Level 4, Breakpoint: the gravity blocks, one at a time', () => {
     expect(sim.stats.finished).toBe(true);
   });
 });
+
+describe('Level 5, Ink Falls: the gorge comes apart', () => {
+  const C = -22,
+    K = C - 25;
+
+  test.each([
+    ['a plain run', RUN, false],
+    ['a dashing sprint', SPRINT, true],
+  ])('(1) the pillar topples into a bridge ahead of %s', async (_n, keys, dash) => {
+    const { d, deaths } = await at('inkfalls', 259);
+    const s = hold(d, keys, 320, 20, (p) =>
+      dash && p.z > 262 && d.pl.dashCharges > 0 ? { dash: true } : {},
+    );
+    expect(deaths()).toBe(0);
+    const onBeam = s.filter((p) => p.z > 300 && p.z < 315);
+    expect(onBeam.length).toBeGreaterThan(0);
+    for (const p of onBeam) expect(p.y).toBeGreaterThan(C - 0.6);
+  });
+
+  test.each([
+    ['a plain run', RUN],
+    ['a sprint', SPRINT],
+  ])('(2) running into a brace brings the pillar down in time for %s: no stop', async (_n, keys) => {
+    const { sim, d, deaths } = await at('inkfalls', 321);
+    const s = hold(d, keys, 380, 20);
+    expect(deaths()).toBe(0);
+    const bi = sim.data.breakables.findIndex((b) => b.fires === 'pillar2' && b.p[0] === 0);
+    expect(sim.broken[bi]).toBe(true);
+    // never had to wait: still moving at speed across the gap
+    expect(Math.min(...s.filter((p) => p.z > 345 && p.z < 370).map((p) => p.speed))).toBeGreaterThan(6);
+  });
+
+  test('(2) cutting a brace from the side fires the same event', async () => {
+    const { sim, d } = await at('inkfalls', 321);
+    const tower = sim.entities.find((e): e is Structure => e instanceof Structure && e.def.id === 'pillar2')!;
+    const bi = sim.data.breakables.findIndex((b) => b.fires === 'pillar2' && b.p[0] > 3);
+    (sim as unknown as { breakObject(i: number, by: string): void }).breakObject(bi, 'sword');
+    d.run(3, {});
+    expect(tower.stage).toBeGreaterThanOrEqual(2);
+  });
+
+  test('(2) slipping between the braces is never a soft-lock: wait at the edge and it falls', async () => {
+    const { sim, d, deaths } = await at('inkfalls', 321);
+    // run the gap between two braces, stop at the edge, wait, go
+    hold(d, { moveZ: 1, moveX: 0, sprint: false }, 323, 5, () => ({ moveX: 0 }));
+    d.pl.pos.x = 1.6;
+    hold(d, RUN, 350.5, 10);
+    expect(sim.broken.filter((b, i) => b && sim.data.breakables[i].fires).length).toBe(0);
+    d.run(3, { moveZ: 0 });
+    hold(d, RUN, 380, 10);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(380);
+  });
+
+  test.each([
+    ['a plain run', RUN, 0],
+    ['a sprint', SPRINT, 0],
+    ['a run after waiting for it to settle', RUN, 6],
+  ])('(3) the Cascade: %s hops down the falling slabs, every step down', async (_n, keys, wait) => {
+    const { d, deaths } = await at('inkfalls', 379);
+    if (wait) {
+      hold(d, RUN, 382, 5); // set it off
+      d.run(wait, { moveZ: 0 });
+    }
+    const s = hold(d, keys, 462, 30);
+    expect(deaths()).toBe(0);
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(462);
+    expect(s[s.length - 1].y).toBeCloseTo(K, 0);
+    // on the slabs the ground only ever steps down (never a climb)
+    const g = s.filter((p) => p.grounded && p.z > 399 && p.z < 455).map((p) => p.y);
+    for (let i = 1; i < g.length; i++) expect(g[i]).toBeLessThanOrEqual(g[i - 1] + 0.05);
+    expect(Math.min(...g)).toBeLessThan(C - 20);
+  });
+});

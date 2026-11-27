@@ -265,6 +265,11 @@ export interface BreakableDef {
   ground?: number;
   /** Hanging kinds: length of the cables / chains up to the anchor. */
   hang?: number;
+  /**
+   * Destructible architecture: breaking it (by sword or by running into it) fires this level event,
+   * e.g. cutting the brace that holds up a tower. Never the only way on: pair it with a trigger.
+   */
+  fires?: string;
 }
 
 /** Waypoint for the automated test bot (also documents the intended main line). */

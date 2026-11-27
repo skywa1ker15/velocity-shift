@@ -334,6 +334,8 @@ export class Simulation {
     if (by === 'sword') this.stats.cuts++;
     else this.stats.smashes++;
     this.events.emit('break', { index: i, by, hit });
+    const ev = this.data.breakables[i].fires;
+    if (ev) this.fire(ev);
   }
 
   /** Phase G: with gravity that can point anywhere, falling "up" or sideways forever is also out. */

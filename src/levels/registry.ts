@@ -125,12 +125,13 @@ export const levels: LevelEntry[] = [
       name: 'INK FALLS',
       subtitle: 'Level 5',
       description:
-        'A brush-drawn gorge that only goes down. Bridges give way and the walls run over the void.',
+        'A brush-drawn gorge that only goes down, and comes apart as you cross it: pillars fall, braces break, whole bridges drop.',
       env: 'inkfalls',
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      killY: -60,
-      medals: { bronze: 67, silver: 47.5, gold: 36.5, platinum: 31.5 },
+      layout: 2, // rebuilt with the destruction act (bests reset)
+      killY: -90,
+      medals: { bronze: 99, silver: 70, gold: 54, platinum: 46.5 },
       objectives: [
         { id: 'if-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'if-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
