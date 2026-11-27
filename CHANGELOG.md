@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase 3 — Phase A: character and performance
+
+- Arms rebuilt with tapered anatomy: long pushed-up sleeve, rolled cuff, slim gauntlet, wrist bracer, knuckle plate, jointed fingers; fingertip accent pads removed.
+- Fixed a Phase 2 bug: the forearm basis was mirrored (left-handed), so the forearm mesh did not point at the hand. Hand conventions are now right-handed (+Z = back of hand).
+- Per-level sleeve / glove / trim palette (`EnvPreset.hands`) so the hands contrast with each environment.
+- Menu / ghost runner redesigned: waisted jacket, hood peak, longer scarf, tapered limbs.
+- Geometry: outline hulls only for silhouette pieces; low-poly rounded boxes; legs drawn only when visible and shadowed by cheap proxies. Triangles per frame on high (Training): 42.6k to about 14k.
+
 ## Unreleased — "Ink & Signal" visual, art and animation overhaul
 
 No level layouts, obstacle timings or movement values changed.

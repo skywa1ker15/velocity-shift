@@ -19,7 +19,7 @@ import { clamp, damp } from '../core/math';
 import type { MovementController } from '../movement/MovementController';
 import { MoveState } from '../movement/types';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { createCharacterMaterial, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
+import { createCharacterMaterial, lathe, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
 
 /** The runner's outfit (shared with the ghost figure). */
 export const outfit = {
@@ -139,6 +139,8 @@ interface Leg {
   thigh: THREE.Mesh;
   shin: THREE.Mesh;
   foot: THREE.Mesh;
+  /** Cheap invisible stand-ins that cast the shadow while the detailed legs are hidden. */
+  proxy: THREE.Mesh[];
   spring: Spring3;
   target: THREE.Vector3;
   knee: THREE.Vector3;
@@ -187,6 +189,12 @@ export class Body {
   setAccent(hex: number) {
     this.mat.userData.accent.value.set(hex);
   }
+  /** Per-level sleeve / glove / trim colours so the hands contrast with the surfaces around them. */
+  setPalette(h: { sleeve: number; glove: number; trim: number }) {
+    this.mat.userData.sleeve.value.set(h.sleeve);
+    this.mat.userData.glove.value.set(h.glove);
+    this.mat.userData.trim.value.set(h.trim);
+  }
   setVisible(v: boolean) {
     this.armRoot.visible = v;
     this.bodyRoot.visible = v;
@@ -201,49 +209,185 @@ export class Body {
   // ----- construction -------------------------------------------------------------------
   private buildArms() {
     const o = outfit;
+    // Forearm anatomy, measured along the arm from the elbow (y = -0.135) to the wrist (+0.135):
+    // a long pushed-up sleeve to just past the middle, a rolled cuff, then a slim gauntlet that
+    // narrows to the wrist. `gaunt` is relative to the start of the gauntlet (S).
+    const cuffY = 0.03;
+    const S = cuffY + 0.012;
+    const gaunt: [number, number][] = [
+      [0.036, 0],
+      [0.0365, 0.014],
+      [0.032, 0.045],
+      [0.0275, 0.075],
+      [0.026, 0.092],
+      [0.0, 0.098],
+    ];
+    const gr = (y: number) => {
+      for (let i = 1; i < gaunt.length; i++)
+        if (y <= gaunt[i][1]) {
+          const k = (y - gaunt[i - 1][1]) / (gaunt[i][1] - gaunt[i - 1][1]);
+          return lerp(gaunt[i - 1][0], gaunt[i][0], clamp(k, 0, 1));
+        }
+      return gaunt[gaunt.length - 1][0];
+    };
+    const shift = (pts: [number, number][], dy: number) =>
+      pts.map(([r, y]) => [r, y + dy] as [number, number]);
     for (const side of [1, -1] as const) {
-      // upper arm: jacket sleeve
-      const upper = this.mesh(new PartBuilder().add(capsule(0.054, UPPER - 0.1), null, o.jacket), 0.004);
-
-      // forearm (local +Y runs toward the hand, local -Z is the back of the arm, facing the camera):
-      // a pushed-up sleeve with a rolled cuff, then a fitted gauntlet with a strapped-on guard
-      const half = FORE / 2;
-      const fore = this.mesh(
-        new PartBuilder()
-          .add(
-            new THREE.CylinderGeometry(0.051, 0.058, half + 0.02, 14, 1),
-            xf(0, -half / 2 - 0.01),
-            o.jacket,
-          )
-          .add(new THREE.TorusGeometry(0.052, 0.013, 6, 14), xf(0, 0.004, 0, Math.PI / 2), o.cuff)
-          .add(new THREE.CylinderGeometry(0.039, 0.047, half, 14, 1), xf(0, half / 2), o.glove)
-          .add(rbox(0.066, 0.108, 0.022, 0.009), xf(0, 0.066, -0.037, -0.05), o.guard)
-          .add(rbox(0.014, 0.08, 0.008, 0.003), xf(0, 0.066, -0.05, -0.05), o.guard, { glow: 1 })
-          .add(new THREE.CylinderGeometry(0.0475, 0.049, 0.013, 14, 1), xf(0, 0.028), o.strap)
-          .add(new THREE.CylinderGeometry(0.043, 0.0445, 0.013, 14, 1), xf(0, 0.1), o.strap)
-          .add(new THREE.CylinderGeometry(0.041, 0.041, 0.012, 14, 1), xf(0, half - 0.008), o.glove, {
-            accent: true,
-          }),
-        0.0035,
+      // upper arm: a tapered jacket sleeve, broad at the shoulder, narrowing to the elbow
+      const uh = UPPER / 2;
+      const upper = this.mesh(
+        new PartBuilder().add(
+          lathe(
+            [
+              [0.052, -uh - 0.01],
+              [0.06, -uh + 0.05],
+              [0.052, 0],
+              [0.047, uh - 0.03],
+              [0.049, uh + 0.015],
+            ],
+            9,
+            1,
+            0.92,
+          ),
+          null,
+          o.jacket,
+          { tone: 'sleeve' },
+        ),
+        0.004,
       );
 
-      // hand: local +Y points along the fingers, local -Z is the back of the hand
+      // forearm (local +Y runs toward the hand, local +Z is the back of the arm, facing the camera)
+      const half = FORE / 2;
+      const fb = new PartBuilder()
+        .add(
+          lathe(
+            [
+              [0.045, -half - 0.02],
+              [0.0495, -0.1],
+              [0.0465, -0.03],
+              [0.0435, cuffY - 0.01],
+            ],
+            10,
+            1,
+            0.9,
+          ),
+          null,
+          o.jacket,
+          { tone: 'sleeve' },
+        )
+        // rolled cuff
+        .add(
+          lathe(
+            [
+              [0.0425, cuffY - 0.014],
+              [0.0495, cuffY - 0.01],
+              [0.0515, cuffY],
+              [0.0495, cuffY + 0.01],
+              [0.039, cuffY + 0.014],
+            ],
+            10,
+            1,
+            0.9,
+          ),
+          null,
+          o.cuff,
+          { tone: 'sleeve' },
+        )
+        .add(lathe(shift(gaunt, S), 10, 1, 0.9), null, o.glove, { tone: 'glove' })
+        // wrist strap
+        .add(new THREE.CylinderGeometry(0.0275, 0.0275, 0.007, 10, 1), xf(0, S + 0.082), o.strap, {
+          tone: 'trim',
+          noInk: true,
+        });
+      // a slim bracer band that follows the arm, with an accent light ring at its lower edge
+      const plate: [number, number][] = [];
+      for (let y = 0.034; y <= 0.07; y += 0.018) plate.push([gr(y) + 0.0045, y]);
+      fb.add(lathe(shift(plate, S), 10, 1, 0.9), null, o.guard, { tone: 'trim' }).add(
+        lathe(
+          [
+            [gr(0.032) + 0.0058, S + 0.032],
+            [gr(0.032) + 0.0058, S + 0.037],
+          ],
+          10,
+          1,
+          0.9,
+        ),
+        null,
+        o.guard,
+        { accent: true, noInk: true },
+      );
+      const fore = this.mesh(fb, 0.0035);
+
+      // hand: local +Y points along the fingers, local +Z is the back of the hand, -Z the palm
       const hand = new THREE.Group();
       const palm = this.mesh(
         new PartBuilder()
-          .add(rbox(0.086, 0.09, 0.034, 0.014), xf(0, 0.046, 0), o.glove)
-          .add(rbox(0.06, 0.052, 0.012, 0.005), xf(0, 0.046, -0.019), o.guard)
-          .add(rbox(0.03, 0.009, 0.005, 0.002), xf(0, 0.056, -0.0262), o.guard, { glow: 1 })
-          .add(rbox(0.018, 0.009, 0.005, 0.002), xf(0, 0.04, -0.0262), o.guard, { glow: 1 })
+          // tapered palm: slim at the wrist, wide across the knuckles
           .add(
-            new THREE.SphereGeometry(0.022, 8, 6),
-            xf(side * -0.036, 0.03, 0.01, 0, 0, 0, 1, 1.25, 0.9),
+            lathe(
+              [
+                [0.028, -0.004],
+                [0.034, 0.02],
+                [0.0405, 0.05],
+                [0.0445, 0.078],
+                [0.0425, 0.094],
+                [0.03, 0.1],
+                [0.0, 0.102],
+              ],
+              12,
+              1,
+              0.42,
+            ),
+            null,
             o.glove,
+            { tone: 'glove' },
           )
-          .add(new THREE.SphereGeometry(0.0105, 8, 6), xf(-0.032, 0.091, -0.011), o.guard)
-          .add(new THREE.SphereGeometry(0.0115, 8, 6), xf(-0.0108, 0.093, -0.012), o.guard)
-          .add(new THREE.SphereGeometry(0.0115, 8, 6), xf(0.0108, 0.093, -0.012), o.guard)
-          .add(new THREE.SphereGeometry(0.0105, 8, 6), xf(0.032, 0.091, -0.011), o.guard),
+          // knuckle guard on the back of the hand
+          .add(
+            lathe(
+              [
+                [0.0425, 0.05],
+                [0.0485, 0.066],
+                [0.0505, 0.08],
+                [0.0475, 0.094],
+              ],
+              8,
+              1,
+              0.5,
+              -0.95,
+              1.9,
+            ),
+            null,
+            o.guard,
+            { tone: 'trim' },
+          )
+          .add(
+            lathe(
+              [
+                [0.0455, 0.072],
+                [0.047, 0.078],
+              ],
+              3,
+              1,
+              0.5,
+              -0.55,
+              1.1,
+            ),
+            null,
+            o.guard,
+            { glow: 1, noInk: true },
+          )
+          // wrist ball: hides the joint when the hand bends against the forearm
+          .add(new THREE.SphereGeometry(0.03, 8, 6), xf(0, 0.002, 0, 0, 0, 0, 1, 0.9, 0.75), o.glove, {
+            tone: 'glove',
+          })
+          // thumb mound
+          .add(
+            new THREE.SphereGeometry(0.022, 8, 5),
+            xf(side * -0.034, 0.032, -0.008, 0, 0, 0, 1, 1.3, 0.8),
+            o.glove,
+            { tone: 'glove' },
+          ),
         0.003,
       );
       hand.add(palm);
@@ -252,17 +396,26 @@ export class Body {
         const l1 = 0.036 * len,
           l2 = 0.026 * len,
           l3 = 0.021 * len;
-        base.add(this.mesh(new PartBuilder().add(capsule(r, l1), xf(0, l1 / 2), o.glove), 0.0026));
+        base.add(
+          this.mesh(
+            new PartBuilder().add(new THREE.CapsuleGeometry(r, l1, 2, 6), xf(0, l1 / 2), o.glove, {
+              tone: 'glove',
+            }),
+            0.0026,
+          ),
+        );
         const tip = new THREE.Group();
         tip.position.y = l1 + 0.002;
         tip.add(
           this.mesh(
-            new PartBuilder()
-              .add(capsule(r * 0.94, l2), xf(0, l2 / 2), o.glove)
-              // the fingertip is dipped in the accent colour: the runner's signature
-              .add(capsule(r * 0.9, l3), xf(0, l2 + l3 / 2 - 0.001, l3 * 0.16, 0.32), o.glove, {
-                accent: true,
-              }),
+            new PartBuilder().add(
+              new THREE.CapsuleGeometry(r * 0.94, l2 + l3 * 0.6, 2, 6),
+              xf(0, (l2 + l3 * 0.6) / 2),
+              o.glove,
+              {
+                tone: 'glove',
+              },
+            ),
             0.0026,
           ),
         );
@@ -313,6 +466,7 @@ export class Body {
 
   private buildLegs() {
     const o = outfit;
+    this.shadowMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
     for (const side of [1, -1] as const) {
       const thigh = this.mesh(
         new PartBuilder()
@@ -341,7 +495,19 @@ export class Body {
           .add(rbox(0.104, 0.012, 0.11, 0.004), xf(0, 0.03, -0.07, 0.25), o.glove, { glow: 1 }),
         0.006,
       );
-      for (const m of [thigh, shin, foot]) m.castShadow = true;
+      // the detailed (outlined) legs are only drawn when they can be seen; shadows come from
+      // simple proxies, so the shadow pass never re-draws every ink hull
+      const proxy = [
+        new THREE.Mesh(new THREE.CapsuleGeometry(0.08, THIGH - 0.16, 2, 6), this.shadowMat),
+        new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, SHIN, 7, 1), this.shadowMat),
+        new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.29), this.shadowMat),
+      ];
+      for (const m of proxy) {
+        m.castShadow = true;
+        m.frustumCulled = false;
+        this.geos.push(m.geometry);
+        this.bodyRoot.add(m);
+      }
       this.bodyRoot.add(thigh, shin, foot);
       const leg: Leg = {
         side,
@@ -349,6 +515,7 @@ export class Body {
         thigh,
         shin,
         foot,
+        proxy,
         spring: new Spring3(260, 26),
         target: new THREE.Vector3(),
         knee: new THREE.Vector3(),
@@ -369,18 +536,18 @@ export class Body {
         .add(rbox(0.372, 0.016, 0.237, 0.005), xf(0, 0.135, 0.015), o.jacket, { accent: true }),
       0.007,
     );
-    hips.castShadow = true;
-    const shadowMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-    const sg = new THREE.CapsuleGeometry(0.19, 0.5, 3, 8);
+    this.hips = hips;
+    const sg = new THREE.CapsuleGeometry(0.19, 0.5, 2, 8);
     this.geos.push(sg);
-    const shadowBody = new THREE.Mesh(sg, shadowMat);
+    const shadowBody = new THREE.Mesh(sg, this.shadowMat);
     shadowBody.position.set(0, 0.6, 0);
     shadowBody.castShadow = true;
-    this.shadowMat = shadowMat;
+    shadowBody.frustumCulled = false;
     this.torso.add(hips, shadowBody);
     this.bodyRoot.add(this.torso);
   }
   private shadowMat!: THREE.Material;
+  private hips!: THREE.Mesh;
 
   // ----- reactions ----------------------------------------------------------------------
   onLand(impact: number) {
@@ -520,7 +687,7 @@ export class Body {
             a.tPole = 1.1;
           } else {
             // guard arm leads low across the body
-            t.set(-0.13, -0.155, -0.5);
+            t.set(-0.25, -0.26, -0.5);
             a.tRoll = 0.5;
             a.tBend = 0.3;
             a.tCurl = 0.3;
@@ -638,7 +805,7 @@ export class Body {
       if (r.lengthSq() < 1e-4) r.set(1, 0, 0);
       r.normalize();
       const u = _d.crossVectors(r, f);
-      _m.makeBasis(r, f, u.negate());
+      _m.makeBasis(r, f, u); // right-handed: +Z is the back of the arm (up when it points forward)
       a.fore.quaternion.setFromRotationMatrix(_m);
       a.fore.position.addVectors(a.elbow, _b).multiplyScalar(0.5);
       _q.setFromAxisAngle(Y, a.roll);
@@ -650,15 +817,15 @@ export class Body {
         const fg = a.fingers[i];
         // fingers curl in a wave (index leads) and fan out when the hand opens
         const c = clamp(a.curl * (1 + (i - 1.5) * 0.08), 0, 1.15);
-        fg.base.rotation.set(c * 1.3, 0, fg.spread * (0.25 + a.splay * 1.1));
-        fg.tip.rotation.x = c * 1.55;
+        fg.base.rotation.set(-c * 1.3, 0, fg.spread * (0.25 + a.splay * 1.1));
+        fg.tip.rotation.x = -c * 1.55;
       }
       a.thumb.base.rotation.set(
-        a.curl * 0.55,
+        -a.curl * 0.55,
         0,
         a.thumb.spread * (0.75 + a.splay * 0.45) - s * a.curl * 0.3,
       );
-      a.thumb.tip.rotation.x = a.curl * 0.9;
+      a.thumb.tip.rotation.x = -a.curl * 0.9;
     }
 
     // the whole upper body: sinks on landings, leans into speed, stays upright when the view rolls
@@ -702,6 +869,9 @@ export class Body {
     this.torso.position.set(0, hipY + 0.02, 0.1 + lookDown * 0.08 + (sliding ? 0.25 : 0));
     this.torso.rotation.x = sliding ? 0.95 : -0.08 - clamp(speed / 30, 0, 0.25);
 
+    // the detailed legs only exist for the camera when it can see them: looking down, in a slide
+    // (the view drops) or a vault
+    const showLegs = pitch < -0.12 || sliding || st === MoveState.Vault;
     const sp = clamp(speed / 11, 0, 1.5);
     const stride = 0.12 + sp * 0.32;
     const lift = 0.05 + sp * 0.2;
@@ -764,7 +934,15 @@ export class Body {
       const planted = grounded && !sliding && foot.y <= 0.07;
       const pitchFoot = planted ? 0 : clamp(Math.atan2(l.knee.z - _b.z, l.knee.y - _b.y) * 0.8, -1.1, 1.1);
       l.foot.rotation.set(sliding ? -0.5 : -pitchFoot * 0.6, 0, 0);
+      const parts = [l.thigh, l.shin, l.foot];
+      for (let i = 0; i < 3; i++) {
+        l.proxy[i].position.copy(parts[i].position);
+        l.proxy[i].quaternion.copy(parts[i].quaternion);
+        parts[i].visible = showLegs;
+      }
+      l.proxy[2].rotation.copy(l.foot.rotation);
     }
+    this.hips.visible = showLegs;
 
     // effect anchor: trailing hand in a slide, feet otherwise
     const sy = Math.sin(yaw),

@@ -35,6 +35,40 @@ export interface PartOpts {
   glow?: number;
   /** Painted in the accent colour (follows the equipped suit). */
   accent?: boolean;
+  /**
+   * Painted in one of the runner's per-level palette colours (glove / sleeve / trim), so the
+   * hands can contrast with every environment.
+   */
+  tone?: 'glove' | 'sleeve' | 'trim';
+  /** Detail that sits inside the silhouette: it gets no outline hull (saves half its triangles). */
+  noInk?: boolean;
+}
+
+const TONE_CODE = { glove: -2, sleeve: -3, trim: -4 } as const;
+
+/**
+ * A smooth lathed solid of revolution around +Y from a [radius, y] profile, optionally squashed
+ * into an ellipse (sx, sz) so limbs are wider than they are deep. Cheap tapered anatomy.
+ */
+export function lathe(
+  profile: [number, number][],
+  segs = 10,
+  sx = 1,
+  sz = 1,
+  phiStart = 0,
+  phiLength = Math.PI * 2,
+): THREE.BufferGeometry {
+  const g = new THREE.LatheGeometry(
+    profile.map(([r, y]) => new THREE.Vector2(r, y)),
+    segs,
+    phiStart,
+    phiLength,
+  );
+  if (sx !== 1 || sz !== 1) {
+    g.scale(sx, 1, sz);
+    g.computeVertexNormals();
+  }
+  return g;
 }
 
 export class PartBuilder {
@@ -44,6 +78,8 @@ export class PartBuilder {
   private info: number[] = [];
   private idx: number[] = [];
   private count = 0;
+  /** Vertex and index ranges of each added piece, and whether it takes part in the outline. */
+  private pieces: { v0: number; v1: number; i0: number; i1: number; ink: boolean }[] = [];
 
   /** Add a primitive (the geometry is consumed and disposed). */
   add(geo: THREE.BufferGeometry, matrix: THREE.Matrix4 | null, color: number, o: PartOpts = {}): this {
@@ -53,7 +89,8 @@ export class PartBuilder {
     _m.copy(matrix ?? _m.identity());
     _nm.getNormalMatrix(_m);
     _c.set(color);
-    const glow = o.accent ? -1 : (o.glow ?? 0);
+    const glow = o.accent ? -1 : o.tone ? TONE_CODE[o.tone] : (o.glow ?? 0);
+    const i0 = this.idx.length;
     for (let i = 0; i < p.count; i++) {
       _v.fromBufferAttribute(p, i).applyMatrix4(_m);
       _n.fromBufferAttribute(n, i).applyMatrix3(_nm).normalize();
@@ -65,6 +102,7 @@ export class PartBuilder {
     const index = geo.getIndex();
     if (index) for (let i = 0; i < index.count; i++) this.idx.push(base + index.getX(i));
     else for (let i = 0; i < p.count; i++) this.idx.push(base + i);
+    this.pieces.push({ v0: base, v1: base + p.count, i0, i1: this.idx.length, ink: !o.noInk });
     this.count += p.count;
     geo.dispose();
     return this;
@@ -74,34 +112,53 @@ export class PartBuilder {
   build(ink: number): THREE.BufferGeometry {
     const n = this.count;
     if (ink > 0) {
-      // average the normals of coincident vertices so the hull has no cracks at hard edges
+      // only pieces that shape the silhouette get a hull. Smooth the normals of coincident
+      // vertices so the hull has no cracks at hard edges.
       const acc = new Map<string, [number, number, number]>();
-      const keys: string[] = [];
-      for (let i = 0; i < n; i++) {
-        const k = `${Math.round(this.pos[i * 3] * 2e4)},${Math.round(this.pos[i * 3 + 1] * 2e4)},${Math.round(this.pos[i * 3 + 2] * 2e4)}`;
-        keys.push(k);
-        const a = acc.get(k);
-        if (a) {
-          a[0] += this.nor[i * 3];
-          a[1] += this.nor[i * 3 + 1];
-          a[2] += this.nor[i * 3 + 2];
-        } else acc.set(k, [this.nor[i * 3], this.nor[i * 3 + 1], this.nor[i * 3 + 2]]);
+      const keys: (string | null)[] = new Array(n).fill(null);
+      for (const pc of this.pieces) {
+        if (!pc.ink) continue;
+        for (let i = pc.v0; i < pc.v1; i++) {
+          const k = `${Math.round(this.pos[i * 3] * 2e4)},${Math.round(this.pos[i * 3 + 1] * 2e4)},${Math.round(this.pos[i * 3 + 2] * 2e4)}`;
+          keys[i] = k;
+          const a = acc.get(k);
+          if (a) {
+            a[0] += this.nor[i * 3];
+            a[1] += this.nor[i * 3 + 1];
+            a[2] += this.nor[i * 3 + 2];
+          } else acc.set(k, [this.nor[i * 3], this.nor[i * 3 + 1], this.nor[i * 3 + 2]]);
+        }
       }
+      const hullIndex = new Int32Array(n).fill(-1);
+      let h = n;
+      const hp: number[] = [];
+      const hn: number[] = [];
       for (let i = 0; i < n; i++) {
-        const a = acc.get(keys[i])!;
+        const k = keys[i];
+        if (k === null) continue;
+        const a = acc.get(k)!;
         const l = Math.hypot(a[0], a[1], a[2]) || 1;
-        this.pos.push(
+        hp.push(
           this.pos[i * 3] + (a[0] / l) * ink,
           this.pos[i * 3 + 1] + (a[1] / l) * ink,
           this.pos[i * 3 + 2] + (a[2] / l) * ink,
         );
-        this.nor.push(-a[0] / l, -a[1] / l, -a[2] / l);
+        hn.push(-a[0] / l, -a[1] / l, -a[2] / l);
+        hullIndex[i] = h++;
+      }
+      const hullTris: number[] = [];
+      for (const pc of this.pieces) {
+        if (!pc.ink) continue;
+        for (let i = pc.i0; i < pc.i1; i += 3)
+          hullTris.push(hullIndex[this.idx[i]], hullIndex[this.idx[i + 2]], hullIndex[this.idx[i + 1]]);
+      }
+      this.pos.push(...hp);
+      this.nor.push(...hn);
+      for (let i = n; i < h; i++) {
         this.col.push(0, 0, 0);
         this.info.push(1, 0);
       }
-      const tris = this.idx.length;
-      for (let i = 0; i < tris; i += 3)
-        this.idx.push(this.idx[i] + n, this.idx[i + 2] + n, this.idx[i + 1] + n);
+      this.idx.push(...hullTris);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -115,7 +172,13 @@ export class PartBuilder {
 }
 
 export interface CharacterMaterial extends THREE.MeshToonMaterial {
-  userData: { accent: { value: THREE.Color }; fade: { value: number } };
+  userData: {
+    accent: { value: THREE.Color };
+    fade: { value: number };
+    glove: { value: THREE.Color };
+    sleeve: { value: THREE.Color };
+    trim: { value: THREE.Color };
+  };
 }
 
 /**
@@ -132,11 +195,17 @@ export function createCharacterMaterial(opts: { ghost?: boolean } = {}): Charact
   }) as CharacterMaterial;
   const accent = { value: new THREE.Color(0xff9a3c) };
   const fade = { value: 1 };
-  mat.userData = { accent, fade };
+  const glove = { value: new THREE.Color(0x39425c) };
+  const sleeve = { value: new THREE.Color(0x2b3656) };
+  const trim = { value: new THREE.Color(0x14171f) };
+  mat.userData = { accent, fade, glove, sleeve, trim };
   const ghost = !!opts.ghost;
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uAccent = accent;
     shader.uniforms.uFade = fade;
+    shader.uniforms.uGlove = glove;
+    shader.uniforms.uSleeve = sleeve;
+    shader.uniforms.uTrim = trim;
     shader.uniforms.uInk = worldUniforms.uInk;
     shader.uniforms.uSunPower = worldUniforms.uSunPower;
     shader.vertexShader = shader.vertexShader
@@ -148,6 +217,9 @@ export function createCharacterMaterial(opts: { ghost?: boolean } = {}): Charact
         `#include <common>
 varying vec2 vInfo;
 uniform vec3 uAccent;
+uniform vec3 uGlove;
+uniform vec3 uSleeve;
+uniform vec3 uTrim;
 uniform vec3 uInk;
 uniform float uFade;
 uniform float uSunPower;`,
@@ -155,7 +227,13 @@ uniform float uSunPower;`,
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-if (vInfo.y < -0.5) diffuseColor.rgb = uAccent;`,
+if (vInfo.y < -0.5) {
+  vec3 pc = uAccent;
+  if (vInfo.y < -3.5) pc = uTrim;
+  else if (vInfo.y < -2.5) pc = uSleeve;
+  else if (vInfo.y < -1.5) pc = uGlove;
+  diffuseColor.rgb = pc;
+}`,
       )
       .replace(
         '#include <emissivemap_fragment>',

@@ -34,6 +34,8 @@ export interface EnvPreset {
   motes: { color: number; count: number; rise: number; size: number };
   /** Ink line colour (defaults to near-black). */
   ink?: number;
+  /** The runner's sleeve / glove / trim colours, chosen to contrast with this level's surfaces. */
+  hands: { sleeve: number; glove: number; trim: number };
   /** Colour of speed lines / dash streaks. */
   streak: number;
 }
@@ -42,6 +44,7 @@ export const envPresets: Record<string, EnvPreset> = {
   // Training: a calm teal simulation hall at blue hour
   training: {
     id: 'training',
+    hands: { sleeve: 0x2f4fc2, glove: 0x46527e, trim: 0xf1ead8 },
     sky: {
       top: 0x16233f,
       horizon: 0x6aa6b8,
@@ -81,6 +84,7 @@ export const envPresets: Record<string, EnvPreset> = {
   // Level 1 — The Awakening: dawn above a sea of clouds, pale marble, gold light
   awakening: {
     id: 'awakening',
+    hands: { sleeve: 0x3a4fb8, glove: 0x4a4670, trim: 0xfff3dc },
     sky: {
       top: 0x3f6cc0,
       horizon: 0xffd2a6,
@@ -120,6 +124,7 @@ export const envPresets: Record<string, EnvPreset> = {
   // Level 2 — Verticality: dusk into night, violet spires, hot magenta veins
   verticality: {
     id: 'verticality',
+    hands: { sleeve: 0x14b3a6, glove: 0xffefc4, trim: 0x2a1f4a },
     sky: {
       top: 0x08071f,
       horizon: 0x7a2f7c,
@@ -159,6 +164,7 @@ export const envPresets: Record<string, EnvPreset> = {
   // Level 3 — Momentum: night in a chrome canyon, cyan data rivers, orange warnings
   momentum: {
     id: 'momentum',
+    hands: { sleeve: 0x7f9bd0, glove: 0xf2eee4, trim: 0x16264a },
     sky: {
       top: 0x01040d,
       horizon: 0x0d3a66,

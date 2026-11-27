@@ -9,12 +9,11 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { clamp, damp } from '../core/math';
-import { createCharacterMaterial, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
+import { createCharacterMaterial, lathe, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
 import { outfit as o } from './Body';
 
 const rbox = (x: number, y: number, z: number, r: number) =>
-  new RoundedBoxGeometry(x, y, z, 2, Math.min(r, x / 2, y / 2, z / 2));
-const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, 3, 8);
+  new RoundedBoxGeometry(x, y, z, 1, Math.min(r, x / 2, y / 2, z / 2));
 
 interface Limb {
   upper: THREE.Group;
@@ -52,42 +51,121 @@ export class Runner {
     this.hips.add(
       mesh(
         new PartBuilder()
-          .add(rbox(0.32, 0.2, 0.2, 0.06), null, o.trouser)
-          .add(rbox(0.335, 0.05, 0.215, 0.012), xf(0, 0.09, 0), o.strap)
-          .add(rbox(0.07, 0.035, 0.012, 0.004), xf(0, 0.09, -0.11), o.guard, { glow: 1 }),
+          // hips: a rounded pelvis with a belt and a buckle light
+          .add(
+            lathe(
+              [
+                [0.14, -0.1],
+                [0.17, -0.03],
+                [0.165, 0.06],
+                [0.14, 0.1],
+                [0, 0.1],
+              ],
+              10,
+              1.1,
+              0.78,
+            ),
+            null,
+            o.trouser,
+          )
+          .add(
+            lathe(
+              [
+                [0.168, 0.07],
+                [0.172, 0.11],
+              ],
+              10,
+              1.1,
+              0.78,
+            ),
+            null,
+            o.strap,
+            { noInk: true },
+          )
+          .add(rbox(0.07, 0.035, 0.012, 0.004), xf(0, 0.09, -0.125), o.guard, { glow: 1, noInk: true }),
       ),
     );
     this.chest.position.y = 0.12;
     this.chest.add(
       mesh(
         new PartBuilder()
-          // a jacket that widens to the shoulders, with a raised collar and a chest stripe
-          .add(rbox(0.36, 0.3, 0.22, 0.07), xf(0, 0.17, 0), o.jacket)
-          .add(rbox(0.44, 0.2, 0.24, 0.08), xf(0, 0.37, 0), o.jacket)
-          .add(rbox(0.2, 0.09, 0.2, 0.04), xf(0, 0.5, 0.01), o.cuff)
-          .add(rbox(0.445, 0.03, 0.245, 0.01), xf(0, 0.33, 0), o.jacket, { accent: true })
-          .add(rbox(0.14, 0.2, 0.06, 0.02), xf(0, 0.3, 0.13), o.guard), // back pack plate
+          // a jacket: narrow at the waist, broad across the shoulders, with a raised collar
+          .add(
+            lathe(
+              [
+                [0.15, 0],
+                [0.165, 0.12],
+                [0.19, 0.27],
+                [0.225, 0.36],
+                [0.2, 0.44],
+                [0.1, 0.5],
+                [0, 0.51],
+              ],
+              12,
+              1.12,
+              0.62,
+            ),
+            null,
+            o.jacket,
+            { tone: 'sleeve' },
+          )
+          .add(
+            lathe(
+              [
+                [0.17, 0.0],
+                [0.175, 0.03],
+              ],
+              12,
+              1.12,
+              0.62,
+            ),
+            null,
+            o.guard,
+            { accent: true, noInk: true },
+          )
+          .add(
+            lathe(
+              [
+                [0.09, 0.46],
+                [0.115, 0.5],
+                [0.1, 0.56],
+                [0.08, 0.57],
+              ],
+              10,
+              1,
+              0.9,
+            ),
+            null,
+            o.cuff,
+            {
+              tone: 'trim',
+            },
+          )
+          .add(rbox(0.16, 0.22, 0.07, 0.02), xf(0, 0.28, 0.12), o.guard, { tone: 'trim' }), // back pack plate
       ),
     );
     this.head.position.y = 0.6;
     this.head.add(
       mesh(
         new PartBuilder()
-          // hooded head with a visor band
-          .add(new THREE.SphereGeometry(0.125, 12, 9), xf(0, 0.08, 0, 0, 0, 0, 1, 1.08, 1.05), o.jacket)
-          .add(rbox(0.2, 0.06, 0.12, 0.025), xf(0, 0.09, -0.075), o.guard, { glow: 1.2 })
-          .add(rbox(0.17, 0.1, 0.1, 0.03), xf(0, 0.0, -0.05), o.cuff),
+          // hooded head: a taller hood with a peak, a visor band and a dark face opening
+          .add(new THREE.SphereGeometry(0.125, 10, 8), xf(0, 0.09, 0.01, 0, 0, 0, 1, 1.12, 1.08), o.jacket, {
+            tone: 'sleeve',
+          })
+          .add(new THREE.ConeGeometry(0.07, 0.14, 8), xf(0, 0.2, 0.1, -1.15), o.jacket, { tone: 'sleeve' })
+          .add(rbox(0.2, 0.06, 0.12, 0.025), xf(0, 0.1, -0.08), o.guard, { glow: 1.2 })
+          .add(rbox(0.16, 0.09, 0.08, 0.03), xf(0, 0.0, -0.06), o.cuff, { tone: 'trim' }),
       ),
     );
     this.chest.add(this.head);
-    // scarf: three flat segments streaming from the neck
+    // scarf: four flat segments that widen toward the tail, streaming from the neck
     let parent: THREE.Object3D = this.chest;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const seg = new THREE.Group();
-      seg.position.set(i === 0 ? 0.06 : 0, i === 0 ? 0.5 : 0, i === 0 ? 0.11 : 0.2);
+      seg.position.set(i === 0 ? 0.06 : 0, i === 0 ? 0.5 : 0, i === 0 ? 0.11 : 0.19);
       seg.add(
         mesh(
-          new PartBuilder().add(rbox(0.1 - i * 0.02, 0.022, 0.21, 0.008), xf(0, 0, 0.1), o.guard, {
+          new PartBuilder().add(rbox(0.085 + i * 0.022, 0.02, 0.2, 0.008), xf(0, 0, 0.1), o.guard, {
             accent: true,
           }),
         ),
@@ -98,19 +176,116 @@ export class Runner {
     }
     this.hips.add(this.chest);
     for (const side of [1, -1] as const) {
-      // arm: sleeve, then gauntlet and glove with accent fingertips
+      // arm: tapered sleeve, rolled cuff, slim gauntlet with a bracer, mitt hand
       const upper = new THREE.Group();
       upper.position.set(side * 0.235, 0.42, 0);
-      upper.add(mesh(new PartBuilder().add(capsule(0.055, 0.2), xf(0, -0.14, 0), o.jacket)));
+      upper.add(
+        mesh(
+          new PartBuilder().add(
+            lathe(
+              [
+                [0.046, -0.31],
+                [0.05, -0.2],
+                [0.059, -0.06],
+                [0.056, 0.03],
+                [0, 0.04],
+              ],
+              9,
+              1,
+              0.92,
+            ),
+            null,
+            o.jacket,
+            {
+              tone: 'sleeve',
+            },
+          ),
+        ),
+      );
       const lower = new THREE.Group();
       lower.position.y = -0.29;
       lower.add(
         mesh(
           new PartBuilder()
-            .add(capsule(0.045, 0.17), xf(0, -0.12, 0), o.glove)
-            .add(rbox(0.06, 0.12, 0.03, 0.01), xf(side * 0.04, -0.11, 0, 0, 0, 0), o.guard)
-            .add(rbox(0.075, 0.09, 0.05, 0.02), xf(0, -0.29, 0), o.glove)
-            .add(rbox(0.07, 0.04, 0.045, 0.015), xf(0, -0.345, 0), o.glove, { accent: true }),
+            .add(
+              lathe(
+                [
+                  [0.043, -0.17],
+                  [0.048, -0.1],
+                  [0.046, -0.02],
+                  [0.046, 0.0],
+                ],
+                9,
+                1,
+                0.92,
+              ),
+              null,
+              o.jacket,
+              {
+                tone: 'sleeve',
+              },
+            )
+            .add(
+              lathe(
+                [
+                  [0.038, -0.176],
+                  [0.05, -0.168],
+                  [0.052, -0.158],
+                  [0.04, -0.15],
+                ],
+                9,
+                1,
+                0.92,
+              ),
+              null,
+              o.cuff,
+              {
+                tone: 'sleeve',
+              },
+            )
+            .add(
+              lathe(
+                [
+                  [0, -0.335],
+                  [0.026, -0.325],
+                  [0.03, -0.28],
+                  [0.036, -0.21],
+                  [0.04, -0.17],
+                ],
+                9,
+                1,
+                0.92,
+              ),
+              null,
+              o.glove,
+              { tone: 'glove' },
+            )
+            .add(
+              lathe(
+                [
+                  [0.034, -0.3],
+                  [0.0345, -0.26],
+                  [0.039, -0.24],
+                ],
+                9,
+                1,
+                0.92,
+              ),
+              null,
+              o.guard,
+              { tone: 'trim' },
+            )
+            .add(new THREE.SphereGeometry(0.05, 8, 6), xf(0, -0.375, 0, 0, 0, 0, 1, 1.12, 0.8), o.glove, {
+              tone: 'glove',
+            })
+            .add(
+              new THREE.CapsuleGeometry(0.016, 0.04, 2, 5),
+              xf(side * -0.04, -0.36, -0.02, 0, 0, side * 0.5),
+              o.glove,
+              {
+                tone: 'glove',
+              },
+            ),
         ),
       );
       upper.add(lower);
@@ -122,8 +297,26 @@ export class Runner {
       thigh.add(
         mesh(
           new PartBuilder()
-            .add(capsule(0.08, 0.3), xf(0, -0.23, 0), o.trouser)
-            .add(rbox(0.012, 0.3, 0.05, 0.004), xf(side * 0.08, -0.23, 0), o.trouser, { accent: true }),
+            .add(
+              lathe(
+                [
+                  [0.058, -0.46],
+                  [0.072, -0.32],
+                  [0.088, -0.12],
+                  [0.087, 0.02],
+                  [0, 0.03],
+                ],
+                9,
+                1,
+                0.95,
+              ),
+              null,
+              o.trouser,
+            )
+            .add(rbox(0.012, 0.3, 0.05, 0.004), xf(side * 0.085, -0.23, 0), o.trouser, {
+              accent: true,
+              noInk: true,
+            }),
         ),
       );
       const shin = new THREE.Group();
@@ -131,12 +324,25 @@ export class Runner {
       shin.add(
         mesh(
           new PartBuilder()
-            .add(new THREE.CylinderGeometry(0.07, 0.05, 0.42, 10, 1), xf(0, -0.21, 0), o.trouser)
-            .add(rbox(0.1, 0.11, 0.04, 0.015), xf(0, -0.03, -0.055), o.guard)
-            .add(rbox(0.07, 0.2, 0.026, 0.01), xf(0, -0.22, -0.056), o.guard)
+            .add(
+              lathe(
+                [
+                  [0.04, -0.44],
+                  [0.046, -0.36],
+                  [0.058, -0.16],
+                  [0.062, 0.0],
+                ],
+                9,
+                1,
+                0.95,
+              ),
+              null,
+              o.trouser,
+            )
+            .add(rbox(0.1, 0.11, 0.04, 0.015), xf(0, -0.03, -0.058), o.guard, { tone: 'trim' })
             .add(rbox(0.11, 0.05, 0.29, 0.02), xf(0, -0.445, -0.06), o.guard)
-            .add(rbox(0.1, 0.07, 0.19, 0.03), xf(0, -0.4, -0.02), o.glove)
-            .add(rbox(0.114, 0.022, 0.292, 0.008), xf(0, -0.475, -0.06), o.sole),
+            .add(rbox(0.1, 0.07, 0.19, 0.03), xf(0, -0.4, -0.02), o.glove, { tone: 'glove' })
+            .add(rbox(0.114, 0.022, 0.292, 0.008), xf(0, -0.475, -0.06), o.sole, { noInk: true }),
         ),
       );
       thigh.add(shin);
@@ -148,6 +354,11 @@ export class Runner {
 
   setAccent(hex: number) {
     this.mat.userData.accent.value.set(hex);
+  }
+  setPalette(h: { sleeve: number; glove: number; trim: number }) {
+    this.mat.userData.sleeve.value.set(h.sleeve);
+    this.mat.userData.glove.value.set(h.glove);
+    this.mat.userData.trim.value.set(h.trim);
   }
 
   private slide = 0;

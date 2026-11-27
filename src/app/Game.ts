@@ -267,6 +267,8 @@ export class Game {
   private setEnv(id: string) {
     this.env = getEnv(id);
     this.renderer.applyEnv(this.env);
+    this.body.setPalette(this.env.hands);
+    this.menuRunner.setPalette(this.env.hands);
     this.motes?.dispose();
     const m = this.env.motes;
     const count = Math.round(m.count * this.renderer.tier.particles * Math.max(0.2, this.settings.particles));
