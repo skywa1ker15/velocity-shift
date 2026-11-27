@@ -302,8 +302,9 @@ test('multiverse: every universe renders on a level, and a shift between each pa
     expect(await page.evaluate(() => document.documentElement.dataset.universe)).toBe(id);
   }
   // chain shifts through the whole library; any shader error fails the test through the console check
-  for (const id of ids) {
-    await page.evaluate((u) => (window as any).__vs.debugShift(u), id);
+  // (each shift uses the next transition kind, so all seven run)
+  for (const [i, id] of ids.entries()) {
+    await page.evaluate(([u, k]) => (window as any).__vs.debugShift(u, k), [id, i % 7] as const);
     await page.waitForFunction(
       () =>
         (window as any).__vs.multiverse.describe().blend > 0.9 ||

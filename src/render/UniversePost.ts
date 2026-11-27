@@ -10,6 +10,8 @@ import { NO_SCREEN, type ScreenLook } from '../multiverse/universes';
 
 const frag = /* glsl */ `
 uniform float uRain;
+uniform float uPixelBurst;
+uniform float uFlash;
 uniform float uHalftone, uScan, uPixel, uFringe, uGrain, uPosterize, uPaper, uGlitch, uHueDrift, uT, uBurst;
 uniform vec2 uRes;
 float uvH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -42,13 +44,14 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     float blk = step(1.0 - glitch * 0.06, uvH(floor(p * vec2(9.0, 6.0)) + tick));
     p += blk * (vec2(uvH(vec2(tick, 3.0)), uvH(vec2(tick, 7.0))) - 0.5) * 0.06;
   }
-  if (uPixel > 0.5) {
-    vec2 px = uPixel / uRes;
+  float pixel = max(uPixel, uPixelBurst);
+  if (pixel > 0.5) {
+    vec2 px = pixel / uRes;
     p = (floor(p / px) + 0.5) * px;
   }
   vec3 col;
   float fr = uFringe + glitch * 0.6;
-  if (fr > 0.001 || uPixel > 0.5 || glitch > 0.001) {
+  if (fr > 0.001 || pixel > 0.5 || glitch > 0.001) {
     vec2 off = (p - 0.5) * fr * 0.012;
     col = vec3(texture2D(inputBuffer, p + off).r, texture2D(inputBuffer, p).g, texture2D(inputBuffer, p - off).b);
   } else {
@@ -100,6 +103,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     float g = uvH(uv * uRes + fract(uT * 7.0) * 91.7) - 0.5;
     col += g * uGrain * 0.09;
   }
+  // a brief lift as the front passes through the lens
+  col += uFlash * (0.35 + 0.65 * col);
   // negative channels (hue rotation, grain) would turn into NaN in the output transform
   outputColor = vec4(max(col, 0.0), inputColor.a);
 }`;
@@ -108,6 +113,10 @@ export class UniverseEffect extends Effect {
   private look: ScreenLook = { ...NO_SCREEN };
   /** 0..1 momentary glitch kick (transitions). */
   burst = 0;
+  /** Momentary chunky pixels in screen pixels (pixel transition). */
+  pixelBurst = 0;
+  /** 0..1 momentary brightening as a front crosses the camera. */
+  flash = 0;
   /** Scales the harsher treatments (accessibility: reduced flashing). */
   intensity = 1;
 
@@ -117,6 +126,8 @@ export class UniverseEffect extends Effect {
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map<string, Uniform>([
         ['uRain', new Uniform(0)],
+        ['uPixelBurst', new Uniform(0)],
+        ['uFlash', new Uniform(0)],
         ['uHalftone', new Uniform(0)],
         ['uScan', new Uniform(0)],
         ['uPixel', new Uniform(0)],
@@ -163,6 +174,10 @@ export class UniverseEffect extends Effect {
     this.uniforms.get('uT')!.value = time;
     this.burst = Math.max(0, this.burst - dt * 2.2);
     this.uniforms.get('uBurst')!.value = this.burst * this.intensity;
+    this.pixelBurst = Math.max(0, this.pixelBurst - dt * 34);
+    this.uniforms.get('uPixelBurst')!.value = this.pixelBurst > 1.5 ? Math.round(this.pixelBurst) : 0;
+    this.flash = Math.max(0, this.flash - dt * 3.2);
+    this.uniforms.get('uFlash')!.value = this.flash * this.flash * 0.5 * this.intensity;
   }
 
   override setSize(width: number, height: number) {

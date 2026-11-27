@@ -12,7 +12,9 @@
 import { makeRng } from '../core/math';
 import type { UniverseId } from './universes';
 
-export const TRANSITIONS = ['sphere'] as string[];
+/** Transition kinds, in shader order. */
+export const TRANSITIONS = ['portal', 'tear', 'glitch', 'drain', 'wave', 'pixel', 'collapse'] as const;
+export type TransitionId = (typeof TRANSITIONS)[number];
 
 export interface PlannedShift {
   /** Fires when this checkpoint (1-based index, as reported by the simulation) is reached. */
@@ -47,14 +49,20 @@ export function planRun(
   seed: number,
   checkpoints: number,
   library: readonly UniverseId[],
-  transitions = TRANSITIONS.length,
+  transitions: number = TRANSITIONS.length,
 ): RunPlan {
   const rng = makeRng(hashSeed(levelId, seed));
   const others = library.filter((u) => u !== home);
   const plan: RunPlan = { seed, home, shifts: [], anomalies: [] };
   if (!others.length || checkpoints < 1) return plan;
   const pick = <T>(list: readonly T[]) => list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
-  const kind = () => Math.floor(rng() * Math.max(1, transitions));
+  // some universes arrive in character: corruption glitches in, the voxel world arrives in cubes
+  const kind = (to?: UniverseId) => {
+    const r = Math.floor(rng() * Math.max(1, transitions));
+    if (to === 'corrupt' && transitions > 2) return 2;
+    if (to === 'voxel' && transitions > 5 && r % 2 === 0) return 5;
+    return r;
+  };
 
   let current: UniverseId = home;
   let away = 0; // consecutive checkpoints spent away from home
@@ -71,7 +79,7 @@ export function planRun(
     if (current !== home && rng() < 0.55 + away * 0.2) to = home;
     else to = pick(others.filter((u) => u !== current).length ? others.filter((u) => u !== current) : others);
     if (to === current) continue;
-    plan.shifts.push({ checkpoint: cp, to, transition: kind() });
+    plan.shifts.push({ checkpoint: cp, to, transition: kind(to) });
     current = to;
     away = to === home ? 0 : 1;
     sinceShift = 1;
@@ -87,12 +95,13 @@ export function planRun(
   // anomalies: roughly one run in two gets one, a few get two
   const count = rng() < 0.5 ? 0 : rng() < 0.8 ? 1 : 2;
   for (let i = 0; i < count; i++) {
+    const to = pick(library);
     plan.anomalies.push({
       checkpoint: Math.floor(rng() * (checkpoints + 1)),
       delay: 1.2 + rng() * 3.5,
-      to: pick(library),
+      to,
       duration: 2.2 + rng() * 2.4,
-      transition: kind(),
+      transition: kind(to),
     });
   }
   return plan;

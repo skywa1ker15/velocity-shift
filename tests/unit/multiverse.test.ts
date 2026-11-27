@@ -103,6 +103,7 @@ describe('director', () => {
       ambient: () => log.push('ambient'),
       screen: () => log.push('screen'),
       arrive: (def) => log.push('arrive:' + def.id),
+      cross: (kind) => log.push('cross:' + kind),
     });
     return { d, log };
   };
@@ -137,9 +138,10 @@ describe('director', () => {
     expect(mv.uUniOn.value).toBe(0);
     expect(mv.uUniA.value).toBe(getUniverse(other).index);
     expect(log.filter((l) => l === 'arrive:' + other).length).toBe(1);
+    expect(log.filter((l) => l.startsWith('cross:')).length).toBe(1);
     // and it took a sensible time: the whole level is covered within ten seconds
     expect(steps / 60).toBeLessThan(10);
-    expect(frontRadius((steps + 2) / 60)).toBeGreaterThan(FRONT_DONE);
+    expect(frontRadius((steps + 2) / 60, 0)).toBeGreaterThan(FRONT_DONE);
   });
 
   it('shifting to the current universe is refused; a second shift completes the first at once', () => {
@@ -237,4 +239,51 @@ describe('scenery', () => {
       b.dispose();
     }
   }, 60_000);
+});
+
+describe('transitions', () => {
+  it('every transition kind sweeps the camera exactly once and completes', async () => {
+    const { TRANSITIONS } = await import('../../src/multiverse/plan');
+    const other = UNIVERSE_IDS.find((u) => u !== 'anime')!;
+    for (let kind = 0; kind < TRANSITIONS.length; kind++) {
+      let crossed = 0;
+      const d = new Director({
+        ambient: () => {},
+        screen: () => {},
+        arrive: () => {},
+        cross: () => crossed++,
+      });
+      d.begin('awakening', getEnv('awakening'), 9, 8, 'anime');
+      // camera off to one side and above, so planar and spherical fronts both have to travel to reach it
+      const cam = new THREE.Vector3(6, 3, -4);
+      const fwd = new THREE.Vector3(0.6, 0, -0.8);
+      expect(d.shiftAhead(other, cam, fwd, kind)).toBe(true);
+      let steps = 0;
+      let lastBlend = 0;
+      while (d.shifting && steps++ < 4000) {
+        d.update(1 / 60, cam, fwd);
+        if (!d.shifting) break;
+        expect(d.blend).toBeGreaterThanOrEqual(lastBlend - 1e-9); // the camera never pops back out
+        lastBlend = d.blend;
+      }
+      expect(d.shifting, TRANSITIONS[kind]).toBe(false);
+      expect(crossed, TRANSITIONS[kind]).toBe(1);
+      expect(d.here.id).toBe(other);
+      expect(steps / 60).toBeLessThan(10);
+    }
+  });
+
+  it('the planner uses the whole set, and corruption always glitches in', async () => {
+    const { TRANSITIONS } = await import('../../src/multiverse/plan');
+    const used = new Set<number>();
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = planRun('momentum', 'synth', seed, 9, LIB);
+      for (const s of [...p.shifts, ...p.anomalies]) {
+        used.add(s.transition);
+        if (s.to === 'corrupt') expect(s.transition).toBe(2);
+        expect(s.transition).toBeLessThan(TRANSITIONS.length);
+      }
+    }
+    expect(used.size).toBe(TRANSITIONS.length);
+  });
 });

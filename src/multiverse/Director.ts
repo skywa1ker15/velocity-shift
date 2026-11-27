@@ -23,7 +23,16 @@ import {
 } from './universes';
 
 /** Radius of the front (metres) t seconds after a shift begins: slow to open, then it races away. */
-export const frontRadius = (t: number) => 10 * t + 22 * t * t;
+export const frontRadius = (t: number, kind = 0) => {
+  // the portal hangs in the air as a small sphere for a beat before it opens
+  if (kind === 0) {
+    const hold = 0.45;
+    if (t < hold) return 1.9 * Math.sin((t / hold) * Math.PI * 0.5);
+    t -= hold;
+    return 1.9 + 10 * t + 22 * t * t;
+  }
+  return 10 * t + 22 * t * t;
+};
 /** Past this radius everything, including the sky shell, is inside: the shift is complete. */
 export const FRONT_DONE = 1300;
 
@@ -68,6 +77,8 @@ export interface DirectorHooks {
   ambient(a: Ambient): void;
   /** Screen treatment: both universes' looks and how far the camera is into B. */
   screen(a: ScreenLook, b: ScreenLook, k: number): void;
+  /** The front has just swept over the camera (transition kind): screen kick, sound. */
+  cross(kind: number, def: UniverseDef): void;
   /** The camera has just crossed into a universe: swap hands, particles, HUD theme, audio. */
   arrive(def: UniverseDef, env: EnvPreset, announce: boolean): void;
 }
@@ -91,6 +102,8 @@ export class Director {
   private lastK = -1;
   private pending: { at: number; to: UniverseId; back: number; transition: number }[] = [];
   private clock = 0;
+  private kind = 0;
+  private crossed = false;
   private returnTo: { at: number; to: UniverseId; transition: number } | null = null;
 
   constructor(private hooks: DirectorHooks) {}
@@ -162,11 +175,11 @@ export class Director {
   shiftAhead(to: UniverseId, pos: THREE.Vector3, forward: THREE.Vector3, transition = 0): boolean {
     _o.copy(pos).addScaledVector(forward, 13);
     _o.y += 1.2;
-    return this.shiftTo(to, _o, transition);
+    return this.shiftTo(to, _o, transition, forward);
   }
 
   /** Start a transition to another universe from a point in the world. */
-  shiftTo(to: UniverseId, origin: THREE.Vector3, transition = 0): boolean {
+  shiftTo(to: UniverseId, origin: THREE.Vector3, transition = 0, forward?: THREE.Vector3): boolean {
     if (!this.level) return false;
     if (this.active) this.finish(); // a shift already under way completes at once
     const def = getUniverse(to);
@@ -176,6 +189,13 @@ export class Director {
     this.write(def, this.envB, 'B');
     mv.uFront.value.set(origin.x, origin.y, origin.z, 0);
     mv.uFrontP.value.x = transition;
+    this.kind = transition;
+    if (forward && forward.lengthSq() > 1e-6) {
+      mv.uFrontDir.value.set(forward.x, 0, forward.z);
+      if (mv.uFrontDir.value.lengthSq() < 1e-6) mv.uFrontDir.value.set(0, 0, 1);
+      mv.uFrontDir.value.normalize();
+    }
+    this.crossed = false;
     mv.uFrontP.value.z = 0;
     mv.uUniOn.value = 1;
     this.active = true;
@@ -218,13 +238,25 @@ export class Director {
     }
     if (!this.active) return;
     this.t += dt;
-    const r = frontRadius(this.t);
+    const r = frontRadius(this.t, this.kind);
     mv.uFront.value.w = r;
     mv.uFrontP.value.z = this.t;
     const f = mv.uFront.value;
-    const dist = Math.hypot(cam.x - f.x, cam.y - f.y, cam.z - f.z);
+    // how deep the camera is inside the arriving universe (matches the shader's shapes, minus noise)
+    let depth: number;
+    const dx = cam.x - f.x,
+      dy = cam.y - f.y,
+      dz = cam.z - f.z;
+    const dir = mv.uFrontDir.value;
+    if (this.kind === 1) depth = r * 0.6 - Math.abs(dx * -dir.z + dz * dir.x);
+    else if (this.kind === 4) depth = r * 0.6 - Math.abs(dx * dir.x + dz * dir.z);
+    else depth = r - Math.hypot(dx, dy, dz);
     // the camera crosses the front over about a metre and a half
-    const target = Math.min(1, Math.max(0, (r - dist) / 1.5 + 0.5));
+    const target = Math.min(1, Math.max(0, depth / 1.5 + 0.5));
+    if (!this.crossed && target > 0.5) {
+      this.crossed = true;
+      this.hooks.cross(this.kind, this.b);
+    }
     this.inB += (target - this.inB) * Math.min(1, dt * 9);
     if (Math.abs(target - this.inB) < 0.002) this.inB = target;
     mv.uInB.value = this.inB;
@@ -278,6 +310,8 @@ export class Director {
       to: this.b.id,
       shifting: this.active,
       radius: mv.uFront.value.w,
+      t: this.t,
+      kind: this.kind,
       blend: this.inB,
       plan: this.plan,
     };

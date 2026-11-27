@@ -523,15 +523,49 @@ void mvResolve(vec3 legacy) {
 vec3 mvCompose(vec3 camPos) {
   vec3 a = mvM < 0.999 ? mvFog(mvCA, vWPos, camPos, uFogColA, uFogSunA, uFogPA) : vec3(0.0);
   vec3 b = mvM > 0.001 ? mvFog(mvCB, vWPos, camPos, uFogColB, uFogSunB, uFogPB) : vec3(0.0);
+  if (uUniOn < 0.5) return a;
+  float kind = uFrontP.x;
+  float d = mvSdfV;
+  float fade = 1.0 - smoothstep(250.0, 900.0, uFront.w);
+  vec3 seamCol = mix(uPalA[3], uPalB[3], 0.5) + 0.25;
+  if (kind > 2.5 && kind < 3.5) {
+    // drain: colour bleeds out of the old world ahead of the front and soaks into the new one behind it
+    float pre = (1.0 - clamp(d / 11.0, 0.0, 1.0)) * fade;
+    float post = clamp(-d / 11.0, 0.0, 1.0);
+    a = mix(a, vec3(dot(a, vec3(0.299, 0.587, 0.114))) * (1.0 + pre * 0.5), pre);
+    b = mix(vec3(dot(b, vec3(0.299, 0.587, 0.114))) * 1.5, b, mix(1.0, post, fade));
+  } else if (kind > 5.5) {
+    // collapse: the old world cracks into plates that fall dark; the new one snaps together plate by plate
+    vec3 cell = floor(vWPos / 1.6 + 0.37);
+    float r = mvHash(cell);
+    float gone = step(r, 1.0 - clamp(d / 9.0, 0.0, 1.0)) * fade;
+    vec3 f = abs(fract(vWPos / 1.6 + 0.37) - 0.5);
+    float crack = step(0.44, max(f.x, max(f.y, f.z))) * (1.0 - clamp(d / 14.0, 0.0, 1.0)) * fade;
+    a = mix(a, vec3(0.0), max(gone, crack * 0.85));
+    float born = step(r, clamp(-d / 9.0, 0.0, 1.0));
+    b = mix(seamCol * 2.2 * step(r, clamp(-d / 9.0 + 0.25, 0.0, 1.0)), b, mix(1.0, born, fade));
+  }
   vec3 c = mix(a, b, mvM);
-  if (uUniOn > 0.5) {
-    // the seam between realities: a hot core line with a soft halo in both universes' accents
-    float d = abs(mvSdfV);
-    float core = 1.0 - smoothstep(0.0, 0.09, d);
-    float halo = exp(-d * 1.6);
-    vec3 seam = mix(uPalA[3], uPalB[3], 0.5) + 0.25;
-    float fade = 1.0 - smoothstep(250.0, 900.0, uFront.w);
-    c += seam * (core * 3.0 + halo * 0.7) * fade;
+  // the seam between realities
+  float ad = abs(d);
+  if (kind < 0.5 || kind > 5.5) {
+    // portal / collapse: a hot core line with a soft halo in both universes' accents
+    c += seamCol * ((1.0 - smoothstep(0.0, 0.09, ad)) * 3.0 + exp(-ad * 1.6) * 0.7) * fade;
+  } else if (kind < 1.5) {
+    // tear: a white-hot ragged lip with a void-dark fringe just outside it
+    c *= 1.0 - (1.0 - smoothstep(0.1, 0.9, d)) * step(0.0, d) * 0.85 * fade;
+    c += vec3(1.6, 1.5, 1.4) * (1.0 - smoothstep(0.0, 0.12, ad)) * 2.5 * fade + seamCol * exp(-ad * 2.5) * 0.5 * fade;
+  } else if (kind < 2.5) {
+    // glitch: no seam, just scan lines across whatever is mid-flip
+    c = mix(c, c.gbr * 1.3, step(ad, 1.5) * step(0.5, fract(gl_FragCoord.y * 0.25)) * 0.6);
+  } else if (kind < 3.5) {
+    c += vec3(1.0) * exp(-ad * 0.6) * 0.25 * fade;
+  } else if (kind < 4.5) {
+    // wave: a broad band of light with ripples trailing behind it
+    c += seamCol * (exp(-ad * 0.7) * 1.1 + (0.5 + 0.5 * sin(d * 1.6)) * exp(-ad * 0.18) * step(d, 0.0) * 0.35) * fade;
+  } else if (kind < 5.5) {
+    // pixel: each cube lights its faces as it arrives
+    c += seamCol * step(ad, 1.2) * 0.8 * fade;
   }
   return c;
 }

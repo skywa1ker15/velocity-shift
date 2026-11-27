@@ -293,6 +293,14 @@ export class Game {
   readonly multiverse = new Director({
     ambient: (a) => this.renderer.applyAmbient(a.light, a.post),
     screen: (a, b, k) => this.renderer.setScreen(a, b, k),
+    cross: (kind, def) => {
+      const fx = this.renderer.universeFx;
+      // each transition leaves its own mark on the lens as it passes
+      fx.flash = kind === 3 ? 0.9 : kind === 2 || kind === 5 ? 0.25 : 0.6;
+      if (kind === 2 || def.id === 'corrupt') fx.burst = 1;
+      if (kind === 5 || def.id === 'voxel') fx.pixelBurst = 18;
+      this.shiftKick = 1;
+    },
     arrive: (def, env) => {
       document.documentElement.dataset.universe = def.id;
       this.body.setPalette(env.hands);
@@ -303,6 +311,8 @@ export class Game {
     },
   });
   private universeStreak = 0;
+  /** 1 → 0 after a front crosses the camera: drives a small FOV breath and speed-line burst. */
+  private shiftKick = 0;
   /** Each universe's background architecture for the loaded level. */
   scenery: Scenery | null = null;
 
@@ -1159,7 +1169,10 @@ export class Game {
       pl = sim.player;
     const yaw = this.input.yaw,
       pitch = this.input.pitch;
-    this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov, this.motion);
+    // a front crossing the camera gives the view a short breath outward
+    this.shiftKick = Math.max(0, this.shiftKick - dt * 2.4);
+    const kick = this.shiftKick * this.shiftKick * (this.motion.speedLines > 0 ? 1 : 0.3);
+    this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion);
     this.body.update(pl, this.rig.feet, this.rig.bobPhase, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
@@ -1188,7 +1201,7 @@ export class Game {
       this.time,
       dt,
       Math.max(speed, speed3 * 0.9),
-      Math.max(this.dashFx, this.impactFx * 0.8),
+      Math.max(this.dashFx, this.impactFx * 0.8, kick * 0.75),
       this.motion.speedLines,
       impact ? 0 : clamp((vr / den) * 0.55, -0.6, 0.6),
       impact ? -1.15 : clamp((vu / den) * 0.75, -0.85, 0.85),

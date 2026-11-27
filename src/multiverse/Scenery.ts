@@ -520,7 +520,7 @@ void main() {
   // how present is this prop? It unfolds behind the front in its own universe, folds away in the other
   float show = abs(uUniA - uMine) < 0.5 ? 1.0 : 0.0;
   if (uUniOn > 0.5) {
-    float sd = distance(aAnchor, uFront.xyz) - uFront.w;
+    float sd = mvSdf(aAnchor);
     float inB = clamp(-sd / 16.0, 0.0, 1.0);
     show = (abs(uUniA - uMine) < 0.5 ? 1.0 - clamp(-sd / 7.0, 0.0, 1.0) : 0.0) + (abs(uUniB - uMine) < 0.5 ? inB : 0.0);
   }
