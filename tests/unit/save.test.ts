@@ -33,6 +33,46 @@ describe('settings', () => {
     expect(m.roll).toBeLessThan(0.3);
     expect(motionProfile(defaultSettings).headBob).toBe(1);
   });
+
+  test('master motion intensity scales every movement effect and keeps the individual sliders', () => {
+    const half = motionProfile({ ...defaultSettings, motionIntensity: 0.5 });
+    expect(half.headBob).toBeCloseTo(0.5);
+    expect(half.roll).toBeCloseTo(0.5);
+    expect(half.shake).toBeCloseTo(0.5);
+    expect(half.speedFov).toBeCloseTo(0.5);
+    expect(half.speedLines).toBeCloseTo(0.5);
+    expect(half.armSway).toBeCloseTo(0.5);
+    expect(half.landing).toBeCloseTo(0.5);
+    // the individual sliders still apply on top of the master
+    const fine = motionProfile({ ...defaultSettings, motionIntensity: 0.5, headBob: 0.5, armSway: 0.4 });
+    expect(fine.headBob).toBeCloseTo(0.25);
+    expect(fine.armSway).toBeCloseTo(0.2);
+    // zero turns everything off, including screen distortion
+    const off = motionProfile({ ...defaultSettings, motionIntensity: 0 });
+    expect(
+      off.headBob + off.roll + off.shake + off.speedFov + off.speedLines + off.armSway + off.landing,
+    ).toBe(0);
+    expect(off.screenFx).toBe(false);
+    // above 100% is allowed
+    expect(motionProfile({ ...defaultSettings, motionIntensity: 1.5 }).headBob).toBeCloseTo(1.5);
+  });
+
+  test('reduce motion still wins over a high master intensity', () => {
+    const m = motionProfile({ ...defaultSettings, motionIntensity: 1.5, reduceMotion: true });
+    expect(m.headBob).toBe(0);
+    expect(m.shake).toBe(0);
+    expect(m.screenFx).toBe(false);
+    expect(m.armSway).toBeLessThan(0.6);
+    expect(m.landing).toBeLessThan(0.7);
+    expect(m.intensity).toBeLessThanOrEqual(0.4);
+  });
+
+  test('new motion settings are clamped and repaired from storage', () => {
+    const s = sanitizeSettings({ motionIntensity: 9, armSway: -3 });
+    expect(s.motionIntensity).toBe(1.5);
+    expect(s.armSway).toBe(0);
+    expect(sanitizeSettings({ motionIntensity: 'x' }).motionIntensity).toBe(1);
+  });
 });
 
 describe('bindings', () => {

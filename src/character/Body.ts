@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { clamp, damp } from '../core/math';
 import type { MovementController } from '../movement/MovementController';
+import type { MotionProfile } from '../settings/settings';
 import { MoveState } from '../movement/types';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createCharacterMaterial, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
@@ -49,6 +50,57 @@ const rbox = (x: number, y: number, z: number, r: number) =>
   new RoundedBoxGeometry(x, y, z, 2, Math.min(r, x / 2, y / 2, z / 2));
 const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, 3, 8);
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+
+interface ArmPose {
+  x: number;
+  y: number;
+  z: number;
+  roll: number;
+  bend: number;
+  curl: number;
+  splay: number;
+  pole: number;
+  stiff: number;
+}
+const mkPose = (): ArmPose => ({
+  x: 0,
+  y: 0,
+  z: 0,
+  roll: 0,
+  bend: 0,
+  curl: 0.85,
+  splay: 0,
+  pole: 0.55,
+  stiff: 210,
+});
+const POSE_IDLE = 0,
+  POSE_RUN = 1,
+  POSE_SLIDE = 2,
+  POSE_WALL = 3,
+  POSE_DASH = 4,
+  POSE_VAULT = 5;
+// how fast each state's weight eases in / out (per second): quick for impacts, softer for settles
+const W_IN = [8, 12, 18, 14, 30, 20, 12];
+const W_OUT = [8, 10, 9, 9, 18, 12, 10];
+function stateIndex(st: MoveState): number {
+  switch (st) {
+    case MoveState.Idle:
+      return POSE_IDLE;
+    case MoveState.Run:
+    case MoveState.Sprint:
+      return POSE_RUN;
+    case MoveState.Slide:
+      return POSE_SLIDE;
+    case MoveState.WallRun:
+      return POSE_WALL;
+    case MoveState.Dash:
+      return POSE_DASH;
+    case MoveState.Vault:
+      return POSE_VAULT;
+    default:
+      return 6;
+  }
+}
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -370,7 +422,7 @@ export class Body {
   // ----- reactions ----------------------------------------------------------------------
   onLand(impact: number) {
     this.landT = 0;
-    this.landAmt = clamp(impact / 20, 0.15, 1);
+    this.landAmt = clamp(impact / 20, 0.15, 1) * Math.min(1.3, this.motion.landing);
     for (const a of this.arms) {
       a.spring.v.y -= 1.2 + this.landAmt * 2.6;
       a.spring.v.z -= this.landAmt * 0.8;
@@ -439,6 +491,35 @@ export class Body {
     this.updateLegs(pl, st, speed, grounded, feet, dt, yaw, pitch);
   }
 
+  // ----- arm pose layers -------------------------------------------------------------------
+  //
+  // The arms are posed in three layers, so states can overlap and nothing snaps:
+  //  1. LOCOMOTION: one pose provider per movement state (idle, run, slide, wall, dash, vault,
+  //     air). Each state has a blend weight that eases in and out, and the arm's target is the
+  //     weighted mix of the providers, so run -> slide -> air cross-fades instead of switching.
+  //  2. OVERLAYS: short actions on top (wall-jump shove, double-jump push, landing brace, the free
+  //     hand counter-swinging a sword stroke), driven by the event timers.
+  //  3. SECONDARY MOTION: look lag and air-steering sway, scaled by the player's sway setting.
+  // The blended target then goes through the spring (follow-through) and the IK.
+  private stateW = new Float32Array(7).fill(0).map((_, i) => (i === 0 ? 1 : 0));
+  private poseScratch: ArmPose[] = Array.from({ length: 7 }, mkPose);
+  private blend: ArmPose = mkPose();
+  private cx = { sp: 0, breathe: 0, rise: 0, fall: 0, longFall: 0, speed: 0 };
+  private motion: MotionProfile = {
+    headBob: 1,
+    roll: 1,
+    shake: 1,
+    speedFov: 1,
+    speedLines: 1,
+    screenFx: true,
+    armSway: 1,
+    landing: 1,
+    intensity: 1,
+  };
+  setMotion(m: MotionProfile) {
+    this.motion = m;
+  }
+
   private updateArms(
     pl: MovementController,
     st: MoveState,
@@ -447,14 +528,27 @@ export class Body {
     dt: number,
     camRoll: number,
   ) {
-    const sp = clamp(speed / 11, 0, 1.4);
-    const breathe = Math.sin(this.t * 1.6) * 0.007;
+    const m = this.motion;
+    const sway = m.armSway;
+    const c = this.cx;
+    c.speed = speed;
+    c.sp = clamp(speed / 11, 0, 1.4);
+    c.breathe = Math.sin(this.t * 1.6) * 0.007 * sway;
     const vy = pl.vel.y;
-    const rise = clamp(vy / 9, 0, 1);
-    const fall = clamp(-vy / 15, 0, 1);
-    const longFall = clamp((pl.airTime - 0.45) / 0.8, 0, 1);
+    c.rise = clamp(vy / 9, 0, 1);
+    c.fall = clamp(-vy / 15, 0, 1);
+    c.longFall = clamp((pl.airTime - 0.45) / 0.8, 0, 1);
+    const sp = c.sp;
     const landK = this.landT < 0.34 ? (1 - this.landT / 0.34) * this.landAmt : 0;
-    let stiff = 210;
+
+    // state weights: the active state eases in, the others ease out
+    const ti = stateIndex(st);
+    let sum = 0;
+    for (let i = 0; i < 7; i++) {
+      this.stateW[i] = damp(this.stateW[i], i === ti ? 1 : 0, i === ti ? W_IN[i] : W_OUT[i], dt);
+      sum += this.stateW[i];
+    }
+    if (sum < 1e-4) this.stateW[ti] = sum = 1;
 
     const swordArm = this.swordPose(dt, sp);
     for (const a of this.arms) {
@@ -480,138 +574,54 @@ export class Body {
         this.placeSword(a);
         continue;
       }
-      const swing = Math.sin(this.phase + (s > 0 ? 0 : Math.PI));
-      const fwd = Math.max(0, swing),
-        back = Math.max(0, -swing);
-      a.tRoll = 0;
-      a.tBend = 0;
-      a.tCurl = 0.85;
-      a.tSplay = 0;
-      a.tPole = 0.55;
-      switch (st) {
-        case MoveState.Idle:
-          t.set(s * 0.215, -0.268 + breathe, -0.41);
-          a.tCurl = 0.5 + Math.sin(this.t * 0.7 + s) * 0.06;
-          a.tRoll = -s * 0.15;
-          stiff = 150;
-          break;
-        case MoveState.Run:
-        case MoveState.Sprint: {
-          // a pumping run: the forward hand drives up and toward the centre line, the rear hand
-          // drops back out of view. Amplitude, reach and hand shape all grow with real speed.
-          const amp = 0.045 + sp * 0.1;
-          t.set(
-            s * (0.245 - fwd * 0.04 * sp + back * 0.02),
-            -0.28 + fwd * amp * 0.55 - back * amp * 0.5 + sp * 0.012,
-            -0.4 - fwd * amp * 1.15 + back * amp,
-          );
-          // loose fists with the thumb turned up while running; the hand opens into a blade,
-          // edge-on to the wind, only once the runner is well past sprint speed
-          const blade = clamp((speed - 14) / 5, 0, 1);
-          a.tCurl = lerp(0.8, 0.1, blade);
-          a.tRoll = -s * (0.85 + fwd * 0.2 + blade * 0.35);
-          a.tBend = fwd * 0.2 - back * 0.1 + blade * 0.35;
-          a.tPole = 0.4;
-          stiff = 200 + sp * 50;
-          break;
-        }
-        case MoveState.Slide:
-          if (s > 0) {
-            // trailing hand skims the ground behind, fingers spread, chattering with speed
-            t.set(0.37, -0.3 + Math.sin(this.t * 31) * 0.006 * sp, -0.33);
-            a.tRoll = 1.25;
-            a.tBend = -0.55;
-            a.tCurl = 0.12;
-            a.tSplay = 1;
-            a.tPole = 1.1;
-          } else {
-            // guard arm leads low across the body
-            t.set(-0.25, -0.26, -0.5);
-            a.tRoll = 0.5;
-            a.tBend = 0.3;
-            a.tCurl = 0.3;
-            a.tPole = 0.9;
-          }
-          break;
-        case MoveState.WallRun:
+
+      // ---- layer 1: blend the state poses
+      const bl = this.blend;
+      bl.x = bl.y = bl.z = bl.roll = bl.bend = bl.curl = bl.splay = bl.pole = bl.stiff = 0;
+      for (let i = 0; i < 7; i++) {
+        const w = this.stateW[i] / sum;
+        if (w < 0.003) continue;
+        const p = this.poseScratch[i];
+        this.poseFor(i, a, pl, p);
+        bl.x += p.x * w;
+        bl.y += p.y * w;
+        bl.z += p.z * w;
+        bl.roll += p.roll * w;
+        bl.bend += p.bend * w;
+        bl.curl += p.curl * w;
+        bl.splay += p.splay * w;
+        bl.pole += p.pole * w;
+        bl.stiff += p.stiff * w;
+      }
+      t.set(bl.x, bl.y, bl.z);
+      a.tRoll = bl.roll;
+      a.tBend = bl.bend;
+      a.tCurl = bl.curl;
+      a.tSplay = bl.splay;
+      a.tPole = bl.pole;
+      let stiff = bl.stiff;
+
+      // ---- layer 2: overlays
+      if (ti === 6) {
+        if (this.wjT < 0.28) {
+          // wall jump: the wall-side arm shoves off, the other swings across
           if (s === pl.wallSide) {
-            // palm planted on the wall, fingers spread, buzzing as it drags
-            t.set(s * 0.43, -0.02 + Math.sin(this.t * 27) * 0.005, -0.4 + Math.sin(this.phase) * 0.02);
-            a.tRoll = s * 1.4;
-            a.tBend = -0.6;
-            a.tCurl = 0.06;
+            t.set(s * 0.46, -0.13, -0.26);
             a.tSplay = 1;
-            a.tPole = 0.2;
-          } else {
-            // the free arm pumps hard for balance
-            t.set(s * 0.25, -0.22 + fwd * 0.09 - back * 0.03, -0.4 - fwd * 0.08 + back * 0.07);
-            a.tCurl = 0.7;
-            a.tRoll = -s * 0.3;
-          }
-          stiff = 230;
-          break;
-        case MoveState.Dash:
-          if (s > 0) {
-            t.set(0.09, -0.13, -0.56); // lead hand: a spear through the air
             a.tCurl = 0.05;
-            a.tRoll = -0.9;
-            a.tBend = 0.1;
-          } else {
-            t.set(-0.37, -0.25, -0.14); // off hand swept back
-            a.tCurl = 0.1;
-            a.tSplay = 0.4;
-          }
-          stiff = 340;
-          break;
-        case MoveState.Vault: {
-          // both palms plant on the ledge, then drive it down and behind
-          const k = pl.vaultT;
-          t.set(s * 0.165, -0.2 - k * 0.17, -0.5 + k * 0.26);
-          a.tCurl = 0.05;
-          a.tSplay = 0.7;
-          a.tBend = -0.75 + k * 0.5;
-          a.tRoll = -s * 0.25;
-          a.tPole = 0.9;
+            a.tRoll = s * 1.2;
+          } else t.set(s * 0.12, -0.12, -0.5);
           stiff = 300;
-          break;
         }
-        default: {
-          // airborne. Rising: arms drive up, lead arm ahead. Falling: arms spread wide and
-          // high with open fluttering hands — a long fall looks nothing like a hop.
-          const lead = s > 0 ? 1 : 0;
-          t.set(
-            s * (0.25 + fall * 0.13 + longFall * 0.04),
-            -0.21 + rise * (0.1 + lead * 0.03) + fall * 0.1,
-            -0.42 - rise * lead * 0.05 + fall * 0.06,
-          );
-          t.y += Math.sin(this.t * 17 + s * 1.3) * 0.012 * fall * (0.4 + longFall);
-          t.x += Math.cos(this.t * 13 + s) * 0.008 * fall * (0.4 + longFall);
-          a.tCurl = lerp(0.6, 0.06, Math.max(fall, rise * 0.5));
-          a.tSplay = fall;
-          a.tRoll = s * 0.75 * fall - s * 0.2 * rise;
-          a.tBend = -0.45 * fall + 0.15 * rise;
-          a.tPole = 0.55 + fall * 0.8;
-          stiff = 170;
-          if (this.wjT < 0.28) {
-            // wall jump: the wall-side arm shoves off, the other swings across
-            if (s === pl.wallSide) {
-              t.set(s * 0.46, -0.13, -0.26);
-              a.tSplay = 1;
-              a.tCurl = 0.05;
-              a.tRoll = s * 1.2;
-            } else t.set(s * 0.12, -0.12, -0.5);
-            stiff = 300;
-          }
-          if (this.djT < 0.22) {
-            t.y -= 0.11; // push down against the air
-            a.tSplay = 1;
-            a.tCurl = 0.05;
-            a.tBend = -0.7;
-          }
-          // steering in the air: both arms swing against the sideways motion
-          t.x -= this.lateral * 0.045;
-          a.tRoll += this.lateral * 0.35;
+        if (this.djT < 0.22) {
+          t.y -= 0.11; // push down against the air
+          a.tSplay = 1;
+          a.tCurl = 0.05;
+          a.tBend = -0.7;
         }
+        // steering in the air: both arms swing against the sideways motion
+        t.x -= this.lateral * 0.045 * sway;
+        a.tRoll += this.lateral * 0.35 * sway;
       }
       // the free hand counter-swings against a sword stroke
       if (swordArm && this.swordSwing > 0) {
@@ -629,8 +639,10 @@ export class Body {
         a.tCurl = lerp(a.tCurl, 0.08, landK);
         a.tBend -= 0.6 * landK;
       }
-      t.x += this.sway.x;
-      t.y += this.sway.y;
+
+      // ---- layer 3: secondary motion
+      t.x += this.sway.x * sway;
+      t.y += this.sway.y * sway;
       a.spring.k = stiff;
       a.spring.d = 1.55 * Math.sqrt(stiff);
       a.spring.update(t, dt);
@@ -644,16 +656,151 @@ export class Body {
     }
 
     // the whole upper body: sinks on landings, leans into speed, stays upright when the view rolls
+    const fall = c.fall;
     this.rootDip = damp(this.rootDip, landK * 0.035, 20, dt);
     this.rootLean = damp(
       this.rootLean,
-      st === MoveState.Sprint ? -0.035 * clamp(sp, 0, 1.2) : fall * 0.05,
+      (st === MoveState.Sprint ? -0.035 * clamp(sp, 0, 1.2) : fall * 0.05) * sway,
       6,
       dt,
     );
-    const counterBob = grounded ? Math.sin(this.phase * 2) * 0.005 * sp : 0;
+    const counterBob = grounded ? Math.sin(this.phase * 2) * 0.005 * sp * sway : 0;
     this.armRoot.position.set(0, -this.rootDip - counterBob, 0);
     this.armRoot.rotation.set(this.rootLean, 0, -camRoll * 0.45);
+  }
+
+  /** The locomotion pose of one arm in one state (index as in POSE_*), written into `p`. */
+  private poseFor(i: number, a: Arm, pl: MovementController, p: ArmPose) {
+    const s = a.side;
+    const c = this.cx;
+    const sp = c.sp;
+    p.roll = 0;
+    p.bend = 0;
+    p.curl = 0.85;
+    p.splay = 0;
+    p.pole = 0.55;
+    p.stiff = 210;
+    const swing = Math.sin(this.phase + (s > 0 ? 0 : Math.PI));
+    const fwd = Math.max(0, swing),
+      back = Math.max(0, -swing);
+    switch (i) {
+      case POSE_IDLE:
+        p.x = s * 0.215;
+        p.y = -0.268 + c.breathe;
+        p.z = -0.41;
+        p.curl = 0.5 + Math.sin(this.t * 0.7 + s) * 0.06;
+        p.roll = -s * 0.15;
+        p.stiff = 150;
+        break;
+      case POSE_RUN: {
+        // a pumping run: the forward hand drives up and toward the centre line, the rear hand
+        // drops back out of view. Amplitude, reach and hand shape all grow with real speed.
+        const amp = 0.045 + sp * 0.1;
+        p.x = s * (0.245 - fwd * 0.04 * sp + back * 0.02);
+        p.y = -0.28 + fwd * amp * 0.55 - back * amp * 0.5 + sp * 0.012;
+        p.z = -0.4 - fwd * amp * 1.15 + back * amp;
+        // loose fists with the thumb turned up while running; the hand opens into a blade,
+        // edge-on to the wind, only once the runner is well past sprint speed
+        const blade = clamp((c.speed - 14) / 5, 0, 1);
+        p.curl = lerp(0.8, 0.1, blade);
+        p.roll = -s * (0.85 + fwd * 0.2 + blade * 0.35);
+        p.bend = fwd * 0.2 - back * 0.1 + blade * 0.35;
+        p.pole = 0.4;
+        p.stiff = 200 + sp * 50;
+        break;
+      }
+      case POSE_SLIDE:
+        if (s > 0) {
+          // trailing hand skims the ground behind, fingers spread, chattering with speed
+          p.x = 0.37;
+          p.y = -0.3 + Math.sin(this.t * 31) * 0.006 * sp;
+          p.z = -0.33;
+          p.roll = 1.25;
+          p.bend = -0.55;
+          p.curl = 0.12;
+          p.splay = 1;
+          p.pole = 1.1;
+        } else {
+          // guard arm leads low across the body
+          p.x = -0.25;
+          p.y = -0.26;
+          p.z = -0.5;
+          p.roll = 0.5;
+          p.bend = 0.3;
+          p.curl = 0.3;
+          p.pole = 0.9;
+        }
+        break;
+      case POSE_WALL:
+        if (s === pl.wallSide) {
+          // palm planted on the wall, fingers spread, buzzing as it drags
+          p.x = s * 0.43;
+          p.y = -0.02 + Math.sin(this.t * 27) * 0.005;
+          p.z = -0.4 + Math.sin(this.phase) * 0.02;
+          p.roll = s * 1.4;
+          p.bend = -0.6;
+          p.curl = 0.06;
+          p.splay = 1;
+          p.pole = 0.2;
+        } else {
+          // the free arm pumps hard for balance
+          p.x = s * 0.25;
+          p.y = -0.22 + fwd * 0.09 - back * 0.03;
+          p.z = -0.4 - fwd * 0.08 + back * 0.07;
+          p.curl = 0.7;
+          p.roll = -s * 0.3;
+        }
+        p.stiff = 230;
+        break;
+      case POSE_DASH:
+        if (s > 0) {
+          p.x = 0.09; // lead hand: a spear through the air
+          p.y = -0.13;
+          p.z = -0.56;
+          p.curl = 0.05;
+          p.roll = -0.9;
+          p.bend = 0.1;
+        } else {
+          p.x = -0.37; // off hand swept back
+          p.y = -0.25;
+          p.z = -0.14;
+          p.curl = 0.1;
+          p.splay = 0.4;
+        }
+        p.stiff = 340;
+        break;
+      case POSE_VAULT: {
+        // both palms plant on the ledge, then drive it down and behind
+        const k = pl.vaultT;
+        p.x = s * 0.165;
+        p.y = -0.2 - k * 0.17;
+        p.z = -0.5 + k * 0.26;
+        p.curl = 0.05;
+        p.splay = 0.7;
+        p.bend = -0.75 + k * 0.5;
+        p.roll = -s * 0.25;
+        p.pole = 0.9;
+        p.stiff = 300;
+        break;
+      }
+      default: {
+        // airborne. Rising: arms drive up, lead arm ahead. Falling: arms spread wide and
+        // high with open fluttering hands: a long fall looks nothing like a hop.
+        const lead = s > 0 ? 1 : 0;
+        const { rise, fall, longFall } = c;
+        p.x = s * (0.25 + fall * 0.13 + longFall * 0.04);
+        p.y = -0.21 + rise * (0.1 + lead * 0.03) + fall * 0.1;
+        p.z = -0.42 - rise * lead * 0.05 + fall * 0.06;
+        p.y += Math.sin(this.t * 17 + s * 1.3) * 0.012 * fall * (0.4 + longFall);
+        p.x += Math.cos(this.t * 13 + s) * 0.008 * fall * (0.4 + longFall);
+        p.curl = lerp(0.6, 0.06, Math.max(fall, rise * 0.5));
+        p.splay = fall;
+        p.roll = s * 0.75 * fall - s * 0.2 * rise;
+        p.bend = -0.45 * fall + 0.15 * rise;
+        p.pole = 0.55 + fall * 0.8;
+        p.stiff = 170;
+      }
+    }
   }
 
   /** Two-bone IK for one arm and the default (forearm-following) hand orientation. */

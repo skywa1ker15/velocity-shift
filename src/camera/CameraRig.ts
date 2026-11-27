@@ -10,6 +10,7 @@ import { clamp, damp, Spring } from '../core/math';
 import type { MovementController } from '../movement/MovementController';
 import { movementConfig as cfg } from '../movement/movementConfig';
 import { MoveState } from '../movement/types';
+import type { Gait } from '../character/Gait';
 import type { MotionProfile } from '../settings/settings';
 
 const DEG = Math.PI / 180;
@@ -36,6 +37,9 @@ export class CameraRig {
   private trauma = 0;
   private leanX = 0;
   private seeded = false;
+  /** Master scales from the player's motion profile, refreshed each frame. */
+  private landK = 1;
+  private fxK = 1;
   private t = 0;
 
   constructor(
@@ -59,17 +63,17 @@ export class CameraRig {
   }
 
   onLand(impact: number) {
-    this.dip.kick(-clamp(impact, 2, 30) * 0.075);
-    this.nod.kick(-clamp(impact, 3, 26) * 0.022); // the head nods forward with the impact
-    if (impact > 20) this.trauma = Math.min(1, this.trauma + (impact - 20) * 0.03);
+    this.dip.kick(-clamp(impact, 2, 30) * 0.075 * this.landK);
+    this.nod.kick(-clamp(impact, 3, 26) * 0.022 * this.landK); // the head nods forward with the impact
+    if (impact > 20) this.trauma = Math.min(1, this.trauma + (impact - 20) * 0.03 * this.landK);
   }
   onDash() {
-    this.fovPunch.kick(150);
-    this.lurch.kick(1.4);
+    this.fovPunch.kick(150 * this.fxK);
+    this.lurch.kick(1.4 * this.fxK);
   }
   onDoubleJump() {
-    this.dip.kick(0.9);
-    this.nod.kick(0.16);
+    this.dip.kick(0.9 * this.fxK);
+    this.nod.kick(0.16 * this.fxK);
   }
   /** A blade connecting: a short visual nod and a small FOV squeeze (aim never moves). */
   onCut(power: number) {
@@ -77,8 +81,8 @@ export class CameraRig {
     this.fovPunch.kick(-30 - power * 40);
   }
   onJump() {
-    this.dip.kick(0.5);
-    this.nod.kick(0.12); // chin lifts as the legs drive
+    this.dip.kick(0.5 * this.fxK);
+    this.nod.kick(0.12 * this.fxK); // chin lifts as the legs drive
   }
   /** Big world events only (collapses, crushers). */
   shake(amount: number) {
@@ -93,8 +97,11 @@ export class CameraRig {
     pitch: number,
     baseFov: number,
     m: MotionProfile,
+    gait: Gait,
   ) {
     this.t += dt;
+    this.landK = m.landing;
+    this.fxK = m.intensity;
     const p = pl.pos,
       q = pl.prevPos;
     const fx = q.x + (p.x - q.x) * alpha,
@@ -115,8 +122,8 @@ export class CameraRig {
     this.eyeHeight = damp(this.eyeHeight, pl.height - cfg.eyeOffset - (sliding ? 0.06 : 0), 15, dt);
 
     const speed = pl.speed;
-    const moving = pl.grounded && !sliding && speed > 0.5;
-    if (moving) this.bobPhase += dt * (4.2 + speed * 0.62);
+    const moving = gait.moving;
+    this.bobPhase = gait.phase;
     const bobAmt = moving ? clamp(speed / 11, 0, 1.3) * m.headBob : 0;
     // footfalls sharpen as the pace rises: a soft sine at a jog, a harder drop-and-catch at a sprint
     const stepS = Math.sin(this.bobPhase * 2);

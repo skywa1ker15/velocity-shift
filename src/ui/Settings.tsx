@@ -199,7 +199,16 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             >
               {toggle('reduceMotion')}
             </Row>
+            <Row
+              label="Motion intensity"
+              hint="Master scale for camera bob, roll and shake, arm and body sway, landings and speed effects. The sliders below fine-tune each one."
+            >
+              {slider('motionIntensity', 0, 1.5, 0.05, pct)}
+            </Row>
             <Row label="Head bob">{slider('headBob', 0, 1, 0.05, pct)}</Row>
+            <Row label="Arm and body sway" hint="Arm lag when you look around, weight shifts and breathing">
+              {slider('armSway', 0, 1, 0.05, pct)}
+            </Row>
             <Row label="Camera roll" hint="Wall-run and slide tilt">
               {slider('cameraRoll', 0, 1, 0.05, pct)}
             </Row>

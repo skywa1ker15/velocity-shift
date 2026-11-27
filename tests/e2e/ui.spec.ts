@@ -341,3 +341,23 @@ test('multiverse: entering a universe is announced under the timer without cover
   expect(await page.evaluate(() => document.documentElement.dataset.universe)).toBe('neon');
   await expect(callout).toHaveCount(0, { timeout: 10_000 });
 });
+
+test('comfort: a master Motion intensity slider sits beside the individual controls and applies at once', async ({
+  page,
+}) => {
+  await boot(page);
+  await page.click('text=Settings');
+  await page.click('.tabs >> text=Comfort');
+  const row = (label: string) => page.locator('.settings .set-row', { hasText: label }).first();
+  await expect(row('Motion intensity')).toBeVisible();
+  await expect(row('Head bob')).toBeVisible();
+  await expect(row('Arm and body sway')).toBeVisible();
+  await expect(row('Camera shake')).toBeVisible();
+  const slider = row('Motion intensity').locator('input[type=range]');
+  await slider.fill('0.5');
+  const got = await page.evaluate(() => (window as any).__vs.settings.motionIntensity);
+  expect(got).toBeCloseTo(0.5);
+  // the individual slider keeps its own value
+  const bob = await page.evaluate(() => (window as any).__vs.settings.headBob);
+  expect(bob).toBe(1);
+});

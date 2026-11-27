@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { AudioEngine } from '../audio/AudioEngine';
 import { CameraRig } from '../camera/CameraRig';
 import { Body } from '../character/Body';
+import { Gait } from '../character/Gait';
 import { FixedLoop, SIM_DT } from '../core/loop';
 import { getEnv, type EnvPreset } from '../environment/presets';
 import { Motes, Sparks, SpeedLines, Sprite, Stickers, Streaks } from '../fx/Fx';
@@ -89,6 +90,7 @@ export class Game {
   private recorder = new GhostRecorder();
   private auto: AutoQuality | null = null;
   private motion: MotionProfile;
+  readonly gait: Gait;
   private time = 0;
   private hudClock = 0;
   private fpsAcc = 0;
@@ -123,8 +125,10 @@ export class Game {
     const s = this.save.data.settings;
     this.motion = motionProfile(s);
     this.input = new InputManager(canvas, this.save.data.bindings, s);
+    this.gait = new Gait();
     this.rig = new CameraRig(this.renderer.camera, this.renderer.viewCamera);
     this.body = new Body(this.renderer.viewScene, this.renderer.scene);
+    this.body.setMotion(this.motion);
     this.lines = new SpeedLines();
     this.stickers = new Stickers(200);
     this.streaks = new Streaks();
@@ -183,6 +187,7 @@ export class Game {
   private applySettings() {
     const s = this.settings;
     this.motion = motionProfile(s);
+    this.body.setMotion(this.motion);
     this.input.settings = s;
     let tier: TierName;
     let scale = s.resolutionScale;
@@ -580,6 +585,7 @@ export class Game {
     const cp = sim.data.checkpoints[sim.checkpoint] ?? { yaw: sim.meta.spawn.yaw };
     this.input.setLook(cp.yaw, 0);
     this.rig.reset(sim.player);
+    this.gait.reset();
   }
 
   /** From the "ready" card or the pause menu: lock the pointer and (re)start play. */
@@ -1242,7 +1248,7 @@ export class Game {
     }
     this.stickers.update(playing ? dt : 0, this.renderer.camera);
     this.sparks.update(playing ? dt : 0);
-    this.renderer.dashFx = this.motion.screenFx ? this.dashFx : 0;
+    this.renderer.dashFx = this.motion.screenFx ? this.dashFx * Math.min(1, this.motion.intensity) : 0;
     this.renderer.render(this.time, dt, this.rig.feet);
 
     if (playing) {
@@ -1273,8 +1279,9 @@ export class Game {
     // a front crossing the camera gives the view a short breath outward
     this.shiftKick = Math.max(0, this.shiftKick - dt * 2.4);
     const kick = this.shiftKick * this.shiftKick * (this.motion.speedLines > 0 ? 1 : 0.3);
-    this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion);
-    this.body.update(pl, this.rig.feet, this.rig.bobPhase, dt, yaw, pitch, this.rig.roll);
+    this.gait.update(pl, dt);
+    this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion, this.gait);
+    this.body.update(pl, this.rig.feet, this.gait.phase, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
     const sw = sim.sword;

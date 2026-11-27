@@ -28,6 +28,10 @@ export interface Settings {
   cameraRoll: number;
   cameraShake: number;
   speedLines: number;
+  /** 0 .. 1.5: master scale for every movement-driven visual (bob, roll, shake, sway, landings…). */
+  motionIntensity: number;
+  /** 0 .. 1: how much the arms and body sway, lag and react. */
+  armSway: number;
   colorblind: boolean;
   captions: boolean;
   tutorials: boolean;
@@ -75,6 +79,8 @@ export const defaultSettings: Settings = {
   cameraRoll: 1,
   cameraShake: 1,
   speedLines: 1,
+  motionIntensity: 1,
+  armSway: 1,
   colorblind: false,
   captions: false,
   tutorials: true,
@@ -103,26 +109,43 @@ export interface MotionProfile {
   speedFov: number;
   speedLines: number;
   screenFx: boolean; // radial blur / chromatic aberration
+  /** Arm and body sway, look lag, idle breathing and weight shifts. */
+  armSway: number;
+  /** Landing impact: camera dip and nod, arm brace, ground effects. */
+  landing: number;
+  /** The master intensity itself, for effects that have no slider of their own. */
+  intensity: number;
 }
 
+/**
+ * Every individual slider is multiplied by the master Motion intensity, then Reduce Motion
+ * clamps what remains (bob, shake and screen distortion off; the rest softened).
+ */
 export function motionProfile(s: Settings): MotionProfile {
+  const k = s.motionIntensity;
   if (s.reduceMotion) {
     return {
       headBob: 0,
-      roll: s.cameraRoll * 0.25,
+      roll: s.cameraRoll * 0.25 * k,
       shake: 0,
-      speedFov: s.speedFov * 0.3,
-      speedLines: s.speedLines * 0.3,
+      speedFov: s.speedFov * 0.3 * k,
+      speedLines: s.speedLines * 0.3 * k,
       screenFx: false,
+      armSway: s.armSway * 0.35 * k,
+      landing: 0.4 * k,
+      intensity: Math.min(0.4, k),
     };
   }
   return {
-    headBob: s.headBob,
-    roll: s.cameraRoll,
-    shake: s.cameraShake,
-    speedFov: s.speedFov,
-    speedLines: s.speedLines,
-    screenFx: true,
+    headBob: s.headBob * k,
+    roll: s.cameraRoll * k,
+    shake: s.cameraShake * k,
+    speedFov: s.speedFov * k,
+    speedLines: s.speedLines * k,
+    screenFx: k > 0.01,
+    armSway: s.armSway * k,
+    landing: k,
+    intensity: k,
   };
 }
 
@@ -150,6 +173,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('cameraRoll', 0, 1);
   num('cameraShake', 0, 1);
   num('speedLines', 0, 1);
+  num('motionIntensity', 0, 1.5);
+  num('armSway', 0, 1);
   num('volMaster', 0, 1);
   num('volMusic', 0, 1);
   num('volSfx', 0, 1);
