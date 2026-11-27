@@ -1279,9 +1279,9 @@ export class Game {
     // a front crossing the camera gives the view a short breath outward
     this.shiftKick = Math.max(0, this.shiftKick - dt * 2.4);
     const kick = this.shiftKick * this.shiftKick * (this.motion.speedLines > 0 ? 1 : 0.3);
-    this.gait.update(pl, dt);
+    this.gait.update(pl, dt, yaw);
     this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion, this.gait);
-    this.body.update(pl, this.rig.feet, this.gait.phase, dt, yaw, pitch, this.rig.roll);
+    this.body.update(pl, this.rig.feet, this.gait, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
     const sw = sim.sword;

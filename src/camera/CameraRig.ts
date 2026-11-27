@@ -174,7 +174,10 @@ export class CameraRig {
     const cam = this.camera;
     cam.position.copy(this.eye);
     const nod = clamp(this.nod.update(0, dt), -0.07, 0.035) * 0.9 * m.headBob;
-    cam.rotation.set(pitch + shy * 0.5 + nod, yaw + shx * 0.5, this.roll + shr);
+    // the head leans into a push-off and rocks a little with each stride (visual only: aim is untouched)
+    const lean = gait.moving ? clamp(-gait.accel, -1, 1) * 0.012 * m.headBob : 0;
+    const stepRoll = gait.moving ? Math.sin(gait.phase) * 0.0035 * bobAmt : 0;
+    cam.rotation.set(pitch + shy * 0.5 + nod + lean, yaw + shx * 0.5, this.roll + shr + stepRoll);
 
     // FOV: widens with speed, punches on dash
     // the setting is a horizontal FOV at 16:9 (the usual convention); three.js wants vertical

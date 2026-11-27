@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { clamp, damp } from '../core/math';
 import type { MovementController } from '../movement/MovementController';
 import type { MotionProfile } from '../settings/settings';
+import { Gait } from './Gait';
 import { MoveState } from '../movement/types';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createCharacterMaterial, PartBuilder, xf, type CharacterMaterial } from '../render/ink';
@@ -233,6 +234,8 @@ export class Body {
   private torso!: THREE.Group;
   private mat: CharacterMaterial;
   private phase = 0;
+  private gait = new Gait();
+  private stepSway = 0;
   private t = 0;
   private lastYaw = 0;
   private lastPitch = 0;
@@ -457,7 +460,7 @@ export class Body {
   update(
     pl: MovementController,
     feet: THREE.Vector3,
-    bobPhase: number,
+    gait: Gait,
     dt: number,
     yaw: number,
     pitch: number,
@@ -472,7 +475,8 @@ export class Body {
     const st = pl.state;
     const speed = pl.speed;
     const grounded = pl.grounded;
-    this.phase = bobPhase;
+    this.gait = gait;
+    this.phase = gait.phase;
 
     // hands lag slightly behind fast look movement (secondary motion)
     let dyaw = yaw - this.lastYaw;
@@ -658,15 +662,26 @@ export class Body {
     // the whole upper body: sinks on landings, leans into speed, stays upright when the view rolls
     const fall = c.fall;
     this.rootDip = damp(this.rootDip, landK * 0.035, 20, dt);
+    const g = this.gait;
+    const stepping = g.moving && grounded ? clamp(sp, 0, 1.2) : 0;
     this.rootLean = damp(
       this.rootLean,
-      (st === MoveState.Sprint ? -0.035 * clamp(sp, 0, 1.2) : fall * 0.05) * sway,
+      ((st === MoveState.Sprint ? -0.035 * clamp(sp, 0, 1.2) : fall * 0.05) -
+        (grounded ? g.accel * 0.03 : 0)) *
+        sway,
       6,
       dt,
     );
     const counterBob = grounded ? Math.sin(this.phase * 2) * 0.005 * sp * sway : 0;
-    this.armRoot.position.set(0, -this.rootDip - counterBob, 0);
-    this.armRoot.rotation.set(this.rootLean, 0, -camRoll * 0.45);
+    // each step rolls and twists the shoulders a touch and shifts the weight sideways
+    this.stepSway = damp(this.stepSway, stepping, 8, dt);
+    const swayK = this.stepSway * sway;
+    this.armRoot.position.set(Math.cos(this.phase) * 0.004 * swayK, -this.rootDip - counterBob, 0);
+    this.armRoot.rotation.set(
+      this.rootLean,
+      Math.sin(this.phase) * 0.022 * swayK,
+      -camRoll * 0.45 + Math.cos(this.phase) * 0.014 * swayK,
+    );
   }
 
   /** The locomotion pose of one arm in one state (index as in POSE_*), written into `p`. */
@@ -693,19 +708,30 @@ export class Body {
         p.stiff = 150;
         break;
       case POSE_RUN: {
-        // a pumping run: the forward hand drives up and toward the centre line, the rear hand
-        // drops back out of view. Amplitude, reach and hand shape all grow with real speed.
-        const amp = 0.045 + sp * 0.1;
-        p.x = s * (0.245 - fwd * 0.04 * sp + back * 0.02);
-        p.y = -0.28 + fwd * amp * 0.55 - back * amp * 0.5 + sp * 0.012;
-        p.z = -0.4 - fwd * amp * 1.15 + back * amp;
+        // A pumping run. The gait changes character with pace, smoothly rather than at a
+        // threshold: a JOG swings loose and low; a SPRINT drives harder and higher; at TOP speed
+        // the arms tuck in close and the hands open into blades. Pushing off makes the hands trail
+        // back, stopping swings them on; strafing and backpedalling have their own carriage; and
+        // every step differs a little from the last.
+        const g = this.gait;
+        const back_ = clamp(-g.dirF, 0, 1);
+        const vary = 1 + g.vary * 0.09;
+        const amp = (0.04 + sp * 0.1) * vary * (1 - back_ * 0.45);
+        const tuck = g.top;
+        p.x =
+          s * (0.245 + g.jog * 0.012 - fwd * 0.04 * sp + back * 0.02 - tuck * 0.035) -
+          g.dirR * 0.03 +
+          back_ * s * 0.02;
+        p.y =
+          -0.28 + fwd * amp * 0.55 - back * amp * 0.5 + sp * 0.012 - g.jog * 0.012 + back_ * 0.05 * (1 + fwd);
+        p.z = -0.4 - fwd * amp * 1.15 + back * amp + g.accel * 0.04 + tuck * 0.02;
         // loose fists with the thumb turned up while running; the hand opens into a blade,
         // edge-on to the wind, only once the runner is well past sprint speed
         const blade = clamp((c.speed - 14) / 5, 0, 1);
-        p.curl = lerp(0.8, 0.1, blade);
-        p.roll = -s * (0.85 + fwd * 0.2 + blade * 0.35);
+        p.curl = lerp(lerp(0.72, 0.9, g.sprint), 0.1, blade);
+        p.roll = -s * (0.85 + fwd * 0.2 + blade * 0.35) + g.dirR * 0.25;
         p.bend = fwd * 0.2 - back * 0.1 + blade * 0.35;
-        p.pole = 0.4;
+        p.pole = lerp(0.46, 0.3, tuck);
         p.stiff = 200 + sp * 50;
         break;
       }
@@ -1040,7 +1066,13 @@ export class Body {
           // heel kicks up behind at speed, knee drives forward
           const c = Math.cos(ph),
             sn = Math.sin(ph);
-          t.set(s * 0.115, 0.045 + Math.max(0, c) * lift + Math.max(0, sn) * sp * 0.06, -0.08 - sn * stride);
+          const dF = this.gait.dirF,
+            dR = this.gait.dirR;
+          t.set(
+            s * 0.115 + sn * stride * dR * 0.6,
+            0.045 + Math.max(0, c) * lift + Math.max(0, sn) * sp * 0.06,
+            -0.08 - sn * stride * dF,
+          );
         }
       } else if (wall) {
         t.set(
