@@ -518,7 +518,7 @@ export class Body {
   onVault() {
     const k = this.motion.intensity;
     for (const a of this.arms) {
-      a.spring.v.y -= 2.2 * k;
+      a.spring.v.y -= 0.9 * k;
       a.spring.v.z -= 0.6 * k;
     }
   }
@@ -896,8 +896,8 @@ export class Body {
         // both palms plant on the ledge, then drive it down and behind
         const k = pl.vaultT;
         p.x = s * 0.165;
-        p.y = -0.2 - k * 0.17;
-        p.z = -0.5 + k * 0.26;
+        p.y = -0.11 - k * 0.13;
+        p.z = -0.52 + k * 0.26;
         p.curl = 0.05;
         p.splay = 0.7;
         p.bend = -0.75 + k * 0.5;

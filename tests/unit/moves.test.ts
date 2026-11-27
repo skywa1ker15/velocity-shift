@@ -76,3 +76,37 @@ describe('advanced move presentation', () => {
     expect(arc.mat.uniforms.uAccent.value.getHex()).toBe(0x445566);
   });
 });
+
+describe('viewmodel camera follows the main camera', () => {
+  const run = (m: ReturnType<typeof motionProfile>, baseFov: number, setup: (c: CameraRig) => void) => {
+    const main = new THREE.PerspectiveCamera();
+    const view = new THREE.PerspectiveCamera(68);
+    const cam = new CameraRig(main, view);
+    const gait = new Gait();
+    const pl = player({ state: MoveState.Run, grounded: true, speed: 16, vel: new THREE.Vector3(0, 0, -16) });
+    setup(cam);
+    for (let i = 0; i < 90; i++) {
+      gait.update(pl as never, 1 / 60, 0);
+      cam.update(pl as never, 1, 1 / 60, 0, 0, baseFov, m, gait);
+    }
+    return view;
+  };
+  it('widens with speed, carries the FOV setting, and dips with a landing', () => {
+    const m = motionProfile(defaultSettings);
+    const v90 = run(m, 90, () => {}).fov;
+    const v110 = run(m, 110, () => {}).fov;
+    expect(v90).toBeGreaterThan(68);
+    expect(v110).toBeGreaterThan(v90);
+    const dipped = run(m, 90, (c) => c.onLand(1, 0));
+    expect(Number.isFinite(dipped.position.y)).toBe(true);
+  });
+  it('Reduce Motion and zero intensity flatten the view roll/dip, leaving the FOV bounded', () => {
+    const off = motionProfile({ ...defaultSettings, motionIntensity: 0 });
+    const v = run(off, 90, (c) => c.onLand(1, 1));
+    expect(Math.abs(v.rotation.z)).toBeLessThan(1e-3);
+    expect(Math.abs(v.position.y)).toBeLessThan(1e-3);
+    const rm = motionProfile({ ...defaultSettings, reduceMotion: true });
+    const w = run(rm, 90, (c) => c.onLand(1, 1));
+    expect(w.fov).toBeLessThan(80);
+  });
+});

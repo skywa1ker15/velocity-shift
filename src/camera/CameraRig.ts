@@ -15,6 +15,11 @@ import type { MotionProfile } from '../settings/settings';
 
 const DEG = Math.PI / 180;
 
+/** The hands camera's field of view at the default 90° setting with no speed widening. */
+const VIEW_FOV = 68;
+/** The vertical FOV that 90° horizontal gives at 16:9. */
+const REF_VERTICAL = (2 * Math.atan(Math.tan((90 * DEG) / 2) * (9 / 16))) / DEG;
+
 export class CameraRig {
   /** World-space eye position (also used as audio listener / FX anchor). */
   readonly eye = new THREE.Vector3();
@@ -247,6 +252,24 @@ export class CameraRig {
       cam.fov = this.fov;
       cam.updateProjectionMatrix();
     }
-    void this.viewCamera;
+    this.syncView(vertical, dip, nod + lean, this.roll + shr + stepRoll + flutter + lroll);
+  }
+
+  /**
+   * The hands and sword are drawn by their own camera. It follows the main one *partially*, the way
+   * a body does: the field of view widens with the world's (half as much), the eye's landing dip
+   * moves the arms 40 % of the way, the head's nod and the horizon roll carry them 50 % / 35 %.
+   * Everything is already scaled by the comfort settings (Reduce Motion, master intensity) upstream.
+   */
+  private syncView(vertical: number, dip: number, nod: number, roll: number) {
+    const v = this.viewCamera;
+    // (the setting itself carries over a third of the way, so a wide view does not shrink the hands)
+    const fov = VIEW_FOV + (vertical - REF_VERTICAL) * 0.35 + (this.fov - vertical) * 0.5;
+    if (Math.abs(v.fov - fov) > 0.01) {
+      v.fov = fov;
+      v.updateProjectionMatrix();
+    }
+    v.position.set(0, dip * 0.4, 0);
+    v.rotation.set(nod * 0.5, 0, roll * 0.35);
   }
 }
