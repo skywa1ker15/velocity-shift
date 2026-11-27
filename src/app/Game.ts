@@ -15,11 +15,11 @@ import { CameraRig } from '../camera/CameraRig';
 import { Body } from '../character/Body';
 import { FixedLoop, SIM_DT } from '../core/loop';
 import { getEnv, type EnvPreset } from '../environment/presets';
-import { Motes, Sparks, SpeedLines, Sprite, Stickers } from '../fx/Fx';
+import { Motes, Sparks, SpeedLines, Sprite, Stickers, Streaks } from '../fx/Fx';
 import { worldUniforms } from '../render/WorldMaterial';
 import { Director } from '../multiverse/Director';
 import { Scenery } from '../multiverse/Scenery';
-import { UNIVERSE_IDS, type UniverseId } from '../multiverse/universes';
+import { FX, UNIVERSE_IDS, type UniverseId } from '../multiverse/universes';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -74,6 +74,7 @@ export class Game {
   private body: Body;
   private lines: SpeedLines;
   private stickers!: Stickers;
+  private streaks!: Streaks;
   private sparks = new Sparks(420);
   private dust = new THREE.Color(0xf6f2e6);
   private trailT = 0;
@@ -126,8 +127,9 @@ export class Game {
     this.body = new Body(this.renderer.viewScene, this.renderer.scene);
     this.lines = new SpeedLines();
     this.stickers = new Stickers(200);
+    this.streaks = new Streaks();
     this.renderer.viewScene.add(this.lines.mesh, this.slash.group);
-    this.renderer.scene.add(this.stickers.mesh, this.sparks.points);
+    this.renderer.scene.add(this.stickers.mesh, this.sparks.points, this.streaks.mesh);
     this.ghost = new GhostPlayer(0xffffff);
     this.renderer.scene.add(this.ghost.group);
     this.body.setVisible(false);
@@ -301,13 +303,16 @@ export class Game {
       if (kind === 5 || def.id === 'voxel') fx.pixelBurst = 18;
       this.shiftKick = 1;
     },
-    arrive: (def, env) => {
+    arrive: (def, env, announce) => {
+      this.applyFxLook(def.id, env);
+      if (announce && this.mode === 'playing') ui.getState().call('shift', def.name, def.tagline);
       document.documentElement.dataset.universe = def.id;
       this.body.setPalette(env.hands);
       this.menuRunner.setPalette(env.hands);
       this.setMotes(env);
       this.universeStreak = env.streak;
       this.applyCosmetics();
+      this.applyFxLook(def.id, env);
     },
   });
   private universeStreak = 0;
@@ -321,6 +326,78 @@ export class Game {
     this.scenery = new Scenery(levelId, data, this.env, this.renderer.tier.particles >= 1 ? 1 : 0.6);
     this.renderer.scene.add(this.scenery.group);
   }
+  /** Movement feedback drawn in the current universe's style. */
+  private applyFxLook(id: UniverseId, env: EnvPreset) {
+    const fx = FX[id];
+    if (!fx || !this.lines) return;
+    // brush universes use the true stroke colour (black ink); the rest keep the cosmetic tint
+    this.lines.setStyle(fx.lines, fx.lines === 4 ? env.streak : undefined);
+    this.stickers.setMode(fx.sprites);
+    this.dust.set(fx.dust);
+    this.streaks.setLook(env.streak, fx.darkStreaks);
+    document.documentElement.style.setProperty(
+      '--uni',
+      '#' + env.palette.accent.toString(16).padStart(6, '0'),
+    );
+  }
+
+  // ----- flow chain + near misses (feedback only; nothing here feeds the simulation) -----
+  private flowCount = 0;
+  private flowAt = -10;
+  private flowKick = 0;
+  private nearMarks = new Map<number, number>();
+  private nearDeaths = 0;
+
+  /** A movement tech just happened: chained quickly enough, it builds a flow call-out. */
+  private flowMove() {
+    if (this.time - this.flowAt > 1.8) this.flowCount = 0;
+    this.flowAt = this.time;
+    this.flowCount++;
+    if (this.flowCount === 3 || this.flowCount === 5 || this.flowCount === 8 || this.flowCount === 12) {
+      ui.getState().call('flow', 'Flow ×' + this.flowCount);
+      this.flowKick = Math.min(1, 0.45 + this.flowCount * 0.05);
+    }
+  }
+
+  /** Brushing past something lethal at speed and living earns a call-out. */
+  private watchNearMisses(sim: Simulation) {
+    const pl = sim.player;
+    if (sim.stats.deaths !== this.nearDeaths) {
+      this.nearDeaths = sim.stats.deaths;
+      this.nearMarks.clear();
+      this.flowCount = 0;
+      return;
+    }
+    if (!sim.stats.started || sim.stats.finished) return;
+    const px = pl.pos.x,
+      py = pl.pos.y + 0.9,
+      pz = pl.pos.z;
+    const ents = sim.entities as unknown as {
+      p: { x: number; y: number; z: number };
+      h?: { x: number; y: number; z: number };
+      def: { lethal?: boolean; type?: string };
+    }[];
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i];
+      if (!e.h || !(e.def.lethal || e.def.type === 'hazard')) continue;
+      const dx = Math.max(Math.abs(px - e.p.x) - e.h.x, 0),
+        dy = Math.max(Math.abs(py - e.p.y) - e.h.y - 0.45, 0),
+        dz = Math.max(Math.abs(pz - e.p.z) - e.h.z, 0);
+      const gap = Math.hypot(dx, dy, dz) - 0.4;
+      const mark = this.nearMarks.get(i);
+      if (gap < 0.8 && pl.speed > 6) {
+        if (mark === undefined) this.nearMarks.set(i, this.time);
+      } else if (mark !== undefined && gap > 1.7) {
+        this.nearMarks.delete(i);
+        if (this.time - mark < 2.5) {
+          ui.getState().call('close', 'Close call');
+          this.flowKick = Math.max(this.flowKick, 0.7);
+          this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.3);
+        }
+      }
+    }
+  }
+
   /** Tests / debugging: use this seed for the next runs instead of a fresh random one. */
   mvSeed: number | null = null;
 
@@ -605,6 +682,7 @@ export class Game {
       });
     });
     ev.on('doubleJump', () => {
+      this.flowMove();
       audio.doubleJump();
       this.rig.onDoubleJump();
       this.body.onDoubleJump();
@@ -628,6 +706,7 @@ export class Game {
       });
     });
     ev.on('dash', () => {
+      this.flowMove();
       audio.dash();
       this.rig.onDash();
       this.body.onDash();
@@ -714,6 +793,7 @@ export class Game {
       if (speed > 24) ui.getState().fire('impact');
     });
     ev.on('slideStart', () => {
+      this.flowMove();
       audio.slideStart();
       // drop into the slide: a burst of dust thrown forward along the ground
       const sp = Math.max(1, pl.speed);
@@ -722,6 +802,7 @@ export class Game {
     });
     ev.on('slideEnd', () => this.input.clearSlideLatch());
     ev.on('wallRunStart', () => {
+      this.flowMove();
       audio.wallStart();
       this.wallPoint(1.3, 0.3);
       _n.set(pl.wallNormal.x, 0, pl.wallNormal.z);
@@ -735,6 +816,7 @@ export class Game {
       });
     });
     ev.on('wallJump', () => {
+      this.flowMove();
       audio.wallJump();
       this.body.onWallJump();
       // kick off: an impact star stamped on the wall and dust thrown along it
@@ -751,6 +833,7 @@ export class Game {
       this.puffs(_v, 3, 1.8, 0.32, _n);
     });
     ev.on('vault', () => {
+      this.flowMove();
       audio.vault();
       // hands slap the ledge: two small puffs and action ticks where they plant
       const fx = -Math.sin(pl.yaw),
@@ -1201,7 +1284,7 @@ export class Game {
       this.time,
       dt,
       Math.max(speed, speed3 * 0.9),
-      Math.max(this.dashFx, this.impactFx * 0.8, kick * 0.75),
+      Math.max(this.dashFx, this.impactFx * 0.8, kick * 0.75, this.flowKick * 0.6),
       this.motion.speedLines,
       impact ? 0 : clamp((vr / den) * 0.55, -0.6, 0.6),
       impact ? -1.15 : clamp((vu / den) * 0.75, -0.85, 0.85),
@@ -1209,6 +1292,9 @@ export class Game {
     );
     this.carry.set(pl.vel.x * 0.8, 0, pl.vel.z * 0.8);
     worldUniforms.uPlayer.value.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
+    this.flowKick = Math.max(0, this.flowKick - dt * 2.6);
+    this.streaks.update(dt, pl.vel.x, pl.vel.y, pl.vel.z, this.motion.speedLines);
+    if (this.mode === 'playing') this.watchNearMisses(sim);
     this.multiverse.update(dt, this.rig.eye, _n.set(fwdX, 0, fwdZ));
     this.scenery?.update();
     this.ghost.update(

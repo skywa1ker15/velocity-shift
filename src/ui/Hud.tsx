@@ -195,6 +195,25 @@ function SwordChip() {
 
 const HIT_TEXT = { cut: 'CUT', smash: 'SMASH', bullseye: 'BULLSEYE' } as const;
 
+/** Movement call-outs under the timer: flow chains, near misses, the universe just entered. */
+function CalloutLine() {
+  const c = useUi((s) => s.callout);
+  const [shown, setShown] = useState<number | null>(null);
+  useEffect(() => {
+    if (!c) return;
+    setShown(c.id);
+    const t = setTimeout(() => setShown(null), c.tone === 'shift' ? 2400 : 1100);
+    return () => clearTimeout(t);
+  }, [c]);
+  if (!c || shown !== c.id) return null;
+  return (
+    <div className={'callout ' + c.tone} key={c.id} aria-live="polite">
+      <b>{c.text}</b>
+      {c.sub && <span>{c.sub}</span>}
+    </div>
+  );
+}
+
 /** Four ticks around the crosshair, plus a short call-out under it. */
 function HitMarker() {
   const hit = useUi((s) => s.hit);
@@ -340,6 +359,7 @@ export function Hud({ frozen }: { frozen?: boolean }) {
 
       {s.crosshair !== 'off' && <div className={'crosshair ' + s.crosshair} aria-hidden />}
       {!frozen && <HitMarker />}
+      {!frozen && <CalloutLine />}
       {!frozen && <RestartRing />}
 
       {s.showFps && <div className="fps mono-num">{hud.fps} FPS</div>}

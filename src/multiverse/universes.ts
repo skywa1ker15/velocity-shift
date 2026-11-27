@@ -63,6 +63,31 @@ export interface UniverseDef {
   screen: ScreenLook;
 }
 
+/** How movement feedback is drawn in a universe. */
+export interface FxLook {
+  /** Speed lines: 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush, 5 glitch bars. */
+  lines: number;
+  /** Decal / puff sprites: 0 inked, 1 glowing, 2 black-and-paper, 3 pixel, 4 corrupted. */
+  sprites: number;
+  /** Dust kicked up by feet. */
+  dust: number;
+  /** Streaks in the air are ink-dark rather than light. */
+  darkStreaks: boolean;
+}
+
+export const FX: Record<UniverseId, FxLook> = {
+  anime: { lines: 0, sprites: 0, dust: 0xf6f2e6, darkStreaks: false },
+  neon: { lines: 1, sprites: 1, dust: 0x7ff6ff, darkStreaks: false },
+  comic: { lines: 2, sprites: 0, dust: 0xffffff, darkStreaks: true },
+  lowpoly: { lines: 0, sprites: 0, dust: 0xfff2e0, darkStreaks: false },
+  psyche: { lines: 1, sprites: 1, dust: 0xfff23d, darkStreaks: false },
+  voxel: { lines: 3, sprites: 3, dust: 0xffffff, darkStreaks: false },
+  ink: { lines: 4, sprites: 2, dust: 0x222222, darkStreaks: true },
+  painted: { lines: 4, sprites: 0, dust: 0xfff0c0, darkStreaks: false },
+  synth: { lines: 1, sprites: 1, dust: 0xff7ad9, darkStreaks: false },
+  corrupt: { lines: 5, sprites: 4, dust: 0x16ff73, darkStreaks: false },
+};
+
 type Override = Omit<EnvPreset, 'id' | 'look' | 'surface'> & { structure: number };
 
 /** Build a full preset from a universe's own values, keeping the level's sun direction and look data. */

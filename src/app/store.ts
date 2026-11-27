@@ -56,6 +56,14 @@ export interface Flash {
 }
 
 /** Combat confirmation near the crosshair: a clean cut, a body smash or a training bullseye. */
+/** A short movement call-out under the timer (near miss, flow chain, universe name). */
+export interface Callout {
+  id: number;
+  text: string;
+  sub?: string;
+  tone: 'flow' | 'close' | 'shift';
+}
+
 export interface Hit {
   id: number;
   kind: 'cut' | 'smash' | 'bullseye';
@@ -82,6 +90,7 @@ export interface UiState {
   flash: Flash | null;
   prompt: { action: string; text: string } | null;
   hit: Hit | null;
+  callout: Callout | null;
   hint: Hint | null;
   /** Bumped whenever save data changes so menus re-read it. */
   saveRev: number;
@@ -93,6 +102,7 @@ export interface UiState {
   dismissToast(id: number): void;
   fire(kind: Flash['kind'], text?: string, delta?: number | null, deaths?: number): void;
   fireHit(kind: Hit['kind'], n: number): void;
+  call(tone: Callout['tone'], text: string, sub?: string): void;
 }
 
 let nextId = 1;
@@ -122,6 +132,7 @@ export const useUi = create<UiState>((set) => ({
   flash: null,
   prompt: null,
   hit: null,
+  callout: null,
   hint: null,
   saveRev: 0,
   storageOk: true,
@@ -133,6 +144,7 @@ export const useUi = create<UiState>((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   fire: (kind, text, delta, deaths) => set({ flash: { id: nextId++, kind, text, delta, deaths } }),
   fireHit: (kind, n) => set({ hit: { id: nextId++, kind, n } }),
+  call: (tone, text, sub) => set({ callout: { id: nextId++, tone, text, sub } }),
 }));
 
 export const ui = useUi;

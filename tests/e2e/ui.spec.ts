@@ -316,3 +316,26 @@ test('multiverse: every universe renders on a level, and a shift between each pa
     );
   }
 });
+
+test('multiverse: entering a universe is announced under the timer without covering the HUD or the hands', async ({
+  page,
+}) => {
+  await boot(page);
+  await page.evaluate(() => {
+    const g = (window as any).__vs;
+    g.mvSeed = 5;
+    g.multiverse.enabled = false;
+  });
+  await startLevel(page, 'training');
+  await page.evaluate(() => (window as any).__vs.debugShift('neon', 0));
+  const callout = page.locator('.callout.shift');
+  await expect(callout).toContainText('Neon District', { timeout: 30_000 });
+  const b = await boxes(page, ['.callout', '.hud-tc', '.hud-tl', '.speed', '.sword-chip']);
+  for (const other of ['.hud-tc', '.hud-tl', '.speed', '.sword-chip'])
+    expect(overlap(b['.callout']!, b[other]!), '.callout overlaps ' + other).toBe(false);
+  const hands: Box = { x: 1280 * 0.18, y: 720 * 0.55, w: 1280 * 0.64, h: 720 * 0.45 };
+  expect(overlap(b['.callout']!, hands)).toBe(false);
+  // the theme follows the universe the camera is in
+  expect(await page.evaluate(() => document.documentElement.dataset.universe)).toBe('neon');
+  await expect(callout).toHaveCount(0, { timeout: 10_000 });
+});

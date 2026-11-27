@@ -37,12 +37,13 @@ export class SpeedLines {
         uInk: worldUniforms.uInk,
         uCenter: { value: new THREE.Vector2() },
         uAspect: { value: 1.78 },
+        uStyle: { value: 0 },
       },
       vertexShader: /* glsl */ `
         varying vec2 vP;
         void main() { vP = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform float uTime, uIntensity, uBurst, uAspect;
+        uniform float uTime, uIntensity, uBurst, uAspect, uStyle;
         uniform vec3 uColor, uInk;
         uniform vec2 uCenter;
         varying vec2 vP;
@@ -50,8 +51,24 @@ export class SpeedLines {
         void main() {
           float k = clamp(uIntensity + uBurst, 0.0, 1.0);
           if (k < 0.01) discard;
-          vec2 p = (vP - uCenter) * vec2(uAspect, 1.0);
+          vec2 sp = vP;
+          // voxel universe: the lines are built from screen blocks
+          if (uStyle > 2.5 && uStyle < 3.5) sp = (floor(vP * 34.0) + 0.5) / 34.0;
+          vec2 p = (sp - uCenter) * vec2(uAspect, 1.0);
           float r = length(p);
+          if (uStyle > 4.5) {
+            // corruption: not rays at all, but rows of the picture tearing sideways from the edges
+            float frame5 = floor(uTime * 14.0);
+            float row = floor((vP.y * 0.5 + 0.5) * 46.0);
+            float on5 = step(h1(row + frame5 * 3.0), 0.05 + k * 0.22);
+            float reach = (0.08 + h1(row * 1.7 + frame5) * 0.3) * (0.4 + k);
+            float edge5 = 1.0 - abs(vP.x);
+            float bar = on5 * step(edge5, reach);
+            if (bar < 0.01) discard;
+            float ch = h1(row * 2.3 + frame5 * 5.0);
+            gl_FragColor = vec4(ch < 0.33 ? vec3(1.0, 0.1, 0.3) : ch < 0.66 ? vec3(0.1, 1.0, 0.45) : vec3(0.2, 0.5, 1.0), bar * (0.35 + 0.3 * k));
+            return;
+          }
           float ang = atan(p.y, p.x) / 6.2831853 + 0.5;
           float frame = floor(uTime * ${STEP_FPS}.0);          // redrawn 12 times a second
           const float N = 120.0;
@@ -66,12 +83,31 @@ export class SpeedLines {
           float tip = mix(1.35, 0.66, k) + hB * 0.5 - uBurst * 0.12;
           float len = max(r - tip, 0.0);
           float halfW = min(0.34, len * (0.3 + hB * 0.6));
+          if (uStyle > 0.5 && uStyle < 1.5) halfW = min(0.1, len * 0.12);                    // neon: hair-thin streaks
+          else if (uStyle > 1.5 && uStyle < 2.5) halfW = min(0.46, len * (0.6 + hB * 0.8));     // comic: fat wedges
+          else if (uStyle > 3.5 && uStyle < 4.5)                                                // brush: wandering width
+            halfW *= 0.5 + 1.1 * h1(id + floor(r * 9.0) * 3.7 + frame);
           float line = on * (1.0 - smoothstep(halfW - 0.06, halfW, across)) * step(tip, r);
           if (line < 0.01) discard;
           // most lines are light, some are ink: reads on bright and dark backgrounds alike
           float inkLine = step(0.72, h1(id * 3.1 + frame));
           vec3 col = mix(uColor, uInk, inkLine);
-          gl_FragColor = vec4(col, line * (0.4 + 0.35 * k) * mix(1.0, 0.7, inkLine));
+          float alpha = line * (0.4 + 0.35 * k) * mix(1.0, 0.7, inkLine);
+          if (uStyle > 0.5 && uStyle < 1.5) {
+            // light, not ink: a bright core that blooms
+            col = uColor * 2.2;
+            alpha = line * (0.5 + 0.4 * k);
+          } else if (uStyle > 1.5 && uStyle < 2.5) {
+            // black wedges with a white twin beside every third: the printed-page speed line
+            col = mix(vec3(0.03, 0.03, 0.06), vec3(1.0), step(0.66, h1(id * 5.3)));
+            alpha = line * (0.6 + 0.3 * k);
+          } else if (uStyle > 3.5 && uStyle < 4.5) {
+            // dry brush: the stroke breaks up along its length
+            alpha *= step(0.25, h1(id * 2.1 + floor(r * 22.0)));
+            col = uColor;
+            alpha = min(1.0, alpha * 1.5);
+          }
+          gl_FragColor = vec4(col, alpha);
         }`,
     });
     this.mesh = new THREE.Mesh(geo, this.mat);
@@ -85,6 +121,12 @@ export class SpeedLines {
   }
   setAspect(a: number) {
     this.mat.uniforms.uAspect.value = a;
+  }
+  /** 0 inked, 1 light streaks, 2 comic wedges, 3 pixel blocks, 4 dry brush, 5 glitch bars. */
+  setStyle(style: number, rawColor?: number) {
+    this.mat.uniforms.uStyle.value = style;
+    // brush universes want the true colour (black ink), not a tint of white
+    if (rawColor !== undefined) this.mat.uniforms.uColor.value.set(rawColor);
   }
 
   /**
@@ -451,7 +493,7 @@ export class Stickers {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { uMap: { value: this.tex } },
+      uniforms: { uMap: { value: this.tex }, uMode: { value: 0 }, uTime: worldUniforms.uTime },
       vertexShader: /* glsl */ `
         attribute vec3 aPos, aX, aY; attribute vec4 aCol; attribute float aCell;
         varying vec2 vUv; varying vec4 vCol;
@@ -464,13 +506,23 @@ export class Stickers {
         }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D uMap;
+        uniform float uMode, uTime;
         varying vec2 vUv; varying vec4 vCol;
         void main() {
-          vec4 t = texture2D(uMap, vUv);
+          vec2 uv = vUv;
+          // pixel universes: the drawn sprite becomes a 12x12 block of texels
+          if (uMode > 2.5 && uMode < 3.5) uv = (floor(uv * 48.0) + 0.5) / 48.0;
+          // corruption: rows of the sprite slip sideways
+          if (uMode > 3.5) uv.x += (fract(sin(floor(uv.y * 64.0) * 91.7 + floor(uTime * 12.0) * 7.3) * 43758.5) - 0.5) * 0.02;
+          vec4 t = texture2D(uMap, uv);
           float a = t.a * vCol.a;
           if (a < 0.02) discard;
           // white paint takes the sprite's colour, ink stays ink
-          gl_FragColor = vec4(t.rgb * mix(vec3(1.0), vCol.rgb, smoothstep(0.2, 0.9, t.r)), a);
+          vec3 col = t.rgb * mix(vec3(1.0), vCol.rgb, smoothstep(0.2, 0.9, t.r));
+          if (uMode > 0.5 && uMode < 1.5) col = vCol.rgb * (0.5 + 1.9 * t.r);                 // light: no ink, it glows
+          else if (uMode > 1.5 && uMode < 2.5) col = mix(vec3(0.035, 0.035, 0.045), vec3(0.955, 0.94, 0.9), step(0.5, t.r)); // ink on paper
+          else if (uMode > 3.5) col = mix(col, col.gbr, step(0.5, fract(uv.y * 40.0 + uTime * 6.0)));
+          gl_FragColor = vec4(col, a);
           #include <colorspace_fragment>
         }`,
     });
@@ -534,6 +586,11 @@ export class Stickers {
       s.p.addScaledVector(_n, 0.02); // sit just off the surface
     }
     this.live = Math.max(this.live, 1);
+  }
+
+  /** 0 inked sprites, 1 glowing light, 2 black-and-paper, 3 pixel blocks, 4 corrupted. */
+  setMode(mode: number) {
+    this.mat.uniforms.uMode.value = mode;
   }
 
   /** `camera` orients the camera-facing sprites. Time is stepped so motion lands on twos. */
@@ -815,5 +872,105 @@ export class Motes {
     this.points.geometry.dispose();
     this.mat.dispose();
     this.points.removeFromParent();
+  }
+}
+
+/**
+ * Speed streaks: thin slivers of light (or ink) hanging in the air around the camera. Standing
+ * still they are invisible; at speed each one stretches along the direction of travel, so the
+ * world itself seems to smear past. One instanced draw call, no per-frame allocation.
+ */
+export class Streaks {
+  readonly mesh: THREE.Mesh;
+  private mat: THREE.ShaderMaterial;
+  private amount = 0;
+
+  constructor(count = 90) {
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3),
+    );
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const seed = new Float32Array(count * 3);
+    for (let i = 0; i < seed.length; i++) {
+      const x = Math.sin(i * 78.233 + 1.7) * 43758.5453;
+      seed[i] = x - Math.floor(x);
+    }
+    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 3));
+    geo.instanceCount = count;
+    this.mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uVel: { value: new THREE.Vector3() },
+        uAmount: { value: 0 },
+        uColor: { value: new THREE.Color(1, 1, 1) },
+        uDark: { value: 0 },
+        uTime: worldUniforms.uTime,
+      },
+      vertexShader: /* glsl */ `
+        attribute vec3 aSeed;
+        uniform vec3 uVel;
+        uniform float uAmount, uTime;
+        varying float vA;
+        varying float vT;
+        void main() {
+          vec3 box = vec3(26.0, 14.0, 26.0);
+          vec3 p = aSeed * box;
+          // wrap a fixed cloud of points around the camera
+          p = mod(p - cameraPosition + box * 0.5, box) - box * 0.5 + cameraPosition;
+          float speed = length(uVel);
+          vec3 dir = speed > 0.01 ? uVel / speed : vec3(0.0, 0.0, 1.0);
+          float len = uAmount * (1.2 + aSeed.x * 3.2);
+          vec3 toCam = cameraPosition - p;
+          float d = length(toCam);
+          vec3 side = normalize(cross(dir, toCam));
+          float w = 0.016 + aSeed.y * 0.02;
+          vec3 wp = p - dir * (position.y * len) + side * position.x * w;
+          vT = position.y;
+          // nothing right in the face, nothing far away, nothing dead ahead where the route is
+          float ahead = abs(dot(normalize(toCam), dir));
+          vA = uAmount * smoothstep(1.4, 4.0, d) * (1.0 - smoothstep(9.0, 13.0, d)) * (1.0 - smoothstep(0.86, 0.97, ahead));
+          gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uColor;
+        uniform float uDark;
+        varying float vA;
+        varying float vT;
+        void main() {
+          float a = vA * (1.0 - vT) * (1.0 - vT);
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(mix(uColor * 1.8, uColor, uDark), a * mix(0.55, 0.75, uDark));
+        }`,
+    });
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 4;
+    this.mesh.visible = false;
+  }
+
+  /** dark = ink-coloured streaks for bright universes. */
+  setLook(color: number, dark: boolean) {
+    this.mat.uniforms.uColor.value.set(color);
+    this.mat.uniforms.uDark.value = dark ? 1 : 0;
+  }
+
+  update(dt: number, vx: number, vy: number, vz: number, scale: number) {
+    const speed = Math.hypot(vx, vy, vz);
+    const target = Math.min(1, Math.max(0, (speed - 10.5) / 12)) * scale;
+    this.amount += (target - this.amount) * Math.min(1, dt * 5);
+    const u = this.mat.uniforms;
+    u.uVel.value.set(vx, vy, vz);
+    u.uAmount.value = this.amount;
+    this.mesh.visible = this.amount > 0.02;
+  }
+
+  dispose() {
+    this.mesh.geometry.dispose();
+    this.mat.dispose();
+    this.mesh.removeFromParent();
   }
 }
