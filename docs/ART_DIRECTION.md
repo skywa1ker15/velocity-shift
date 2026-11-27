@@ -123,3 +123,11 @@ Home universes: Training = Hand-Drawn, The Awakening = Elderwild, Verticality = 
 **Adding a universe.** Add an entry to `multiverse/universes.ts` (id, shader index, env, screen look) and to `FX`, then a branch in `multiverse/surface.ts`, `multiverse/sky.ts`, `multiverse/character.ts`, a maker in `multiverse/Scenery.ts` and a voicing in `AudioEngine.ts`. The director, planner, tests and settings pick it up automatically.
 
 **Built for the movement overhaul.** The character material and movement effects already read their style from the universe at the camera, so new animation work only has to drive poses; the universe look follows.
+
+## Phase D: character and first-person animation
+
+- One skinned, 19-bone arm per side (sleeve, gauntlet, shift fin, plated knuckles, tapered fingers), restyled per universe by the character shader. Skinned beat rigid on measured draw calls (about 141-148 down to 126-128); software-GL frame time was within noise.
+- Animation is layered: state poses (idle, run, slide, wall, dash, vault, air) cross-fade by weight; event overlays (jump, land, wall slap, vault plant, dash recoil, sword counter-swing); secondary sway scaled by the player's sway setting; then springs and two-bone IK.
+- The hands camera follows the main camera partially (FOV, landing dip, nod, roll). All motion passes through the master Motion intensity and Reduce Motion.
+- Each universe sets a sword-stroke look (`FxLook.trail`) and spark colours (`FxLook.slide`).
+- Evidence frames: `docs/phase-d/`. Real-GPU performance is not measured here.
