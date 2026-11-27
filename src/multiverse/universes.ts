@@ -73,19 +73,85 @@ export interface FxLook {
   dust: number;
   /** Streaks in the air are ink-dark rather than light. */
   darkStreaks: boolean;
+  /**
+   * What a slide throws off. `colors` cycle through the sparks (empty = the suit's accent), `size`
+   * and `rate` scale them, `life` is their lifetime in seconds. rate 0: no sparks (ink: the dark
+   * dust does the work; sparks are additive and would vanish).
+   */
+  slide: { colors: number[]; size: number; rate: number; life: number };
 }
 
 export const FX: Record<UniverseId, FxLook> = {
-  anime: { lines: 0, sprites: 0, dust: 0xf6f2e6, darkStreaks: false },
-  neon: { lines: 1, sprites: 1, dust: 0x7ff6ff, darkStreaks: false },
-  comic: { lines: 2, sprites: 0, dust: 0xffffff, darkStreaks: true },
-  lowpoly: { lines: 0, sprites: 0, dust: 0xfff2e0, darkStreaks: false },
-  psyche: { lines: 1, sprites: 1, dust: 0xfff23d, darkStreaks: false },
-  voxel: { lines: 3, sprites: 3, dust: 0xffffff, darkStreaks: false },
-  ink: { lines: 4, sprites: 2, dust: 0x222222, darkStreaks: true },
-  painted: { lines: 4, sprites: 0, dust: 0xfff0c0, darkStreaks: false },
-  synth: { lines: 1, sprites: 1, dust: 0xff7ad9, darkStreaks: false },
-  corrupt: { lines: 5, sprites: 4, dust: 0x16ff73, darkStreaks: false },
+  anime: {
+    lines: 0,
+    sprites: 0,
+    dust: 0xf6f2e6,
+    darkStreaks: false,
+    slide: { colors: [], size: 1, rate: 1, life: 0.3 },
+  },
+  neon: {
+    lines: 1,
+    sprites: 1,
+    dust: 0x7ff6ff,
+    darkStreaks: false,
+    slide: { colors: [0x19f2ff, 0xff2bd6], size: 1.2, rate: 1.5, life: 0.45 },
+  },
+  comic: {
+    lines: 2,
+    sprites: 0,
+    dust: 0xffffff,
+    darkStreaks: true,
+    slide: { colors: [0xffe23d, 0xffffff], size: 1.6, rate: 0.8, life: 0.25 },
+  },
+  lowpoly: {
+    lines: 0,
+    sprites: 0,
+    dust: 0xfff2e0,
+    darkStreaks: false,
+    slide: { colors: [0xffd9a0, 0xfff2e0], size: 1.9, rate: 0.7, life: 0.35 },
+  },
+  psyche: {
+    lines: 1,
+    sprites: 1,
+    dust: 0xfff23d,
+    darkStreaks: false,
+    slide: { colors: [0xff3d6e, 0xffd23d, 0x3dff9e, 0x3d9eff, 0xc13dff], size: 1.3, rate: 1.4, life: 0.4 },
+  },
+  voxel: {
+    lines: 3,
+    sprites: 3,
+    dust: 0xffffff,
+    darkStreaks: false,
+    slide: { colors: [0xffffff, 0xb7e4ff], size: 2.4, rate: 0.6, life: 0.4 },
+  },
+  ink: {
+    lines: 4,
+    sprites: 2,
+    dust: 0x222222,
+    darkStreaks: true,
+    slide: { colors: [], size: 1, rate: 0, life: 0.3 },
+  },
+  painted: {
+    lines: 4,
+    sprites: 0,
+    dust: 0xfff0c0,
+    darkStreaks: false,
+    slide: { colors: [0xffc46b, 0xfff0c0], size: 1.5, rate: 0.9, life: 0.5 },
+  },
+  synth: {
+    lines: 1,
+    sprites: 1,
+    dust: 0xff7ad9,
+    darkStreaks: false,
+    slide: { colors: [0xff2e9f, 0xffd23d], size: 1.2, rate: 1.4, life: 0.4 },
+  },
+  corrupt: {
+    lines: 5,
+    sprites: 4,
+    dust: 0x16ff73,
+    darkStreaks: false,
+    slide: { colors: [0x16ff73, 0xff1a3c, 0x1a5cff], size: 1.3, rate: 1.2, life: 0.22 },
+  },
 };
 
 type Override = Omit<EnvPreset, 'id' | 'look' | 'surface'> & { structure: number };

@@ -36,6 +36,8 @@ export class CameraRig {
   private wallOff = 0;
   private trauma = 0;
   private leanX = 0;
+  private lastYaw = 0;
+  private yawRate = 0;
   private seeded = false;
   /** Master scales from the player's motion profile, refreshed each frame. */
   private landK = 1;
@@ -66,6 +68,18 @@ export class CameraRig {
     this.dip.kick(-clamp(impact, 2, 30) * 0.075 * this.landK);
     this.nod.kick(-clamp(impact, 3, 26) * 0.022 * this.landK); // the head nods forward with the impact
     if (impact > 20) this.trauma = Math.min(1, this.trauma + (impact - 20) * 0.03 * this.landK);
+  }
+  /** Dropping into a slide: the view dives and the lens punches out (harder with the speed boost). */
+  onSlideStart(boosted: boolean) {
+    this.dip.kick(-(boosted ? 1.15 : 0.7) * this.fxK);
+    this.nod.kick(-0.05 * this.fxK);
+    this.fovPunch.kick((boosted ? 70 : 28) * this.fxK);
+    this.lurch.kick(0.9 * this.fxK);
+  }
+  /** Coming out of a slide: the view rises past the standing height and settles. */
+  onSlideEnd() {
+    this.dip.kick(0.8 * this.fxK);
+    this.nod.kick(0.05 * this.fxK);
   }
   onDash() {
     this.fovPunch.kick(150 * this.fxK);
@@ -119,7 +133,20 @@ export class CameraRig {
     this.feet.set(fx, fy + this.stepOffset, fz);
 
     const sliding = pl.state === MoveState.Slide;
-    this.eyeHeight = damp(this.eyeHeight, pl.height - cfg.eyeOffset - (sliding ? 0.06 : 0), 15, dt);
+    // how hard the slide is still going: the view sits lower the faster the ground rushes past
+    const slideK = sliding ? clamp((pl.speed - 3) / 9, 0, 1) : 0;
+    this.eyeHeight = damp(
+      this.eyeHeight,
+      pl.height - cfg.eyeOffset - (sliding ? 0.06 + slideK * 0.05 : 0),
+      sliding ? 15 : 11,
+      dt,
+    );
+    // turn rate (visual lean only)
+    let dyaw = yaw - this.lastYaw;
+    if (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    else if (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    this.lastYaw = yaw;
+    this.yawRate = damp(this.yawRate, dt > 1e-4 ? clamp(dyaw / dt, -6, 6) : 0, 12, dt);
 
     const speed = pl.speed;
     const moving = gait.moving;
@@ -154,7 +181,8 @@ export class CameraRig {
     // on a wall the view also shifts a little away from it, opening up the surface being run on
     this.wallOff = damp(this.wallOff, onWall ? -pl.wallSide * 0.1 * Math.min(1, m.roll + 0.3) : 0, 7, dt);
     if (onWall) rollTarget = pl.wallSide * 12 * DEG;
-    else if (sliding) rollTarget = -3 * DEG;
+    else if (sliding)
+      rollTarget = -3 * DEG + clamp(this.yawRate * 0.9, -3.5, 3.5) * DEG; // leans into the carve
     else rollTarget = clamp(-lateral * 0.0018, -2.2 * DEG, 2.2 * DEG);
     this.roll = damp(this.roll, rollTarget * m.roll, pl.state === MoveState.WallRun ? 9 : 7, dt);
 
@@ -185,7 +213,7 @@ export class CameraRig {
     // total speed counts (a long fall widens the view too); slides and wall-runs add a touch more
     const speed3 = Math.hypot(speed, pl.grounded ? 0 : pl.vel.y * 0.7);
     const k = clamp((speed3 - cfg.runSpeed) / (25 - cfg.runSpeed), 0, 1);
-    const stateFov = sliding ? 2.5 : onWall ? 2 : 0;
+    const stateFov = sliding ? 2.5 + slideK * 2 : onWall ? 2 : 0;
     const punch = clamp(this.fovPunch.update(0, dt), -4, 12);
     const target = vertical + (k * 12 + stateFov) * m.speedFov + punch * (m.screenFx ? 1 : 0.3);
     // widen promptly, relax slowly: the view never snaps shut when speed drops

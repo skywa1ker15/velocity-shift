@@ -246,6 +246,9 @@ export class Body {
   private landAmt = 0;
   private wjT = 9;
   private jumpT = 9;
+  private slideT = 9;
+  private exitT = 9;
+  private slideBlend = 0;
   private hipDrop = 0;
   private bodyRoll = 0;
   private rootDip = 0;
@@ -452,6 +455,29 @@ export class Body {
     this.wjT = 0;
     for (const a of this.arms) a.spring.v.x -= a.side * 0.8;
   }
+  /** Dropping into a slide: the trailing hand throws back to plant, the guard arm sweeps in low. */
+  onSlideStart(boosted: boolean) {
+    this.slideT = 0;
+    const k = this.motion.intensity * (boosted ? 1.3 : 1);
+    for (const a of this.arms) {
+      if (a.side > 0) {
+        a.spring.v.y -= 2.4 * k;
+        a.spring.v.z += 1.8 * k;
+      } else {
+        a.spring.v.y -= 1.0 * k;
+        a.spring.v.z -= 1.4 * k;
+      }
+    }
+  }
+  /** Coming out of a slide: both hands drive forward and up as the body rises. */
+  onSlideEnd() {
+    this.exitT = 0;
+    const k = this.motion.intensity;
+    for (const a of this.arms) {
+      a.spring.v.y += 1.9 * k;
+      a.spring.v.z -= 1.3 * k;
+    }
+  }
   onBump() {
     for (const a of this.arms) a.spring.v.z += 1.5;
   }
@@ -472,6 +498,8 @@ export class Body {
     this.landT += dt;
     this.wjT += dt;
     this.jumpT += dt;
+    this.slideT += dt;
+    this.exitT += dt;
     const st = pl.state;
     const speed = pl.speed;
     const grounded = pl.grounded;
@@ -634,6 +662,12 @@ export class Body {
         t.z += 0.07 * this.swordSwing;
         a.tCurl = Math.max(a.tCurl, 0.7);
       }
+      // out of a slide: the hands drive forward and up as the body rises
+      if (ti !== POSE_SLIDE && this.exitT < 0.3) {
+        const ek = 1 - this.exitT / 0.3;
+        t.y += 0.05 * ek * sway;
+        t.z -= 0.05 * ek * sway;
+      }
       // landing: hands brace down and forward, fingers spread; heavy landings bring them together
       if (landK > 0 && grounded) {
         t.y -= 0.075 * landK;
@@ -735,28 +769,35 @@ export class Body {
         p.stiff = 200 + sp * 50;
         break;
       }
-      case POSE_SLIDE:
+      case POSE_SLIDE: {
+        // entry: over the first 0.2 s the hands settle from the drop into the slide carriage;
+        // afterwards the pose follows how much speed is left (a fast slide sits lower and
+        // wider, the hand drags further behind and chatters harder; a dying slide rises)
+        const e = clamp(this.slideT / 0.2, 0, 1);
+        const k = e * e * (3 - 2 * e);
+        const sK = clamp((c.speed - 3) / 9, 0, 1);
         if (s > 0) {
           // trailing hand skims the ground behind, fingers spread, chattering with speed
-          p.x = 0.37;
-          p.y = -0.3 + Math.sin(this.t * 31) * 0.006 * sp;
-          p.z = -0.33;
-          p.roll = 1.25;
-          p.bend = -0.55;
-          p.curl = 0.12;
-          p.splay = 1;
-          p.pole = 1.1;
+          p.x = lerp(0.2, 0.36 + sK * 0.05, k);
+          p.y = lerp(-0.12, -0.3 - sK * 0.015, k) + Math.sin(this.t * 31) * (0.003 + 0.005 * sK) * k;
+          p.z = lerp(-0.4, -0.31 + sK * 0.08, k);
+          p.roll = lerp(0.4, 1.25, k);
+          p.bend = lerp(0, -0.55, k);
+          p.curl = lerp(0.5, 0.12, k);
+          p.splay = k;
+          p.pole = lerp(0.6, 1.1, k);
         } else {
-          // guard arm leads low across the body
-          p.x = -0.25;
-          p.y = -0.26;
-          p.z = -0.5;
-          p.roll = 0.5;
-          p.bend = 0.3;
-          p.curl = 0.3;
-          p.pole = 0.9;
+          // guard arm leads low across the body, higher as the slide dies
+          p.x = lerp(-0.12, -0.25, k);
+          p.y = lerp(-0.1, -0.26 - sK * 0.02 + (1 - sK) * 0.03, k);
+          p.z = lerp(-0.45, -0.5 - sK * 0.03, k);
+          p.roll = lerp(0.1, 0.5, k);
+          p.bend = lerp(0, 0.3, k);
+          p.curl = lerp(0.6, 0.3, k);
+          p.pole = lerp(0.6, 0.9, k);
         }
         break;
+      }
       case POSE_WALL:
         if (s === pl.wallSide) {
           // palm planted on the wall, fingers spread, buzzing as it drags
@@ -1033,13 +1074,17 @@ export class Body {
     root.rotation.z = this.bodyRoll;
 
     const land = this.landT < 0.3 ? Math.sin((this.landT / 0.3) * Math.PI) * this.landAmt * 0.26 : 0;
-    const hipTarget = sliding ? 0.55 : land;
-    this.hipDrop = damp(this.hipDrop, hipTarget, sliding ? 14 : 22, dt);
+    this.slideBlend = damp(this.slideBlend, sliding ? 1 : 0, sliding ? 16 : 9, dt);
+    const sb = this.slideBlend;
+    const slideLow = 0.47 + 0.1 * clamp(speed / 11, 0, 1);
+    const hipTarget = sliding ? slideLow : land;
+    // rising out of a slide is eased; everything else keeps the quick response
+    this.hipDrop = damp(this.hipDrop, hipTarget, sliding ? 14 : sb > 0.1 ? 9 : 22, dt);
     const hipY = 0.93 - this.hipDrop;
     // keep the torso out of the lens: it sits behind the eye and leans back in a slide
     const lookDown = clamp(-pitch / 1.2, 0, 1);
-    this.torso.position.set(0, hipY + 0.02, 0.1 + lookDown * 0.08 + (sliding ? 0.25 : 0));
-    this.torso.rotation.x = sliding ? 0.95 : -0.08 - clamp(speed / 30, 0, 0.25);
+    this.torso.position.set(0, hipY + 0.02, 0.1 + lookDown * 0.08 + 0.25 * sb);
+    this.torso.rotation.x = lerp(-0.08 - clamp(speed / 30, 0, 0.25), 0.95, sb);
 
     // the detailed legs only exist for the camera when it can see them: looking down, in a slide
     // (the view drops) or a vault
@@ -1053,7 +1098,7 @@ export class Body {
       const s = l.side;
       const t = l.target;
       const ph = this.phase + (s > 0 ? Math.PI : 0); // opposite to the same-side arm
-      l.hip.set(s * 0.11, hipY, 0.06 + (sliding ? 0.2 : 0));
+      l.hip.set(s * 0.11, hipY, 0.06 + 0.2 * sb);
       if (sliding) {
         // legs shoot forward; one knee stays up
         if (s > 0) t.set(0.13, 0.1, -0.78);

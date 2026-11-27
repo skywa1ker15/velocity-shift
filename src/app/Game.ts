@@ -20,7 +20,7 @@ import { Motes, Sparks, SpeedLines, Sprite, Stickers, Streaks } from '../fx/Fx';
 import { worldUniforms } from '../render/WorldMaterial';
 import { Director } from '../multiverse/Director';
 import { Scenery } from '../multiverse/Scenery';
-import { FX, UNIVERSE_IDS, type UniverseId } from '../multiverse/universes';
+import { FX, UNIVERSE_IDS, type FxLook, type UniverseId } from '../multiverse/universes';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -78,6 +78,14 @@ export class Game {
   private streaks!: Streaks;
   private sparks = new Sparks(420);
   private dust = new THREE.Color(0xf6f2e6);
+  private sparkCol = new THREE.Color();
+  private slideLook: FxLook['slide'] = { colors: [], size: 1, rate: 1, life: 0.3 };
+  /** Colour for the next slide spark: cycles through the universe's palette, else the suit accent. */
+  private pickSlideColor(i: number) {
+    const c = this.slideLook.colors;
+    if (c.length) this.sparkCol.set(c[(Math.floor(this.time * 14) + i) % c.length]);
+    else this.sparkCol.copy(this.accent);
+  }
   private trailT = 0;
   /** Share of the player's velocity that new dust inherits (so it is seen from first person). */
   private carry = new THREE.Vector3();
@@ -343,6 +351,7 @@ export class Game {
     this.lines.setStyle(fx.lines, fx.lines === 4 ? env.streak : undefined);
     this.stickers.setMode(fx.sprites);
     this.dust.set(fx.dust);
+    this.slideLook = fx.slide;
     this.streaks.setLook(env.streak, fx.darkStreaks);
     document.documentElement.style.setProperty(
       '--uni',
@@ -816,15 +825,34 @@ export class Game {
       }
       if (speed > 24) ui.getState().fire('impact');
     });
-    ev.on('slideStart', () => {
+    ev.on('slideStart', ({ boosted }) => {
       this.flowMove();
       audio.slideStart();
-      // drop into the slide: a burst of dust thrown forward along the ground
+      this.rig.onSlideStart(boosted);
+      this.body.onSlideStart(boosted);
+      // drop into the slide: a burst of dust thrown forward along the ground, and (in universes
+      // that throw sparks) a fan of them in the universe's own colours
       const sp = Math.max(1, pl.speed);
       _n.set(pl.vel.x / sp, 0, pl.vel.z / sp);
       this.puffs(feet(), 4, 2.4, 0.42, _n);
+      if (this.slideLook.rate > 0) {
+        for (let i = 0; i < 3; i++) {
+          this.pickSlideColor(i);
+          _w.set(_n.x * 0.6, 0.5, _n.z * 0.6);
+          this.sparks.emit(this.body.contact, _w, this.count(boosted ? 6 : 3), this.sparkCol, {
+            speed: 3.5 + pl.speed * 0.2,
+            spread: 1.1,
+            life: this.slideLook.life,
+            size: 0.035 * this.slideLook.size,
+          });
+        }
+      }
     });
-    ev.on('slideEnd', () => this.input.clearSlideLatch());
+    ev.on('slideEnd', () => {
+      this.input.clearSlideLatch();
+      this.rig.onSlideEnd();
+      this.body.onSlideEnd();
+    });
     ev.on('wallRunStart', () => {
       this.flowMove();
       audio.wallStart();
@@ -1369,14 +1397,18 @@ export class Game {
         }
         this.slideSparkT -= dt;
         if (this.slideSparkT <= 0) {
-          this.slideSparkT = 0.045;
-          _w.set(-_n.x, 0.5, -_n.z);
-          this.sparks.emit(this.body.contact, _w, this.count(2), this.accent, {
-            speed: 3 + speed * 0.15,
-            spread: 0.7,
-            life: 0.3,
-            size: 0.035,
-          });
+          const sl = this.slideLook;
+          this.slideSparkT = 0.045 / Math.max(0.01, sl.rate);
+          if (sl.rate > 0) {
+            this.pickSlideColor(0);
+            _w.set(-_n.x, 0.5, -_n.z);
+            this.sparks.emit(this.body.contact, _w, this.count(2), this.sparkCol, {
+              speed: 3 + speed * 0.15,
+              spread: 0.7,
+              life: sl.life,
+              size: 0.035 * sl.size,
+            });
+          }
         }
       } else if (st === MoveState.WallRun && this.trailT <= 0 && speed > 3) {
         this.trailT = 0.06;
