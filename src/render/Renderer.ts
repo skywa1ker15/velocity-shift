@@ -55,6 +55,9 @@ export class Renderer {
   /** Screen-space half of the current universe's look. */
   universeFx = new UniverseEffect();
   private screenArgs: [ScreenLook, ScreenLook, number] = [NO_SCREEN, NO_SCREEN, 0];
+  get screenLook() {
+    return this.screenArgs;
+  }
   private composer!: EffectComposer;
   private bloom!: BloomEffect;
   private vignette!: VignetteEffect;

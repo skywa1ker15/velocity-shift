@@ -368,7 +368,65 @@ export class AudioEngine {
   stopMusic() {
     this.music?.stop();
   }
+
+  /** The music takes on the character of the universe the player is in (same tune, new instrument). */
+  setUniverse(id: string) {
+    this.music?.setTone(UNI_TONE[id] ?? UNI_TONE.anime);
+  }
+
+  /** A transition front sweeping over the player: one short gesture per transition kind. */
+  shift(kind: number) {
+    switch (kind) {
+      case 1: // tear: a ripping downward scrape
+        this.burst('sfx', 'bandpass', 5200, 380, 0.5, 0.3, 2.5);
+        this.tone('sfx', 'sawtooth', 220, 55, 0.45, 0.12);
+        break;
+      case 2: // glitch: a stutter of clicks
+        for (let i = 0; i < 6; i++)
+          this.tone('sfx', 'square', 180 + this.rnd() * 1600, 90, 0.04, 0.1, i * 0.045);
+        this.burst('sfx', 'highpass', 6000, 2000, 0.3, 0.14, 1);
+        break;
+      case 3: // drain: everything exhales
+        this.burst('sfx', 'lowpass', 2400, 160, 0.9, 0.26, 0.7);
+        this.tone('sfx', 'sine', 330, 110, 0.9, 0.12);
+        break;
+      case 4: // wave: a swell passing through
+        this.burst('sfx', 'bandpass', 300, 2600, 0.55, 0.24, 1.6);
+        this.burst('sfx', 'bandpass', 2600, 300, 0.6, 0.18, 1.6, 0.3);
+        break;
+      case 5: // pixel: a falling run of chip notes
+        [1568, 1175, 880, 659, 440].forEach((f, i) => this.tone('sfx', 'square', f, f, 0.07, 0.09, i * 0.05));
+        break;
+      case 6: // collapse: a low crumble, then a bright snap
+        this.burst('sfx', 'lowpass', 500, 70, 0.7, 0.4, 0.8);
+        this.tone('sfx', 'triangle', 660, 1320, 0.18, 0.14, 0.4);
+        break;
+      default: // portal: a rising whoosh with a glassy ring
+        this.burst('sfx', 'bandpass', 400, 3600, 0.5, 0.26, 1.8);
+        this.tone('sfx', 'sine', 440, 1320, 0.5, 0.1);
+    }
+  }
 }
+
+/** How each universe voices the music: pad wave, arpeggio wave, transposition, filter brightness. */
+interface MusicTone {
+  pad: OscillatorType | null;
+  arp: OscillatorType;
+  shift: number;
+  bright: number;
+}
+const UNI_TONE: Record<string, MusicTone> = {
+  anime: { pad: null, arp: 'triangle', shift: 0, bright: 1 },
+  neon: { pad: 'sawtooth', arp: 'square', shift: -2, bright: 0.85 },
+  comic: { pad: 'square', arp: 'square', shift: 2, bright: 1.25 },
+  lowpoly: { pad: 'triangle', arp: 'sine', shift: 5, bright: 1.1 },
+  psyche: { pad: 'sine', arp: 'sawtooth', shift: -3, bright: 1.4 },
+  voxel: { pad: 'square', arp: 'square', shift: 7, bright: 1.5 },
+  ink: { pad: 'sine', arp: 'sine', shift: -5, bright: 0.6 },
+  painted: { pad: 'triangle', arp: 'triangle', shift: 3, bright: 0.95 },
+  synth: { pad: 'sawtooth', arp: 'sawtooth', shift: 0, bright: 1.3 },
+  corrupt: { pad: 'square', arp: 'sawtooth', shift: -1, bright: 0.75 },
+};
 
 /**
  * Generative music: a pad chord, a pulsing bass and an arpeggio stepped by a look-ahead scheduler.
@@ -451,6 +509,13 @@ class Music {
   private out: GainNode;
   private filter: BiquadFilterNode;
   private name = '';
+  private tone: MusicTone = UNI_TONE.anime;
+
+  /** Takes effect from the next scheduled note, so the change lands on the beat. */
+  setTone(t: MusicTone) {
+    this.tone = t;
+    this.setIntensity(this.intensity);
+  }
 
   constructor(
     private ctx: AudioContext,
@@ -467,7 +532,11 @@ class Music {
 
   setIntensity(v: number) {
     this.intensity += (v - this.intensity) * 0.03;
-    this.filter.frequency.setTargetAtTime(700 + this.intensity * 5200, this.ctx.currentTime, 0.2);
+    this.filter.frequency.setTargetAtTime(
+      (700 + this.intensity * 5200) * this.tone.bright,
+      this.ctx.currentTime,
+      0.2,
+    );
   }
 
   play(name: string) {
@@ -491,6 +560,8 @@ class Music {
 
   private schedule() {
     const p = this.preset;
+    const tone = this.tone;
+    const root = p.root + tone.shift;
     const sixteenth = 60 / p.bpm / 4;
     // look-ahead scheduling keeps timing tight regardless of frame rate
     while (this.nextTime < this.ctx.currentTime + 0.2) {
@@ -500,18 +571,25 @@ class Music {
       const chord = p.chords[bar % p.chords.length];
       const k = this.intensity;
       if (s % 16 === 0)
-        for (const n of chord) this.voice(p.wave, mtof(p.root + 12 + n), t, sixteenth * 16, 0.05, 1.2);
-      if (s % 4 === 0)
-        this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 3, 0.16 + k * 0.1, 0.02);
+        for (const n of chord)
+          this.voice(tone.pad ?? p.wave, mtof(root + 12 + n), t, sixteenth * 16, 0.05, 1.2);
+      if (s % 4 === 0) this.voice('sine', mtof(root - 12 + chord[0]), t, sixteenth * 3, 0.16 + k * 0.1, 0.02);
       else if (s % 4 === 2 && k > 0.3)
-        this.voice('sine', mtof(p.root - 12 + chord[0]), t, sixteenth * 1.5, 0.1 * k, 0.02);
+        this.voice('sine', mtof(root - 12 + chord[0]), t, sixteenth * 1.5, 0.1 * k, 0.02);
       if (k > 0.12 || this.name === 'menu') {
         // arpeggio walks the scale against the chord
         const idx = (s * 3 + bar * 2) % (p.scale.length * 2);
         const oct = Math.floor(idx / p.scale.length);
-        const note = p.root + 24 + chord[0] + p.scale[idx % p.scale.length] + oct * 12;
+        const note = root + 24 + chord[0] + p.scale[idx % p.scale.length] + oct * 12;
         if (s % 2 === 0 || k > 0.6)
-          this.voice('triangle', mtof(note), t, sixteenth * 1.6, 0.035 + k * 0.05, 0.01);
+          this.voice(
+            tone.arp,
+            mtof(note),
+            t,
+            sixteenth * 1.6,
+            (0.035 + k * 0.05) * (tone.arp === 'triangle' || tone.arp === 'sine' ? 1 : 0.55),
+            0.01,
+          );
       }
       if (k > 0.45 && s % 2 === 1) this.hat(t, 0.02 + k * 0.03);
       if (k > 0.25 && s % 8 === 0) this.kick(t, 0.2 + k * 0.2);

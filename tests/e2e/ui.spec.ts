@@ -287,7 +287,8 @@ test('multiverse: every universe renders on a level, and a shift between each pa
   await page.evaluate(() => {
     const g = (window as any).__vs;
     g.mvSeed = 3;
-    g.multiverse.enabled = false; // drive the universes by hand
+    g.mvManual = true; // drive the universes by hand
+    g.multiverse.enabled = false;
   });
   await startLevel(page, 'awakening');
   const ids: string[] = await page.evaluate(async () => {
@@ -324,6 +325,7 @@ test('multiverse: entering a universe is announced under the timer without cover
   await page.evaluate(() => {
     const g = (window as any).__vs;
     g.mvSeed = 5;
+    g.mvManual = true;
     g.multiverse.enabled = false;
   });
   await startLevel(page, 'training');

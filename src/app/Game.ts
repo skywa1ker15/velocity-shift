@@ -201,6 +201,8 @@ export class Game {
       brightness: s.brightness,
     });
     this.renderer.setHazardAlt(s.colorblind);
+    this.renderer.universeFx.intensity = s.shiftIntensity * (s.reduceMotion ? 0.3 : 1);
+    this.renderer.universeFx.setLook(...this.renderer.screenLook);
     if (this.loop) this.loop.fpsCap = s.fpsCap;
     this.audio.applySettings(s);
     if (this.motes) this.motes.points.visible = s.particles > 0.05;
@@ -302,9 +304,11 @@ export class Game {
       if (kind === 2 || def.id === 'corrupt') fx.burst = 1;
       if (kind === 5 || def.id === 'voxel') fx.pixelBurst = 18;
       this.shiftKick = 1;
+      this.audio.shift(kind);
     },
     arrive: (def, env, announce) => {
       this.applyFxLook(def.id, env);
+      this.audio.setUniverse(def.id);
       if (announce && this.mode === 'playing') ui.getState().call('shift', def.name, def.tagline);
       document.documentElement.dataset.universe = def.id;
       this.body.setPalette(env.hands);
@@ -400,11 +404,15 @@ export class Game {
 
   /** Tests / debugging: use this seed for the next runs instead of a fresh random one. */
   mvSeed: number | null = null;
+  /** Tests: leave `multiverse.enabled` alone (universes are driven by hand). */
+  mvManual = false;
 
   /** Start (or restart) the visual run plan for the loaded level. */
   private beginMultiverse(levelId: string, checkpoints: number) {
     const seed = this.mvSeed ?? Math.floor(Math.random() * 0x7fffffff);
-    this.multiverse.begin(levelId, this.env, seed, checkpoints);
+    const mode = this.settings.multiverse;
+    if (!this.mvManual) this.multiverse.enabled = mode === 'dynamic';
+    this.multiverse.begin(levelId, this.env, seed, checkpoints, mode === 'classic' ? 'anime' : undefined);
   }
 
   /** Debug / tests: every universe in the library. */
@@ -448,7 +456,17 @@ export class Game {
     this.loadToken++;
     this.clearLevel();
     this.setEnv('awakening');
-    this.multiverse.begin('menu', this.env, 1, 0);
+    // the menu is a window onto the multiverse: it starts in Level 1's home and keeps drifting
+    this.multiverse.enabled = false;
+    this.multiverse.begin(
+      'awakening',
+      this.env,
+      1,
+      0,
+      this.settings.multiverse === 'classic' ? 'anime' : undefined,
+    );
+    this.menuShiftAt = 7;
+    if (this.menuData) this.buildScenery('awakening', this.menuData);
     if (this.menuData) {
       this.menuSim = new Simulation(levelById('awakening')!.meta, this.menuData);
       this.menuBot = new Bot(this.menuSim);
@@ -1449,9 +1467,37 @@ export class Game {
     }
   }
 
+  private menuShiftAt = 7;
+  private menuShiftN = 0;
+
+  /** Menu attract mode: every so often the world behind the menu shifts to another universe. */
+  private menuMultiverse(dt: number) {
+    const sim = this.menuSim;
+    if (!sim) return;
+    const pl = sim.player;
+    const sp = Math.hypot(pl.vel.x, pl.vel.z);
+    if (sp > 0.5) _n.set(pl.vel.x / sp, 0, pl.vel.z / sp);
+    else _n.set(0, 0, 1);
+    if (
+      this.settings.multiverse !== 'classic' &&
+      this.menuT > this.menuShiftAt &&
+      !this.multiverse.shifting
+    ) {
+      this.menuShiftAt = this.menuT + 9 + (this.menuShiftN % 3) * 2;
+      const ids = UNIVERSE_IDS.filter((u) => u !== this.multiverse.here.id);
+      // a fixed, well-mixed tour rather than true randomness: every visit to the menu shows them all
+      const to = ids[(this.menuShiftN * 7 + 3) % ids.length];
+      this.multiverse.shiftAhead(to, _v.set(pl.pos.x, pl.pos.y + 1, pl.pos.z), _n, this.menuShiftN % 7);
+      this.menuShiftN++;
+    }
+    this.multiverse.update(dt, this.renderer.camera.position, _n);
+    this.scenery?.update();
+  }
+
   private frameMenu(dt: number) {
     // attract mode: the autopilot runs the level for real; a chase camera shows the runner
     this.menuT += dt;
+    this.menuMultiverse(dt);
     const cam = this.renderer.camera;
     const sim = this.menuSim,
       runner = this.menuRunner;

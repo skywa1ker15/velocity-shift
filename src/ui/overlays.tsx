@@ -26,6 +26,10 @@ export function Pause() {
         <header>
           <span className="kicker">{meta?.name}</span>
           <h2>Paused</h2>
+          <p className="uni-line">
+            <b>{game.multiverse.here.name}</b>
+            {game.multiverse.plan && <span> · run seed {game.multiverse.plan.seed}</span>}
+          </p>
         </header>
         <nav>
           <Btn className="primary" data-autofocus onClick={resume}>

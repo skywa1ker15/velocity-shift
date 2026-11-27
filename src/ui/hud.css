@@ -811,3 +811,91 @@
     animation: none;
   }
 }
+
+/* ---------- the HUD takes on the universe the camera is in ---------- */
+.uni-line {
+  margin: 6px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.uni-line b {
+  color: var(--uni, var(--accent));
+  font-weight: 700;
+}
+html[data-universe='neon'] .hud .mono-num,
+html[data-universe='synth'] .hud .mono-num {
+  text-shadow:
+    0 0 12px var(--uni),
+    0 2px 0 rgba(6, 7, 12, 0.8);
+}
+html[data-universe='synth'] .hud .timer,
+html[data-universe='neon'] .hud .timer {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--uni) 60%, transparent),
+    0 0 18px color-mix(in srgb, var(--uni) 35%, transparent);
+}
+html[data-universe='ink'] .hud {
+  filter: grayscale(1) contrast(1.15);
+}
+html[data-universe='comic'] .hud .mono-num {
+  -webkit-text-stroke: 1.5px #0b0d14;
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 #0b0d14;
+}
+html[data-universe='voxel'] .hud .mono-num,
+html[data-universe='voxel'] .hud b {
+  font-family: var(--mono, monospace);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-shadow: 2px 2px 0 #0b0d14;
+}
+html[data-universe='painted'] .hud .mono-num {
+  text-shadow:
+    0 2px 0 rgba(40, 24, 12, 0.85),
+    0 0 16px rgba(255, 200, 120, 0.35);
+}
+html[data-universe='corrupt'] .hud .mono-num,
+html[data-universe='corrupt'] .hud b {
+  text-shadow:
+    1.5px 0 #ff1e3c,
+    -1.5px 0 #16c8ff;
+}
+html[data-universe='corrupt'] .hud-tc,
+html[data-universe='corrupt'] .hud-tl {
+  animation: hudJitter 2.6s steps(1) infinite;
+}
+html[data-universe='psyche'] .hud-tr,
+html[data-universe='psyche'] .hud-tl {
+  animation: hudHue 9s linear infinite;
+}
+@keyframes hudJitter {
+  0%,
+  91%,
+  100% {
+    translate: 0 0;
+  }
+  92% {
+    translate: 3px 0;
+  }
+  94% {
+    translate: -2px 1px;
+  }
+  96% {
+    translate: 1px -1px;
+  }
+}
+@keyframes hudHue {
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-universe='corrupt'] .hud-tc,
+  html[data-universe='corrupt'] .hud-tl,
+  html[data-universe='psyche'] .hud-tr,
+  html[data-universe='psyche'] .hud-tl {
+    animation: none;
+  }
+}

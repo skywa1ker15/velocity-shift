@@ -46,6 +46,13 @@ export interface Settings {
   hudOpacity: number;
   hideHud: boolean;
   unlockAll: boolean;
+  /**
+   * dynamic: universes shift during a run. home: each level stays in its home universe.
+   * classic: the original hand-drawn look everywhere.
+   */
+  multiverse: 'dynamic' | 'home' | 'classic';
+  /** 0 .. 1: strength of flashes, glitches, colour fringes and hue drift. */
+  shiftIntensity: number;
 }
 
 export const defaultSettings: Settings = {
@@ -84,6 +91,8 @@ export const defaultSettings: Settings = {
   hudOpacity: 1,
   hideHud: false,
   unlockAll: false,
+  multiverse: 'dynamic',
+  shiftIntensity: 1,
 };
 
 /** Effective motion multipliers after applying the Reduce Motion master toggle. */
@@ -148,6 +157,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('volUi', 0, 1);
   num('hudScale', 0.7, 1.4);
   num('hudOpacity', 0.2, 1);
+  num('shiftIntensity', 0, 1);
+  if (!['dynamic', 'home', 'classic'].includes(out.multiverse)) out.multiverse = 'dynamic';
   if (!['low', 'medium', 'high', 'ultra', 'auto'].includes(out.preset)) out.preset = 'auto';
   if (!['auto', 'hold', 'toggle'].includes(out.sprintMode)) out.sprintMode = 'auto';
   if (!['hold', 'toggle'].includes(out.slideMode)) out.slideMode = 'hold';

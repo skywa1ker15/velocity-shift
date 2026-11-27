@@ -212,6 +212,12 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
               {toggle('colorblind')}
             </Row>
             <Row label="Tutorial prompts">{toggle('tutorials')}</Row>
+            <Row
+              label="Shift intensity"
+              hint="Strength of flashes, glitches, colour fringes and hue drift when the world shifts"
+            >
+              {slider('shiftIntensity', 0, 1, 0.05, pct)}
+            </Row>
           </>
         )}
         {tab === 'Audio' && (
@@ -225,6 +231,16 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
         )}
         {tab === 'Gameplay' && (
           <>
+            <Row
+              label="Multiverse"
+              hint="Shifting: the world changes universe as you run, differently every run. Home: each level keeps one universe. Classic: the original hand-drawn look. Takes effect on the next run."
+            >
+              {select('multiverse', [
+                ['dynamic', 'Shifting'],
+                ['home', 'Home universe'],
+                ['classic', 'Classic look'],
+              ])}
+            </Row>
             <Row label="Show personal-best ghost">{toggle('ghost')}</Row>
             <Row label="Speedometer">{toggle('showSpeed')}</Row>
             <Row label="Movement indicators" hint="Double jump, wall-run timer, slide">
