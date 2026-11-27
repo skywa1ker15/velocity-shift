@@ -60,6 +60,7 @@ describe('destructible placement', () => {
       faceted: ['panel', 'crate'],
       blockfall: ['crate', 'energy'],
       core: ['pylon', 'energy'],
+      shiftpoint: ['column', 'relic'],
     };
     for (const { meta, data } of loaded) {
       expect(data.breakables.length, meta.id).toBeGreaterThanOrEqual(8);

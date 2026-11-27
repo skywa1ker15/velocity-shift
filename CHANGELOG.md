@@ -1,5 +1,16 @@
 # Changelog
 
+## Phase G: Dynamic World and extreme movement
+
+- **Gravity frames.** Gravity can point in any direction: sideways, reverse, diagonal, zero, low or heavy, wells, rotating fields, and fields that follow a moving structure. Every move (sprint, slide, wall-run, vault, dash, double jump) works unchanged on walls and ceilings. Momentum is exact through every turn; frame turns are eased and rate-capped and roll about the facing direction, while gravity itself is never delayed. Courses without gravity changes run the original code path (reference runs unchanged to the tick).
+- **Dynamic structures** (rotate, shift, tilt, topple, fall) with telegraphs, riders carried, linked gravity, collision removed when fallen, and exact replay on respawn.
+- **Launches:** impulse rings that work in the air, spring floors whose bounce scales with impact, and slingshots.
+- **Destruction feedback:** crack lines on telegraphing collapses, pooled instanced debris in the world material with a per-universe chunk style, and procedural gravity, impulse and structure sounds.
+- **Camera** follows the interpolated gravity frame, with an FOV breath and a light rumble on gravity turns, all within the comfort settings.
+- **New course SHIFT POINT** (Level 9, home universe Psyche): the Turning Hall, the Wall Run, the Falling Bridge with a toppling tower, the slingshot through low gravity, and the reverse-gravity ceiling run, with calm stretches between. Two achievements.
+- Robustness: depenetration and contact-skin recovery for capsules turned in place, and a frame-aware autopilot.
+- Tests: 25 new gravity and dynamic-world simulation tests, camera-frame tests, Shift Point hidden route, and a real-keyboard end-to-end test. Report and evidence: `docs/phase-g/`.
+
 ## Phase F: course fairness, verified secrets and course rewards
 
 - Momentum's blink tiles retuned: they were frame-perfect below sprint pace (0% at 7 m/s). Now 22% with a 0.69 s window at 7 m/s, still 41% at sprint; the reference time is unchanged.

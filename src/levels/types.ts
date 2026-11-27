@@ -121,6 +121,11 @@ export interface JumpPadDef extends EntityBase {
   p: Vec3Tuple;
   s: Vec3Tuple;
   v: Vec3Tuple; // launch velocity (x,z additive, y absolute)
+  /**
+   * Spring floor: the bounce grows with how hard you land on it. Upward speed becomes at least
+   * `v[1]` and at least `spring` × the falling speed you arrived with.
+   */
+  spring?: number;
 }
 
 export interface GravityDef extends EntityBase {
@@ -130,8 +135,86 @@ export interface GravityDef extends EntityBase {
   scale: number;
 }
 
+// ----- Phase G: dynamic world ---------------------------------------------------------------
+
+/**
+ * A gravity field: while the player is inside its box (world-aligned unless linked), gravity is
+ * redirected. `dir`: a fixed direction (sideways, reverse, diagonal). `well`: toward `center`
+ * (default `p`). `spin`: `dir` turning about `axis` at `speed` rad/s. `structure`: the linked
+ * structure's own "down", so gravity follows its floor as it turns. `scale`: strength (0 =
+ * weightless, 0.4 = low, 1.8 = heavy).
+ */
+export interface FieldDef extends EntityBase {
+  type: 'field';
+  p: Vec3Tuple;
+  s: Vec3Tuple;
+  mode: 'dir' | 'well' | 'spin' | 'structure';
+  dir?: Vec3Tuple;
+  scale?: number;
+  center?: Vec3Tuple;
+  axis?: Vec3Tuple;
+  speed?: number;
+  /** `structure` mode: id of the structure; `p`/`s` are then in its local frame. */
+  link?: string;
+  /** Overlapping fields: the highest priority wins (default 1). */
+  priority?: number;
+}
+
+/** One step of a structure's motion program: rotate about its pivot and/or shift, over `t` s. */
+export interface StructureStep {
+  t: number;
+  /** World axis and angle in degrees. */
+  rot?: [number, number, number, number];
+  move?: Vec3Tuple;
+  ease?: 'linear' | 'smooth' | 'in' | 'out';
+}
+
+/**
+ * A structure: a rigid group of boxes on one kinematic body with its pivot at `p`, driven by a
+ * motion program on the level clock. Rotating buildings and corridors, tilting floors, shifting
+ * and rising platforms, bridges that swing into place, towers that topple and fall away. With `on`
+ * it waits for an event; it then telegraphs (`warn` s, at least 0.75 s when it falls or turns
+ * under the player) before moving. `fall`: once the program ends it drops away, tumbling, and its
+ * collision is removed after `fall` seconds (no invisible collision is ever left behind).
+ */
+export interface StructureDef extends EntityBase {
+  type: 'structure';
+  p: Vec3Tuple;
+  r?: Vec3Tuple;
+  parts: { p: Vec3Tuple; s: Vec3Tuple; mat?: MatId; wallrun?: boolean; r?: Vec3Tuple }[];
+  steps: StructureStep[];
+  /** Seconds between the trigger and the start (after the telegraph). */
+  delay?: number;
+  warn?: number;
+  loop?: boolean;
+  fall?: number;
+}
+
+/**
+ * An impulse volume (rings, slingshot exits, launch gates): works grounded or airborne. Speed along
+ * `dir` (world) becomes at least `min`, plus `add`; motion across it is kept.
+ */
+export interface ImpulseDef extends EntityBase {
+  type: 'impulse';
+  p: Vec3Tuple;
+  s: Vec3Tuple;
+  dir: Vec3Tuple;
+  add: number;
+  min: number;
+}
+
 export type EntityDef =
-  MoverDef | RotatorDef | CollapseDef | BlinkDef | HazardDef | BoostDef | JumpPadDef | GravityDef;
+  | MoverDef
+  | RotatorDef
+  | CollapseDef
+  | BlinkDef
+  | HazardDef
+  | BoostDef
+  | JumpPadDef
+  | GravityDef
+  | FieldDef
+  | StructureDef
+  | ImpulseDef;
 
 export interface CheckpointDef {
   p: Vec3Tuple; // respawn feet position
@@ -237,6 +320,8 @@ export interface LevelMeta {
   music: string;
   spawn: { p: Vec3Tuple; yaw: number };
   killY: number;
+  /** Optional world box [min, max]: leaving it is a fall (gravity can point anywhere). */
+  bounds?: [Vec3Tuple, Vec3Tuple];
   medals: MedalTimes;
   objectives: ObjectiveDef[];
   seed: number;

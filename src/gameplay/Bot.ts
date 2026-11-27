@@ -11,6 +11,11 @@ import { Mover } from '../entities/Entities';
 import type { Simulation } from './Simulation';
 import { breakableCentre } from './breakables';
 
+const _d = { x: 0, y: 0, z: 0 };
+const _a = { x: 0, y: 0, z: 0 };
+const _b = { x: 0, y: 0, z: 0 };
+const _c = { x: 0, y: 0, z: 0 };
+
 export class Bot {
   index = 0;
   private inp: InputFrame = emptyInput();
@@ -97,8 +102,14 @@ export class Bot {
       return inp;
     }
     const pt = pts[this.index];
-    const dx = pt.p[0] - pl.pos.x,
-      dz = pt.p[2] - pl.pos.z;
+    // steer in the player's own gravity frame (identical to world XZ when gravity points down)
+    inp.yaw += sim.gravity.takeYawFix();
+    _d.x = pt.p[0] - pl.pos.x;
+    _d.y = pt.p[1] - pl.pos.y;
+    _d.z = pt.p[2] - pl.pos.z;
+    const dl = pl.toLocal(_d, _d);
+    const dx = dl.x,
+      dz = dl.z;
     const dist = Math.hypot(dx, dz);
     const targetYaw = Math.atan2(-dx, -dz);
     // turn quickly but not instantly (a human-like 12 rad/s)
@@ -141,7 +152,7 @@ export class Bot {
       const a = this.queue[0];
       if (this.wait > 0) this.wait--;
       else if (a === 'J2') {
-        if (pl.vel.y < 1.5 && !pl.grounded) {
+        if (pl.upSpeed < 1.5 && !pl.grounded) {
           inp.jumpPressed = true;
           this.queue.shift();
           this.wait = 10;
@@ -155,7 +166,7 @@ export class Bot {
         this.wait = 6;
       } else if (a === 'DA') {
         // dash near the apex
-        if (pl.vel.y < 2 || pl.state === MoveState.WallRun) {
+        if (pl.upSpeed < 2 || pl.state === MoveState.WallRun) {
           inp.dashPressed = true;
           this.queue.shift();
         }
@@ -230,16 +241,20 @@ export class Bot {
   /** True once the player has gone past waypoint i along the line from the previous one. */
   private passed(i: number): boolean {
     if (i === 0) return false;
-    const a = this.sim.data.bot[i - 1].p,
-      b = this.sim.data.bot[i].p,
-      p = this.sim.player.pos;
-    const sx = b[0] - a[0],
-      sz = b[2] - a[2];
+    const pl = this.sim.player;
+    const A = this.sim.data.bot[i - 1].p,
+      B = this.sim.data.bot[i].p;
+    // compare in the player's gravity frame (the identity when gravity points down)
+    const a = pl.toLocal({ x: A[0], y: A[1], z: A[2] }, _a),
+      b = pl.toLocal({ x: B[0], y: B[1], z: B[2] }, _b),
+      p = pl.toLocal(pl.pos, _c);
+    const sx = b.x - a.x,
+      sz = b.z - a.z;
     const l2 = sx * sx + sz * sz;
     if (l2 < 0.01) return true;
-    const t = ((p.x - a[0]) * sx + (p.z - a[2]) * sz) / l2;
-    const lateral = Math.abs((p.x - a[0]) * sz - (p.z - a[2]) * sx) / Math.sqrt(l2);
-    return t > 1 && lateral < 3 && Math.abs(p.y - b[1]) < 5;
+    const t = ((p.x - a.x) * sx + (p.z - a.z) * sz) / l2;
+    const lateral = Math.abs((p.x - a.x) * sz - (p.z - a.z) * sx) / Math.sqrt(l2);
+    return t > 1 && lateral < 3 && Math.abs(p.y - b.y) < 5;
   }
 }
 

@@ -82,6 +82,8 @@ export interface FxLook {
   slide: { colors: number[]; size: number; rate: number; life: number };
   /** Sword stroke: body tint (null = the suit accent), border colour, streakiness, edge heat. */
   trail: TrailLook;
+  /** Phase G: how this universe breaks apart — chunk shape and how many / how hard they fly. */
+  debris: { shape: 'cube' | 'shard' | 'slab'; amount: number; push: number };
 }
 
 export const FX: Record<UniverseId, FxLook> = {
@@ -92,6 +94,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [], size: 1, rate: 1, life: 0.3 },
     trail: { tint: null, ink: 0x0b0d14, streak: 1, hot: 1, style: 0 },
+    debris: { shape: 'slab', amount: 1, push: 3.5 },
   },
   neon: {
     lines: 1,
@@ -100,6 +103,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0x19f2ff, 0xff2bd6], size: 1.2, rate: 1.5, life: 0.45 },
     trail: { tint: 0x19f2ff, ink: 0xff2bd6, streak: 0.35, hot: 1.4, style: 1 },
+    debris: { shape: 'shard', amount: 0.8, push: 4 },
   },
   comic: {
     lines: 2,
@@ -108,6 +112,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: true,
     slide: { colors: [0xffe23d, 0xffffff], size: 1.6, rate: 0.8, life: 0.25 },
     trail: { tint: 0xffe23d, ink: 0x050508, streak: 0, hot: 1, style: 2 },
+    debris: { shape: 'slab', amount: 1.3, push: 5 },
   },
   lowpoly: {
     lines: 0,
@@ -116,6 +121,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0xffd9a0, 0xfff2e0], size: 1.9, rate: 0.7, life: 0.35 },
     trail: { tint: null, ink: 0x2a2f45, streak: 0, hot: 0.8, style: 4 },
+    debris: { shape: 'shard', amount: 1, push: 3 },
   },
   psyche: {
     lines: 1,
@@ -124,6 +130,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0xff3d6e, 0xffd23d, 0x3dff9e, 0x3d9eff, 0xc13dff], size: 1.3, rate: 1.4, life: 0.4 },
     trail: { tint: 0xff3d6e, ink: 0x3d9eff, streak: 0.6, hot: 1.3, style: 6 },
+    debris: { shape: 'shard', amount: 1.2, push: 4.5 },
   },
   voxel: {
     lines: 3,
@@ -132,6 +139,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0xffffff, 0xb7e4ff], size: 2.4, rate: 0.6, life: 0.4 },
     trail: { tint: 0xffffff, ink: 0x14161f, streak: 0, hot: 0.9, style: 4 },
+    debris: { shape: 'cube', amount: 1.4, push: 3 },
   },
   ink: {
     lines: 4,
@@ -140,6 +148,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: true,
     slide: { colors: [], size: 1, rate: 0, life: 0.3 },
     trail: { tint: 0x15151c, ink: 0x0a0a0d, streak: 1.4, hot: 1.2, style: 3 },
+    debris: { shape: 'slab', amount: 0.9, push: 2.5 },
   },
   painted: {
     lines: 4,
@@ -148,6 +157,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0xffc46b, 0xfff0c0], size: 1.5, rate: 0.9, life: 0.5 },
     trail: { tint: 0xffc46b, ink: 0x6b3a1e, streak: 1.2, hot: 0.9, style: 7 },
+    debris: { shape: 'slab', amount: 1, push: 3 },
   },
   synth: {
     lines: 1,
@@ -156,6 +166,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0xff2e9f, 0xffd23d], size: 1.2, rate: 1.4, life: 0.4 },
     trail: { tint: 0xff2e9f, ink: 0x19f2ff, streak: 0.4, hot: 1.4, style: 1 },
+    debris: { shape: 'cube', amount: 0.8, push: 4 },
   },
   corrupt: {
     lines: 5,
@@ -164,6 +175,7 @@ export const FX: Record<UniverseId, FxLook> = {
     darkStreaks: false,
     slide: { colors: [0x16ff73, 0xff1a3c, 0x1a5cff], size: 1.3, rate: 1.2, life: 0.22 },
     trail: { tint: 0x16ff73, ink: 0xff1a3c, streak: 0.8, hot: 1.2, style: 5 },
+    debris: { shape: 'cube', amount: 1.2, push: 6 },
   },
 };
 
@@ -635,6 +647,7 @@ export const HOME: Record<string, UniverseId> = {
   faceted: 'lowpoly',
   blockfall: 'voxel',
   core: 'corrupt',
+  shiftpoint: 'psyche',
 };
 export const homeOf = (levelId: string): UniverseId => {
   const h = HOME[levelId] ?? 'anime';

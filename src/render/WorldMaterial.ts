@@ -134,8 +134,13 @@ varying vec3 vWNormal;`,
 vFace = aFace;
 vFx = aFx;
 vRole = aRole;
+#ifdef USE_INSTANCING
+vWPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+vWNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+#else
 vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
-vWNormal = normalize(mat3(modelMatrix) * normal);`,
+vWNormal = normalize(mat3(modelMatrix) * normal);
+#endif`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(

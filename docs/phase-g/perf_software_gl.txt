@@ -1,0 +1,20 @@
+== awakening
+classic                  {"ms":130.1,"calls":127,"triangles":20916,"geometries":160,"textures":18,"programs":55}
+psyche                   {"ms":157.7,"calls":127,"triangles":35108,"geometries":160,"textures":18,"programs":54}
+voxel                    {"ms":166.2,"calls":127,"triangles":47152,"geometries":160,"textures":18,"programs":54}
+mid-shift neon→painted   {"ms":162.1,"calls":128,"triangles":32160,"geometries":160,"textures":18,"programs":54}
+== momentum
+classic                  {"ms":180,"calls":148,"triangles":17633,"geometries":177,"textures":18,"programs":58}
+psyche                   {"ms":195.2,"calls":148,"triangles":36027,"geometries":177,"textures":18,"programs":57}
+voxel                    {"ms":163.5,"calls":148,"triangles":41379,"geometries":177,"textures":18,"programs":57}
+mid-shift neon→painted   {"ms":178.3,"calls":149,"triangles":29539,"geometries":177,"textures":18,"programs":57}
+== core
+classic                  {"ms":154.1,"calls":101,"triangles":15176,"geometries":135,"textures":18,"programs":57}
+psyche                   {"ms":184.5,"calls":101,"triangles":29292,"geometries":135,"textures":18,"programs":56}
+voxel                    {"ms":149.7,"calls":101,"triangles":35488,"geometries":135,"textures":18,"programs":56}
+mid-shift neon→painted   {"ms":207.8,"calls":102,"triangles":26768,"geometries":135,"textures":18,"programs":56}
+== shiftpoint
+classic                  {"ms":150.2,"calls":133,"triangles":21386,"geometries":165,"textures":18,"programs":55}
+psyche                   {"ms":179.3,"calls":132,"triangles":39564,"geometries":165,"textures":18,"programs":54}
+voxel                    {"ms":152.2,"calls":132,"triangles":47908,"geometries":165,"textures":18,"programs":54}
+mid-shift neon→painted   {"ms":201.4,"calls":133,"triangles":32488,"geometries":165,"textures":18,"programs":54}

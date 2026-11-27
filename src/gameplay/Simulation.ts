@@ -14,6 +14,7 @@ import { MovementController } from '../movement/MovementController';
 import { MoveState, type InputFrame } from '../movement/types';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { bodyTouches, breakableCentre } from './breakables';
+import { GravityDirector } from './Gravity';
 import { Sword, SwordPhase, type SwordHit, type SwordTarget, type Slash } from './Sword';
 
 export interface RunStats {
@@ -82,7 +83,7 @@ export interface SimEvents {
   collect: { id: string; index: number };
   shortcut: { id: string; hidden: boolean };
   prompt: { index: number };
-  signal: { kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn'; entity: Entity };
+  signal: { kind: Parameters<EntityCtx['signal']>[0]; entity: Entity };
   event: { name: string };
   /** Sword state changes and swings (opened = the cutting window opened this tick). */
   sword: { action: 'draw' | 'sheathe' | 'slash'; kind?: Slash; combo?: number; fromSheath?: boolean };
@@ -110,6 +111,9 @@ export class Simulation {
   private wallChain = 0;
   private ctx: EntityCtx;
   readonly sword = new Sword();
+  /** Phase G: turns the player's gravity frame toward what the fields ask for. */
+  readonly gravity = new GravityDirector();
+  private byId = new Map<string, Entity>();
   /** Broken flag per breakable (index matches data.breakables). */
   readonly broken: boolean[] = [];
   private targets: (SwordTarget | null)[] = [];
@@ -147,7 +151,10 @@ export class Simulation {
       dt: SIM_DT,
       kill: (reason) => this.kill(reason),
       signal: (kind, entity) => this.events.emit('signal', { kind, entity }),
+      gravity: (dx, dy, dz, scale, priority) => this.gravity.request(dx, dy, dz, scale, priority),
+      byId: (id) => this.byId.get(id),
     };
+    for (const e of this.entities) if (e.def.id) this.byId.set(e.def.id, e);
     this.targetsLive = (data.breakables ?? []).map((b) => breakableCentre(b));
     this.wireStats();
     this.physics.step();
@@ -212,6 +219,7 @@ export class Simulation {
   private placeAtCheckpoint() {
     const cp = this.data.checkpoints[this.checkpoint] ?? { p: this.meta.spawn.p, yaw: this.meta.spawn.yaw };
     this.player.reset(cp.p[0], cp.p[1] + 0.05, cp.p[2], cp.yaw);
+    this.gravity.reset(this.player);
     this.sword.reset();
     this.dead = false;
     this.deadTicks = 0;
@@ -282,7 +290,7 @@ export class Simulation {
       if (!pl.grounded && s !== MoveState.WallRun) st.airTime += SIM_DT;
     }
 
-    if (pl.pos.y < this.meta.killY) {
+    if (pl.pos.y < this.meta.killY || this.outOfBounds()) {
       this.kill('void');
       return;
     }
@@ -328,11 +336,21 @@ export class Simulation {
     this.events.emit('break', { index: i, by, hit });
   }
 
+  /** Phase G: with gravity that can point anywhere, falling "up" or sideways forever is also out. */
+  private outOfBounds() {
+    const b = this.meta.bounds;
+    if (!b) return false;
+    const p = this.player.pos;
+    return p.x < b[0][0] || p.y < b[0][1] || p.z < b[0][2] || p.x > b[1][0] || p.y > b[1][1] || p.z > b[1][2];
+  }
+
   private updateEntities() {
     const c = this.ctx;
     c.time = this.time;
+    this.gravity.begin();
     for (const e of this.entities) e.update(c, this.physics);
     this.physics.step();
+    if (!this.dead) this.gravity.apply(this.player, SIM_DT);
   }
 
   private checkVolumes() {

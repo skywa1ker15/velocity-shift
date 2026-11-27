@@ -44,8 +44,8 @@ test('boots to the title, then every menu screen opens and returns', async ({ pa
   await expect(page.locator('.logo').first()).toBeVisible();
 
   await page.click('text=Level Select');
-  await expect(page.locator('.lv-card')).toHaveCount(9);
-  await expect(page.locator('.lv-card.locked')).toHaveCount(7); // only training and level 1 start open
+  await expect(page.locator('.lv-card')).toHaveCount(10);
+  await expect(page.locator('.lv-card.locked')).toHaveCount(8); // only training and level 1 start open
   await page.keyboard.press('Escape');
 
   await page.click('nav >> text=Settings');
@@ -169,7 +169,7 @@ test('progress and settings persist across a reload', async ({ page }) => {
   expect(saved.ach).toContain('first-steps');
 });
 
-test('all eight courses load, render and tick without errors', async ({ page }) => {
+test('all nine courses load, render and tick without errors', async ({ page }) => {
   test.setTimeout(480_000);
   await boot(page);
   await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true }));
@@ -182,6 +182,7 @@ test('all eight courses load, render and tick without errors', async ({ page }) 
     'faceted',
     'blockfall',
     'core',
+    'shiftpoint',
   ]) {
     await startLevel(page, id);
     await page.evaluate(() => (window as any).__vs.debugAdvance(1.5, { moveZ: 1 }));
@@ -220,4 +221,50 @@ test('rebinding a key works and conflicts are resolved', async ({ page }) => {
   const d = await page.evaluate(() => (window as any).__vs.save.data.bindings);
   expect(d.jump).toEqual(['Space']);
   expect(d.dash).toEqual(['KeyQ', 'KeyE']);
+});
+
+test("Phase G: holding W through Shift Point's wall run (real keyboard, real-time) lands on the wall and back down", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => ((window as any).__vsAllowUnlocked = true));
+  await boot(page);
+  await page.evaluate(() => (window as any).__vs.updateSettings({ unlockAll: true, tutorials: false }));
+  await startLevel(page, 'shiftpoint');
+  // respawn at the checkpoint on the deck before the sideways field
+  await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    sim.checkpoint = sim.data.checkpoints.findIndex((c: { p: number[] }) => Math.abs(c.p[2] - 123) < 0.6);
+    sim.restartFromCheckpoint();
+  });
+  const pl = () =>
+    page.evaluate(() => {
+      const p = (window as any).__vs.sim.player;
+      const u = p.upAxis();
+      return {
+        x: p.pos.x,
+        y: p.pos.y,
+        z: p.pos.z,
+        ux: u.x,
+        uy: u.y,
+        grounded: p.grounded,
+        deaths: (window as any).__vs.sim.stats.deaths,
+      };
+    });
+  await page.keyboard.down('KeyW');
+  let onWall = false;
+  let s = await pl();
+  for (let i = 0; i < 3000 && s.z < 205 && s.deaths === 0; i++) {
+    s = await pl();
+    // standing on the wall: gravity turned sideways, feet on the wall face (x = 7.5)
+    if (s.grounded && s.ux < -0.95 && Math.abs(s.x - 7.5) < 0.1) onWall = true;
+  }
+  await page.keyboard.up('KeyW');
+  expect(s.deaths).toBe(0);
+  expect(onWall).toBe(true);
+  expect(s.z).toBeGreaterThanOrEqual(205);
+  // and gravity is ordinary again on the deck after it
+  await page.waitForTimeout(500);
+  s = await pl();
+  expect(s.uy).toBeGreaterThan(0.99);
 });

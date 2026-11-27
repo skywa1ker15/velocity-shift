@@ -10,7 +10,7 @@
  * Transition table and tuning notes: docs/MOVEMENT.md
  */
 import { Emitter } from '../core/events';
-import { clamp, hlen, v3 } from '../core/math';
+import { clamp, hlen, quatRotate, quatRotateInv, v3, type Quat, type V3 } from '../core/math';
 import { movementConfig as cfg } from './movementConfig';
 import {
   MoveState,
@@ -22,6 +22,8 @@ import {
 } from './types';
 
 const DEG = Math.PI / 180;
+const UP: V3 = { x: 0, y: 1, z: 0 };
+const _l = v3();
 
 export class MovementController {
   readonly pos = v3();
@@ -53,6 +55,19 @@ export class MovementController {
   readonly platformVel = v3();
   /** Seconds since the last dash started (for effects). */
   sinceDash = 99;
+  /**
+   * Gravity frame (Phase G): rotation from the player's local frame to the world. Local +Y points
+   * against gravity. Every ability runs unchanged in local space; `pos`, `vel` and the other
+   * vectors stay in WORLD space between ticks, so turning the frame never changes momentum.
+   * Identity (the usual case) takes the original code path untouched.
+   */
+  readonly frame: Quat = { x: 0, y: 0, z: 0, w: 1 };
+  /**
+   * While the frame is still easing toward a new gravity direction, gravity itself must not lag:
+   * the air step pulls along this true "down" (world between ticks, local during one).
+   */
+  readonly trueDown = v3(0, -1, 0);
+  useTrueDown = false;
 
   readonly events = new Emitter<MoveEvents>();
 
@@ -92,7 +107,32 @@ export class MovementController {
   constructor(private world: CollisionWorld) {}
 
   get speed() {
+    if (this.framed) {
+      quatRotateInv(this.frame, this.vel, _l);
+      return Math.hypot(_l.x, _l.z);
+    }
     return hlen(this.vel);
+  }
+  /** Is the gravity frame turned away from world up? */
+  get framed() {
+    return !this.local && this.frame.w < 0.9999999 && this.frame.w > -0.9999999;
+  }
+  /** True while vector state is expressed in the frame (inside a framed tick). */
+  private local = false;
+  /** Velocity along the frame's up (= vel.y when gravity points down). */
+  get upSpeed() {
+    if (!this.framed) return this.vel.y;
+    return quatRotateInv(this.frame, this.vel, _l).y;
+  }
+  /** The frame's up axis in world space. */
+  upAxis(out: V3 = v3()) {
+    return quatRotate(this.frame, UP, out);
+  }
+  /** World-space position expressed in the local frame. */
+  toLocal(v: V3, out: V3 = v3()) {
+    return this.framed
+      ? quatRotateInv(this.frame, v, out)
+      : ((out.x = v.x), (out.y = v.y), (out.z = v.z), out);
   }
   get dashCharges() {
     return Math.floor(this.dashEnergy + 1e-6);
@@ -122,6 +162,9 @@ export class MovementController {
     this.gravityScale = 1;
     this.sinceDash = 99;
     this.platformVel.x = this.platformVel.y = this.platformVel.z = 0;
+    this.frame.x = this.frame.y = this.frame.z = 0;
+    this.frame.w = 1;
+    this.useTrueDown = false;
   }
 
   kill() {
@@ -132,6 +175,18 @@ export class MovementController {
   /** Jump pads / launchers: replaces vertical velocity and puts the player in the air. */
   launch(vx: number, vy: number, vz: number, additive = true) {
     if (this.state === MoveState.Dead) return;
+    if (this.framed) {
+      // the launch vector is given in world space; "vertical" means along the frame's up
+      this.inFrame(() => {
+        const l = quatRotateInv(this.frame, { x: vx, y: vy, z: vz }, v3());
+        this.launchLocal(l.x, l.y, l.z, additive);
+      });
+      return;
+    }
+    this.launchLocal(vx, vy, vz, additive);
+  }
+
+  private launchLocal(vx: number, vy: number, vz: number, additive: boolean) {
     if (this.state === MoveState.Slide) this.exitSlide();
     if (additive) {
       this.vel.x += vx;
@@ -151,6 +206,41 @@ export class MovementController {
 
   /** Boost pads: raise horizontal speed along a direction to at least `minSpeed`, adding `add`. */
   boost(dx: number, dz: number, add: number, minSpeed: number) {
+    if (this.framed) {
+      const l = quatRotateInv(this.frame, { x: dx, y: 0, z: dz }, v3());
+      const hl = Math.hypot(l.x, l.z) || 1;
+      this.inFrame(() => this.boostLocal(l.x / hl, l.z / hl, add, minSpeed));
+      return;
+    }
+    this.boostLocal(dx, dz, add, minSpeed);
+  }
+
+  /**
+   * Impulse along an arbitrary world direction (impulse rings, gravity slingshots): the speed along
+   * `dir` becomes at least `min`, plus `add`; motion across it is kept, so momentum carries through.
+   */
+  impulse(dx: number, dy: number, dz: number, add: number, min: number) {
+    if (this.state === MoveState.Dead) return;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    dx /= l;
+    dy /= l;
+    dz /= l;
+    const v = this.vel;
+    const along = v.x * dx + v.y * dy + v.z * dz;
+    const target = Math.max(along + add, min);
+    v.x += dx * (target - along);
+    v.y += dy * (target - along);
+    v.z += dz * (target - along);
+    if (this.state === MoveState.Slide) this.inFrame(() => this.exitSlide());
+    if (this.grounded && this.upSpeed > 0.5) {
+      this.grounded = false;
+      this.state = MoveState.Air;
+    }
+    this.canDoubleJump = true;
+    this.airTime = 0;
+  }
+
+  private boostLocal(dx: number, dz: number, add: number, minSpeed: number) {
     const along = this.vel.x * dx + this.vel.z * dz;
     const target = Math.max(along + add, minSpeed);
     this.vel.x += dx * (target - along);
@@ -159,6 +249,46 @@ export class MovementController {
 
   // =====================================================================================
   tick(inp: InputFrame, dt: number) {
+    if (!this.framed) return this.tickLocal(inp, dt);
+    this.inFrame(() => this.tickLocal(inp, dt));
+  }
+
+  /** Run `fn` with all vector state expressed in the gravity frame (and the world framed too). */
+  private inFrame(fn: () => void) {
+    this.convert(true);
+    this.world.setFrame?.(this.frame);
+    this.local = true;
+    try {
+      fn();
+    } finally {
+      this.local = false;
+      this.world.setFrame?.(null);
+      this.convert(false);
+    }
+  }
+  private convert(toLocal: boolean) {
+    const f = toLocal ? quatRotateInv : quatRotate;
+    for (const v of this.frameVecs) f(this.frame, v, v);
+  }
+  private get frameVecs(): V3[] {
+    return (this._fv ??= [
+      this.pos,
+      this.prevPos,
+      this.vel,
+      this.groundNormal,
+      this.wallNormal,
+      this.platformVel,
+      this.wallDir,
+      this.dashDir,
+      this.vaultFrom,
+      this.vaultTo,
+      this.vaultDir,
+      this.trueDown,
+    ]);
+  }
+  private _fv?: V3[];
+
+  private tickLocal(inp: InputFrame, dt: number) {
     const p = this.pos;
     this.prevPos.x = p.x;
     this.prevPos.y = p.y;
@@ -222,7 +352,13 @@ export class MovementController {
       p.y = r.y;
       p.z = r.z;
     }
-    if (overlap === 0) this.pushTicks = 0;
+    if (overlap === 3) {
+      // (gravity frames only) the body turned into a surface: step straight back out of it
+      p.x += this.tmp.x;
+      p.y += this.tmp.y;
+      p.z += this.tmp.z;
+      this.pushTicks = 0;
+    } else if (overlap === 0) this.pushTicks = 0;
     else if (++this.pushTicks > 30) {
       this.pushTicks = 0;
       this.events.emit('crushed', {});
@@ -466,8 +602,21 @@ export class MovementController {
         this.jumpCut = false;
       }
     }
-    const g = cfg.gravity * this.gravityScale * (v.y < 0 ? cfg.fallMultiplier : 1);
-    v.y = Math.max(v.y - g * dt, -cfg.terminalVelocity);
+    if (this.useTrueDown) {
+      // gravity along the true field while the frame catches up (same fall boost and cap)
+      const d = this.trueDown;
+      const along = v.x * d.x + v.y * d.y + v.z * d.z;
+      const g = cfg.gravity * this.gravityScale * (along > 0 ? cfg.fallMultiplier : 1) * dt;
+      const capped = Math.min(along + g, cfg.terminalVelocity) - along;
+      if (capped > 0) {
+        v.x += d.x * capped;
+        v.y += d.y * capped;
+        v.z += d.z * capped;
+      }
+    } else {
+      const g = cfg.gravity * this.gravityScale * (v.y < 0 ? cfg.fallMultiplier : 1);
+      v.y = Math.max(v.y - g * dt, -cfg.terminalVelocity);
+    }
     if (this.hasWish && dt > 0) {
       // Quake-style air acceleration: steer without ever reducing existing momentum
       const cur = v.x * this.wx + v.z * this.wz;

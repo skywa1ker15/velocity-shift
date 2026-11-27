@@ -75,6 +75,40 @@ Combine with `+` (`jj+d`). The fifth value is the arrival radius.
 Because the simulation is deterministic, timed hazards can be tuned (their `phase`) so the
 reference line passes on the first attempt; the test then guards that line against regressions.
 
+## Dynamic world (Phase G)
+
+Four entity types build moving, turning, collapsing and gravity-bending sequences. They are all
+deterministic on the level clock and all replay from the start on respawn.
+
+```ts
+// a structure: one rigid kinematic body; pivot at p; a motion program of steps
+b.entity({ type: 'structure', id: 'hall', on: 'hall', p: [0, 3, 74], warn: 0.9,
+  steps: [{ t: 2.4, rot: [0, 0, 1, 90] }],          // rot: world axis + degrees; move: [dx,dy,dz]
+  parts: [{ p: [0, -3.5, 0], s: [6, 1, 52] }, ...] }); // ease: 'smooth' | 'linear' | 'in' | 'out'
+// add `fall: 2` to drop it away after the program (its collision is removed after 2 s)
+
+// gravity fields (highest priority wins where they overlap)
+b.entity({ type: 'field', mode: 'dir', dir: [1, 0, 0], p, s });           // sideways / reverse / diagonal
+b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p, s }); // low (0 = weightless)
+b.entity({ type: 'field', mode: 'well', center: [0, 5, 40], p, s });      // pulls toward a point
+b.entity({ type: 'field', mode: 'spin', dir: [0, -1, 0], axis: [0, 0, 1], speed: 0.5, p, s });
+b.entity({ type: 'field', mode: 'structure', link: 'hall', p: [0, 0, 0], s: [6, 7, 52] }); // follows the hall's floor
+
+// launches
+b.entity({ type: 'impulse', p, s, dir: [0, 1, 1], add: 4, min: 22 });     // ring / slingshot, works airborne
+b.entity({ type: 'jumppad', p, s, v: [0, 8, 0], spring: 0.9 });            // spring floor: bounce grows with impact
+```
+
+Rules that keep it fair and stable:
+
+- Anything that moves under the player or falls telegraphs for at least 0.75 s (`warn`).
+- Gravity turns are eased and rate-limited (≈0.4 s for 90°, ≈0.7 s for 180°). Gravity itself
+  acts along the true field at once; only the frame and camera ease.
+- Put bot waypoints inside a turning structure **on its rotation axis**: those points do not move.
+- Collapse timings: make each section fall behind a 7 m/s runner, not only a sprinter.
+- Checkpoints before every set-piece, lined up with what follows (respawn and run straight).
+- A level whose gravity can point anywhere should set `bounds` (falling up is also out).
+
 ## Hidden routes are tested
 
 `tests/sim/hidden-routes.test.ts` holds a second bot line per course that takes the hidden route.

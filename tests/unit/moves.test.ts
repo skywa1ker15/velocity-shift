@@ -127,3 +127,33 @@ describe('viewmodel camera follows the main camera', () => {
     expect(w.fov).toBeLessThan(80);
   });
 });
+
+describe('camera follows the gravity frame (Phase G)', () => {
+  const setup = () => {
+    const main = new THREE.PerspectiveCamera();
+    const cam = new CameraRig(main, new THREE.PerspectiveCamera(68));
+    const pl = player({ state: MoveState.Run, grounded: true, speed: 0, vel: new THREE.Vector3() });
+    return { main, cam, pl, gait: new Gait(), m: motionProfile(defaultSettings) };
+  };
+  it('the view rolls with the frame: its up matches the frame up, and the eye sits above the feet along it', () => {
+    const { main, cam, pl, gait, m } = setup();
+    // gravity toward +X: the frame's up is -X
+    const frame = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    for (let i = 0; i < 30; i++) cam.update(pl as never, 1, 1 / 60, Math.PI, 0, 90, m, gait, frame);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(main.quaternion);
+    expect(up.x).toBeLessThan(-0.95);
+    // the eye is "above" the feet along the frame's up, i.e. toward -X
+    expect(main.position.x).toBeLessThan(-1);
+    expect(Math.abs(main.position.y)).toBeLessThan(0.3);
+  });
+  it('with no frame the camera is exactly the classic one', () => {
+    const a = setup(),
+      b = setup();
+    for (let i = 0; i < 30; i++) {
+      a.cam.update(a.pl as never, 1, 1 / 60, 1, 0.2, 90, a.m, a.gait);
+      b.cam.update(b.pl as never, 1, 1 / 60, 1, 0.2, 90, b.m, b.gait, new THREE.Quaternion());
+    }
+    expect(b.main.quaternion.angleTo(a.main.quaternion)).toBeLessThan(1e-9);
+    expect(b.main.position.distanceTo(a.main.position)).toBeLessThan(1e-9);
+  });
+});

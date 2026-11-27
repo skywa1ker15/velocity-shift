@@ -162,6 +162,18 @@ export const achievements: AchievementDef[] = [
     test: (c) => medalOf(c.save, 'core') >= 3,
   },
   {
+    id: 'shiftpoint-done',
+    name: 'Shift Happens',
+    desc: 'Finish Shift Point.',
+    test: (c) => finished(c.save, 'shiftpoint'),
+  },
+  {
+    id: 'shiftpoint-clean',
+    name: 'Which Way Is Up',
+    desc: 'Finish Shift Point without dying.',
+    test: (c) => ranCourse(c, 'shiftpoint') && c.stats!.deaths === 0,
+  },
+  {
     id: 'world-tour',
     name: 'Every World',
     desc: 'Finish every course.',

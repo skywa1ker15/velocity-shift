@@ -184,13 +184,15 @@ test('level select: locked cards say what unlocks them; arrows move focus; Escap
 }) => {
   await boot(page);
   await page.click('text=Level Select');
-  await expect(page.locator('.lv-card')).toHaveCount(9);
+  await expect(page.locator('.lv-card')).toHaveCount(10);
   const locked = page.locator('.lv-card.locked');
-  await expect(locked).toHaveCount(7);
+  await expect(locked).toHaveCount(8);
   await expect(locked.nth(0)).toContainText('Finish THE AWAKENING to unlock');
   await expect(locked.nth(1)).toContainText('Finish VERTICALITY to unlock');
   await expect(locked.nth(2)).toContainText('Finish MOMENTUM to unlock');
   await expect(locked.nth(6)).toContainText('Finish BLOCKFALL to unlock');
+  await expect(locked.nth(7)).toContainText('Finish CORRUPTED CORE to unlock');
+  await expect(locked.nth(7)).toContainText('Finish CORRUPTED CORE to unlock');
   await expect(locked.nth(0).locator('.lock')).toBeVisible();
 
   const first = page.locator('.lv-card').first();

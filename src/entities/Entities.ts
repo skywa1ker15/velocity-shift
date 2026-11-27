@@ -12,6 +12,8 @@ import type RAPIER from '@dimforge/rapier3d-compat';
 import {
   quatFromAxisAngle,
   quatFromEuler,
+  quatMul,
+  quatRotate,
   quatRotateInv,
   v3,
   type Quat,
@@ -26,11 +28,14 @@ import type {
   BoostDef,
   CollapseDef,
   EntityDef,
+  FieldDef,
   GravityDef,
   HazardDef,
+  ImpulseDef,
   JumpPadDef,
   MoverDef,
   RotatorDef,
+  StructureDef,
 } from '../levels/types';
 
 export const TELEGRAPH_TIME = 0.75;
@@ -42,7 +47,14 @@ export interface EntityCtx {
   time: number;
   dt: number;
   kill(reason: string): void;
-  signal(kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn', e: Entity): void;
+  signal(
+    kind: 'boost' | 'jumppad' | 'collapse' | 'telegraph' | 'hazardWarn' | 'impulse' | 'structure' | 'fall',
+    e: Entity,
+  ): void;
+  /** Ask for gravity along (dx,dy,dz) at `scale` this tick (Phase G gravity fields). */
+  gravity?(dx: number, dy: number, dz: number, scale: number, priority: number): void;
+  /** Another entity by its `id` (fields linked to structures). */
+  byId?(id: string): Entity | undefined;
 }
 
 const tmp = v3();
@@ -51,9 +63,10 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /** Is the player's body overlapping the (optionally rotated) box? Slightly forgiving. */
 export function playerTouchesBox(pl: MovementController, c: V3, h: V3, q?: Quat, grow = 0.75): boolean {
-  tmp.x = pl.pos.x - c.x;
-  tmp.y = pl.pos.y + pl.height / 2 - c.y;
-  tmp.z = pl.pos.z - c.z;
+  bodyCentre(pl, tmp);
+  tmp.x -= c.x;
+  tmp.y -= c.y;
+  tmp.z -= c.z;
   if (q) quatRotateInv(q, tmp, tmp);
   return (
     Math.abs(tmp.x) < h.x + cfg.radius * grow &&
@@ -64,11 +77,28 @@ export function playerTouchesBox(pl: MovementController, c: V3, h: V3, q?: Quat,
 
 /** Is the player's centre inside the axis-aligned volume? */
 export function playerInVolume(pl: MovementController, p: Vec3Tuple, s: Vec3Tuple): boolean {
+  const c = bodyCentre(pl, tmpC);
   return (
-    Math.abs(pl.pos.x - p[0]) < s[0] / 2 &&
-    Math.abs(pl.pos.y + pl.height / 2 - p[1]) < s[1] / 2 &&
-    Math.abs(pl.pos.z - p[2]) < s[2] / 2
+    Math.abs(c.x - p[0]) < s[0] / 2 && Math.abs(c.y - p[1]) < s[1] / 2 && Math.abs(c.z - p[2]) < s[2] / 2
   );
+}
+
+const tmpC = v3();
+const tmpU = v3();
+/** The middle of the player's body: half their height "up" from the feet, whichever way up is. */
+export function bodyCentre(pl: MovementController, out: V3): V3 {
+  const h = pl.height / 2;
+  if (!pl.framed) {
+    out.x = pl.pos.x;
+    out.y = pl.pos.y + h;
+    out.z = pl.pos.z;
+    return out;
+  }
+  const u = pl.upAxis(tmpU);
+  out.x = pl.pos.x + u.x * h;
+  out.y = pl.pos.y + u.y * h;
+  out.z = pl.pos.z + u.z * h;
+  return out;
 }
 
 export abstract class Entity {
@@ -406,7 +436,7 @@ export class Hazard extends Entity {
 }
 
 // ---------------------------------------------------------------------------------------
-abstract class Volume<D extends BoostDef | JumpPadDef | GravityDef> extends Entity {
+abstract class Volume<D extends BoostDef | JumpPadDef | GravityDef | ImpulseDef> extends Entity {
   declare readonly def: D;
   protected cooldown = 0;
   constructor(def: D) {
@@ -435,12 +465,19 @@ export class Boost extends Volume<BoostDef> {
 }
 
 export class JumpPad extends Volume<JumpPadDef> {
+  /** Falling speed just before touching (spring floors). */
+  private lastFall = 0;
   update(ctx: EntityCtx) {
+    const vy = ctx.player.upSpeed;
+    if (!playerInVolume(ctx.player, this.def.p, this.def.s)) this.lastFall = Math.min(0, vy);
+    else if (vy < this.lastFall) this.lastFall = vy;
     this.cooldown -= ctx.dt;
     this.warn = Math.max(0, this.warn - ctx.dt * 2);
     if (this.cooldown <= 0 && playerInVolume(ctx.player, this.def.p, this.def.s)) {
       const v = this.def.v;
-      ctx.player.launch(v[0], v[1], v[2], true);
+      // a spring floor answers how hard you came down on it
+      const up = this.def.spring ? Math.max(v[1], -this.lastFall * this.def.spring) : v[1];
+      ctx.player.launch(v[0], up, v[2], true);
       this.cooldown = 0.4;
       this.warn = 1;
       ctx.signal('jumppad', this);
@@ -451,6 +488,251 @@ export class JumpPad extends Volume<JumpPadDef> {
 export class GravityZone extends Volume<GravityDef> {
   update(ctx: EntityCtx) {
     if (playerInVolume(ctx.player, this.def.p, this.def.s)) ctx.player.gravityScale = this.def.scale;
+  }
+}
+
+// ----- Phase G: dynamic world ------------------------------------------------------------
+
+const ease = (k: StructureEase, t: number) =>
+  k === 'linear' ? t : k === 'in' ? t * t : k === 'out' ? 1 - (1 - t) * (1 - t) : smooth(t);
+type StructureEase = 'linear' | 'smooth' | 'in' | 'out';
+const _sq: Quat = { x: 0, y: 0, z: 0, w: 1 };
+const _sq2: Quat = { x: 0, y: 0, z: 0, w: 1 };
+
+/**
+ * A rigid structure on one kinematic body, posed by a deterministic motion program (see
+ * StructureDef). The pose is a pure function of the time since it started, so respawns replay it
+ * exactly. Riders are carried by the physics world's surface tracking; collision always matches
+ * what is drawn, and is switched off once a fallen structure has dropped away.
+ */
+export class Structure extends Entity {
+  declare readonly def: StructureDef;
+  private body!: RAPIER.RigidBody;
+  private handles: number[] = [];
+  private q0: Quat;
+  private p0 = v3();
+  /** 0 idle, 1 telegraphing, 2 moving, 3 falling, 4 gone */
+  stage = 0;
+  private t = 0;
+  private readonly total: number;
+  /** Seconds since the motion program began (for effects). */
+  progress = 0;
+  /** 0..1 how far through the current program step (camera framing, audio). */
+  moving = 0;
+
+  constructor(def: StructureDef) {
+    super(def);
+    this.p0.x = this.p.x = def.p[0];
+    this.p0.y = this.p.y = def.p[1];
+    this.p0.z = this.p.z = def.p[2];
+    this.q0 = def.r ? quatFromEuler(def.r[0], def.r[1], def.r[2]) : { x: 0, y: 0, z: 0, w: 1 };
+    this.q = { ...this.q0 };
+    this.total = def.steps.reduce((a, st) => a + st.t, 0);
+    this.active = !def.on;
+    this.savePrev();
+  }
+  get warnTime() {
+    return Math.max(this.def.fall !== undefined || this.def.warn ? TELEGRAPH_TIME : 0, this.def.warn ?? 0);
+  }
+  init(phys: PhysicsWorld) {
+    this.body = phys.addKinematicBody(this.p, this.q);
+    for (const part of this.def.parts) {
+      const lq = part.r ? quatFromEuler(part.r[0], part.r[1], part.r[2]) : { x: 0, y: 0, z: 0, w: 1 };
+      this.handles.push(
+        phys.addBoxToBody(
+          this.body,
+          { x: part.p[0], y: part.p[1], z: part.p[2] },
+          half(part.s),
+          lq,
+          part.wallrun ?? false,
+          this,
+          this.index,
+        ),
+      );
+    }
+  }
+  /** Pose at `tau` seconds into the program (after delay and telegraph). */
+  private pose(tau: number) {
+    let q = { ...this.q0 };
+    let px = this.p0.x,
+      py = this.p0.y,
+      pz = this.p0.z;
+    let left = tau;
+    if (this.def.loop && this.total > 0) left = tau % this.total;
+    this.moving = 0;
+    for (const st of this.def.steps) {
+      if (left <= 0) break;
+      const f = st.t > 0 ? Math.min(1, left / st.t) : 1;
+      const k = ease(st.ease ?? 'smooth', f);
+      if (f < 1) this.moving = k;
+      if (st.rot) {
+        quatFromAxisAngle(st.rot[0], st.rot[1], st.rot[2], (st.rot[3] * Math.PI * k) / 180, _sq);
+        q = quatMul(_sq, q, { x: 0, y: 0, z: 0, w: 1 });
+      }
+      if (st.move) {
+        px += st.move[0] * k;
+        py += st.move[1] * k;
+        pz += st.move[2] * k;
+      }
+      left -= st.t;
+    }
+    this.p.x = px;
+    this.p.y = py;
+    this.p.z = pz;
+    this.q = q;
+  }
+  update(ctx: EntityCtx, phys: PhysicsWorld) {
+    this.savePrev();
+    if (!this.active || this.stage === 4) return;
+    if (this.stage === 0) {
+      this.stage = this.warnTime > 0 ? 1 : 2;
+      this.t = 0;
+      if (this.stage === 1) ctx.signal('telegraph', this);
+    }
+    this.t += ctx.dt;
+    const start = this.warnTime + (this.def.delay ?? 0);
+    if (this.stage === 1) {
+      this.warn = Math.min(1, this.t / Math.max(0.01, this.warnTime));
+      if (this.t >= start) {
+        this.stage = 2;
+        this.warn = 0;
+        ctx.signal('structure', this);
+      }
+    }
+    if (this.stage >= 2) {
+      const tau = this.t - start;
+      this.progress = tau;
+      this.pose(Math.max(0, tau));
+      if (this.def.fall !== undefined && !this.def.loop && tau > this.total) {
+        // drop away under ordinary gravity, tumbling about the last turn's axis
+        const f = tau - this.total;
+        if (this.stage === 2) {
+          this.stage = 3;
+          ctx.signal('fall', this);
+        }
+        this.p.y -= 0.5 * 14 * f * f;
+        const last = [...this.def.steps].reverse().find((st) => st.rot)?.rot ?? [1, 0, 0, 0];
+        quatFromAxisAngle(last[0], last[1], last[2], 0.35 * f * f * Math.sign(last[3] || 1), _sq);
+        quatMul(_sq, this.q, _sq2);
+        this.q = { x: _sq2.x, y: _sq2.y, z: _sq2.z, w: _sq2.w };
+        if (f > this.def.fall) {
+          this.stage = 4;
+          this.visible = false;
+          for (const h of this.handles) phys.setEnabled(h, false);
+        }
+      }
+    }
+    phys.moveBody(this.body, this.p, this.q);
+  }
+  override onEvent(event: string, time: number) {
+    if (this.def.on === event && !this.active) {
+      this.active = true;
+      this.startTime = time;
+      this.stage = 0;
+    }
+  }
+  override reset(phys: PhysicsWorld, full: boolean) {
+    // every respawn replays the set-piece from the start (fair, and exactly the same each time)
+    this.active = !this.def.on;
+    this.stage = 0;
+    this.t = 0;
+    this.warn = 0;
+    this.progress = 0;
+    this.visible = true;
+    for (const h of this.handles) phys.setEnabled(h, true);
+    this.p.x = this.p0.x;
+    this.p.y = this.p0.y;
+    this.p.z = this.p0.z;
+    this.q = { ...this.q0 };
+    this.savePrev();
+    phys.moveBody(this.body, this.p, this.q);
+    void full;
+  }
+}
+
+/**
+ * Gravity field (see FieldDef). Asks the gravity director for a direction each tick the player is
+ * inside. Linked fields live in their structure's frame, so they turn and move with it.
+ */
+export class GravityField extends Entity {
+  declare readonly def: FieldDef;
+  private h: V3;
+  /** Current pull direction (world, unit) — for effects. */
+  readonly dir = v3(0, -1, 0);
+  /** The player is inside (for effects and audio). */
+  inside = false;
+  constructor(def: FieldDef) {
+    super(def);
+    this.h = half(def.s);
+    this.p.x = def.p[0];
+    this.p.y = def.p[1];
+    this.p.z = def.p[2];
+    const d = def.dir ?? [0, -1, 0];
+    const l = Math.hypot(d[0], d[1], d[2]) || 1;
+    this.dir.x = d[0] / l;
+    this.dir.y = d[1] / l;
+    this.dir.z = d[2] / l;
+    this.savePrev();
+  }
+  init() {}
+  update(ctx: EntityCtx) {
+    this.savePrev();
+    this.inside = false;
+    if (!this.active || !ctx.gravity) return;
+    const d = this.def;
+    const pl = ctx.player;
+    let host: Entity | undefined;
+    if (d.mode === 'structure' && d.link) {
+      host = ctx.byId?.(d.link);
+      if (!host || !host.visible) return;
+      // the field box lives in the structure's frame
+      this.q = host.q;
+      quatRotate(host.q, { x: d.p[0], y: d.p[1], z: d.p[2] }, this.p);
+      this.p.x += host.p.x;
+      this.p.y += host.p.y;
+      this.p.z += host.p.z;
+      if (!playerTouchesBox(pl, this.p, this.h, host.q, 0)) return;
+      quatRotate(host.q, { x: 0, y: -1, z: 0 }, this.dir);
+    } else {
+      if (!playerInVolume(pl, d.p, d.s)) return;
+      if (d.mode === 'well') {
+        const c = d.center ?? d.p;
+        const up = pl.upAxis(tmp);
+        const cx = c[0] - (pl.pos.x + up.x * pl.height * 0.5),
+          cy = c[1] - (pl.pos.y + up.y * pl.height * 0.5),
+          cz = c[2] - (pl.pos.z + up.z * pl.height * 0.5);
+        const l = Math.hypot(cx, cy, cz);
+        if (l < 0.5) return;
+        this.dir.x = cx / l;
+        this.dir.y = cy / l;
+        this.dir.z = cz / l;
+      } else if (d.mode === 'spin' && d.axis) {
+        const base = d.dir ?? [0, -1, 0];
+        quatFromAxisAngle(d.axis[0], d.axis[1], d.axis[2], (d.speed ?? 0.5) * ctx.time, _sq);
+        quatRotate(_sq, { x: base[0], y: base[1], z: base[2] }, this.dir);
+        const l = Math.hypot(this.dir.x, this.dir.y, this.dir.z) || 1;
+        this.dir.x /= l;
+        this.dir.y /= l;
+        this.dir.z /= l;
+      }
+    }
+    this.inside = true;
+    ctx.gravity(this.dir.x, this.dir.y, this.dir.z, d.scale ?? 1, d.priority ?? 1);
+  }
+}
+
+/** Impulse volume (rings, slingshot exits, launch gates). Works in the air. */
+export class Impulse extends Volume<ImpulseDef> {
+  update(ctx: EntityCtx) {
+    this.cooldown -= ctx.dt;
+    this.warn = Math.max(0, this.warn - ctx.dt * 2);
+    if (this.cooldown <= 0 && playerInVolume(ctx.player, this.def.p, this.def.s)) {
+      const d = this.def.dir;
+      ctx.player.impulse(d[0], d[1], d[2], this.def.add, this.def.min);
+      this.cooldown = 0.5;
+      this.warn = 1;
+      ctx.signal('impulse', this);
+    }
   }
 }
 
@@ -472,5 +754,11 @@ export function createEntity(def: EntityDef): Entity {
       return new JumpPad(def);
     case 'gravity':
       return new GravityZone(def);
+    case 'field':
+      return new GravityField(def);
+    case 'structure':
+      return new Structure(def);
+    case 'impulse':
+      return new Impulse(def);
   }
 }

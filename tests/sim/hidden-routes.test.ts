@@ -15,6 +15,28 @@ const pt = ([x, y, z, act, r]: P): BotPoint => ({ p: [x, y, z], act, r });
 
 /** level → [hidden shortcut id, shard on the hidden route, the line that takes it] */
 const routes: Record<string, [string, string, P[]]> = {
+  shiftpoint: [
+    'sp-hidden',
+    's3',
+    [
+      [0, 0, 6],
+      [0, 0, 40],
+      [0, 3, 60, undefined, 3],
+      [0, 3, 97, undefined, 3],
+      [0, 0, 106, undefined, 2],
+      [0, 0, 127],
+      [7.5, 0, 150, undefined, 2],
+      [7.5, 0, 190, undefined, 2],
+      [4, -4, 201, undefined, 2],
+      [-0.2, -4, 203.5],
+      [-1.8, -4, 206, 'j', 0.8],
+      [-3.5, -2.8, 210.5, undefined, 1.2],
+      [-3.5, -2.8, 216, 'wj', 1.2],
+      [-1, -1, 219, 'j', 1.5],
+      [2.2, -0.6, 224.5],
+      [2.2, -0.6, 228],
+    ],
+  ],
   momentum: [
     'mo-hidden',
     'm1',

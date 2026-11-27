@@ -20,6 +20,9 @@ const VIEW_FOV = 68;
 /** The vertical FOV that 90° horizontal gives at 16:9. */
 const REF_VERTICAL = (2 * Math.atan(Math.tan((90 * DEG) / 2) * (9 / 16))) / DEG;
 
+const _lv = { x: 0, y: 0, z: 0 };
+const _o = new THREE.Vector3();
+
 export class CameraRig {
   /** World-space eye position (also used as audio listener / FX anchor). */
   readonly eye = new THREE.Vector3();
@@ -133,8 +136,13 @@ export class CameraRig {
     baseFov: number,
     m: MotionProfile,
     gait: Gait,
+    frame?: THREE.Quaternion,
   ) {
     this.t += dt;
+    // Phase G: a turned gravity frame. Everything below is built "upright" in the player's frame
+    // and rotated into the world at the end; velocity effects read frame-local velocity.
+    const framed = !!frame && Math.abs(frame.w) < 0.9999999;
+    const lv = framed && pl.framed ? pl.toLocal(pl.vel, _lv) : pl.vel;
     this.landK = m.landing;
     this.fxK = m.intensity;
     const p = pl.pos,
@@ -148,7 +156,8 @@ export class CameraRig {
     }
     // step-ups snap the feet by up to 0.35 m in one tick: absorb the snap and ease it out
     const jump = fy - this.lastFeetY;
-    if (pl.grounded && Math.abs(jump) > 0.035 && Math.abs(jump) < 0.6) this.stepOffset -= jump;
+    // (in a turned frame the feet move legitimately as the body rotates: no step smoothing)
+    if (!framed && pl.grounded && Math.abs(jump) > 0.035 && Math.abs(jump) < 0.6) this.stepOffset -= jump;
     this.lastFeetY = fy;
     this.stepOffset = damp(this.stepOffset, 0, 16, dt);
     this.feet.set(fx, fy + this.stepOffset, fz);
@@ -194,7 +203,7 @@ export class CameraRig {
     // subtle positional inertia: the view leans a little against sideways velocity
     const sy = Math.sin(yaw),
       cy = Math.cos(yaw);
-    const lateral = pl.vel.x * cy - pl.vel.z * sy; // velocity along camera-right
+    const lateral = lv.x * cy - lv.z * sy; // velocity along camera-right
     this.leanX = damp(this.leanX, clamp(-lateral * 0.0035, -0.05, 0.05), 8, dt);
 
     // roll: away from the wall while wall-running, slight tilt in slides, tiny strafe lean
@@ -228,7 +237,7 @@ export class CameraRig {
     const lean = gait.moving ? clamp(-gait.accel, -1, 1) * 0.012 * m.headBob : 0;
     const stepRoll = gait.moving ? Math.sin(gait.phase) * 0.0035 * bobAmt : 0;
     // a long fall: wind flutters the view very slightly (no shake, no aim change)
-    const fallK = !pl.grounded ? clamp((-pl.vel.y - 12) / 18, 0, 1) : 0;
+    const fallK = !pl.grounded ? clamp((-lv.y - 12) / 18, 0, 1) : 0;
     const flutter = fallK > 0 ? Math.sin(this.t * 23) * 0.002 * fallK * fallK * m.headBob : 0;
     const lroll = this.landRoll.update(0, dt) * 0.03 * m.roll;
     cam.rotation.set(
@@ -236,12 +245,19 @@ export class CameraRig {
       yaw + shx * 0.5,
       this.roll + shr + stepRoll + flutter + lroll,
     );
+    if (framed) {
+      // eye offsets (height, bob, lean) were built upright around the feet: turn them with the frame
+      _o.set(this.eye.x - fx, this.eye.y - fy, this.eye.z - fz).applyQuaternion(frame!);
+      this.eye.set(fx + _o.x, fy + _o.y, fz + _o.z);
+      cam.position.copy(this.eye);
+      cam.quaternion.premultiply(frame!);
+    }
 
     // FOV: widens with speed, punches on dash
     // the setting is a horizontal FOV at 16:9 (the usual convention); three.js wants vertical
     const vertical = (2 * Math.atan(Math.tan((baseFov * DEG) / 2) * (9 / 16))) / DEG;
     // total speed counts (a long fall widens the view too); slides and wall-runs add a touch more
-    const speed3 = Math.hypot(speed, pl.grounded ? 0 : pl.vel.y * 0.7);
+    const speed3 = Math.hypot(speed, pl.grounded ? 0 : lv.y * 0.7);
     const k = clamp((speed3 - cfg.runSpeed) / (25 - cfg.runSpeed), 0, 1);
     const stateFov = sliding ? 2.5 + slideK * 2 : onWall ? 2 : 0;
     const punch = clamp(this.fovPunch.update(0, dt), -4, 12);

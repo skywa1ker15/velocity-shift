@@ -67,8 +67,9 @@ export class Gait {
     if (speed > 0.8) {
       const sy = Math.sin(yaw),
         cy = Math.cos(yaw);
-      const vf = -(pl.vel.x * sy + pl.vel.z * cy);
-      const vr = pl.vel.x * cy - pl.vel.z * sy;
+      const lv = pl.framed ? pl.toLocal(pl.vel, _lv) : pl.vel;
+      const vf = -(lv.x * sy + lv.z * cy);
+      const vr = lv.x * cy - lv.z * sy;
       const l = Math.hypot(vf, vr) || 1;
       this.dirF = damp(this.dirF, vf / l, 10, dt);
       this.dirR = damp(this.dirR, vr / l, 10, dt);
@@ -97,3 +98,5 @@ export class Gait {
     this.lastStep = 0;
   }
 }
+
+const _lv = { x: 0, y: 0, z: 0 };

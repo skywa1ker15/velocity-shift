@@ -8,7 +8,7 @@
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { Quat, V3 } from '../core/math';
-import { quatRotate, quatRotateInv, v3 } from '../core/math';
+import { quatRotate, quatRotateInv, v3, vset } from '../core/math';
 import type { CollisionWorld, MoveResult, RayHit } from '../movement/types';
 import { movementConfig as cfg } from '../movement/movementConfig';
 import { SIM_DT } from '../core/loop';
@@ -54,6 +54,42 @@ export class PhysicsWorld implements CollisionWorld {
   private t1 = v3();
   private t2 = v3();
   private t3 = v3();
+
+  /**
+   * Gravity frame (Phase G). While set, every CollisionWorld query is expressed in the player's
+   * frame: positions, deltas and normals are local, with +Y pointing against gravity. The movement
+   * controller sets it around its own tick only; everything else always sees world space.
+   */
+  private frame: Quat | null = null;
+  private readonly up = v3(0, 1, 0);
+  private upIsY = true;
+  private fW = v3();
+  private fD = v3();
+  private fN = v3();
+  private fP = v3();
+
+  setFrame(q: Quat | null) {
+    this.frame = q;
+    if (q) quatRotate(q, Y_AXIS, this.up);
+  }
+  private toW(v: V3, out: V3) {
+    return quatRotate(this.frame!, v, out);
+  }
+  private toL(v: V3, out: V3) {
+    return quatRotateInv(this.frame!, v, out);
+  }
+  /** Point the character controller (and its capsule) along `up`; cheap when unchanged. */
+  private orient(framed: boolean) {
+    if (framed) {
+      this.kcc.setUp(this.up);
+      this.player.setRotation(this.frame!);
+      this.upIsY = false;
+    } else if (!this.upIsY) {
+      this.kcc.setUp(Y_AXIS);
+      this.player.setRotation(IDENTITY);
+      this.upIsY = true;
+    }
+  }
 
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: 0, z: 0 });
@@ -148,6 +184,8 @@ export class PhysicsWorld implements CollisionWorld {
   }
 
   move(feet: V3, height: number, dx: number, dy: number, dz: number, snap: boolean, out: MoveResult): void {
+    if (this.frame) return this.moveFramed(feet, height, dx, dy, dz, snap, out);
+    this.orient(false);
     this.setHeight(height);
     const lift = this.lift;
     const t = this.tmp;
@@ -210,6 +248,131 @@ export class PhysicsWorld implements CollisionWorld {
     if (snap || dy <= 0) this.probeGround(out, lift, snap ? cfg.snapDistance : 0.02);
   }
 
+  /** The same collide-and-slide as `move`, with the capsule standing along the frame's up. */
+  private moveFramed(
+    feet: V3,
+    height: number,
+    dx: number,
+    dy: number,
+    dz: number,
+    snap: boolean,
+    out: MoveResult,
+  ) {
+    this.orient(true);
+    this.setHeight(height);
+    const lift = this.lift;
+    const up = this.up;
+    const fw = this.toW(feet, this.fW);
+    const c = lift + (height - lift) / 2;
+    this.player.setTranslation({ x: fw.x + up.x * c, y: fw.y + up.y * c, z: fw.z + up.z * c });
+    const d = this.fD;
+    d.x = dx;
+    d.y = dy;
+    d.z = dz;
+    this.toW(d, d);
+    this.kcc.computeColliderMovement(this.player, d, undefined, QUERY_GROUPS);
+    let mw = this.kcc.computedMovement();
+    // In a turned frame a capsule can come to rest inside the contact skin of a second surface
+    // (a floor that became a wall beside it); the controller then refuses the whole step instead of
+    // sliding. If a step makes almost no progress against a contact, ease the capsule out of the
+    // skin along that contact and take the step again.
+    const want = Math.hypot(d.x, d.y, d.z);
+    if (want > 1e-4) {
+      const got = Math.hypot(mw.x, mw.y, mw.z);
+      if (got < want * 0.2 && this.kcc.numComputedCollisions() > 0) {
+        const col = this.kcc.computedCollision(0);
+        if (col) {
+          const nx = col.normal1.x,
+            ny = col.normal1.y,
+            nz = col.normal1.z;
+          // only push off surfaces that are not the ground we stand on
+          if (Math.abs(nx * up.x + ny * up.y + nz * up.z) < 0.7) {
+            const nudge = 0.03;
+            const t0 = this.player.translation();
+            this.player.setTranslation({ x: t0.x + nx * nudge, y: t0.y + ny * nudge, z: t0.z + nz * nudge });
+            this.kcc.computeColliderMovement(this.player, d, undefined, QUERY_GROUPS);
+            const m2 = this.kcc.computedMovement();
+            mw = { x: m2.x + nx * nudge, y: m2.y + ny * nudge, z: m2.z + nz * nudge } as typeof mw;
+          }
+        }
+      }
+    }
+    const m = this.toL(mw as V3, this.fD);
+    out.x = feet.x + m.x;
+    out.y = feet.y + m.y;
+    out.z = feet.z + m.z;
+    out.grounded = false;
+    out.hitWall = false;
+    out.hitCeiling = false;
+    out.wallNx = out.wallNy = out.wallNz = 0;
+    out.groundId = -1;
+    out.gnx = 0;
+    out.gny = 1;
+    out.gnz = 0;
+    const n = this.kcc.numComputedCollisions();
+    let best = 0.72;
+    for (let i = 0; i < n; i++) {
+      const col = this.kcc.computedCollision(i);
+      if (!col) continue;
+      const nl = this.toL(col.normal1 as V3, this.fN);
+      if (nl.y < -0.5) out.hitCeiling = true;
+      else if (Math.abs(nl.y) < best) {
+        best = Math.abs(nl.y);
+        out.hitWall = true;
+        out.wallNx = nl.x;
+        out.wallNy = nl.y;
+        out.wallNz = nl.z;
+      }
+    }
+    if (out.hitWall) {
+      const tl = Math.hypot(out.wallNx, out.wallNz);
+      if (tl > 0.5) {
+        const tx = -out.wallNz / tl,
+          tz = out.wallNx / tl;
+        const want = dx * tx + dz * tz;
+        const got = m.x * tx + m.z * tz;
+        if (got * want < 0 || Math.abs(got) > Math.abs(want) + 1e-5) {
+          const fix = (got * want < 0 ? 0 : want) - got;
+          out.x += tx * fix;
+          out.z += tz * fix;
+        }
+      }
+    }
+    if (snap || dy <= 0) {
+      // ground probe: a ball cast "down" the frame
+      const pr = PROBE_R;
+      const reach = lift + (snap ? cfg.snapDistance : 0.02);
+      const o = this.fW;
+      o.x = out.x;
+      o.y = out.y + lift + pr;
+      o.z = out.z;
+      const ly = o.y;
+      this.toW(o, o);
+      const down = { x: -up.x, y: -up.y, z: -up.z };
+      const hit = this.world.castShape(
+        o,
+        IDENTITY,
+        down,
+        this.probe,
+        0,
+        reach,
+        true,
+        undefined,
+        QUERY_GROUPS,
+        this.player,
+      );
+      if (!hit) return;
+      const nl = this.toL(hit.normal1 as V3, this.fN);
+      if (nl.y < WALKABLE_NY) return;
+      out.grounded = true;
+      out.y = ly - hit.time_of_impact - pr;
+      out.groundId = hit.collider.handle;
+      out.gnx = nl.x;
+      out.gny = nl.y;
+      out.gnz = nl.z;
+    }
+  }
+
   private probeGround(out: MoveResult, lift: number, down: number) {
     const pr = PROBE_R;
     const t = this.tmp;
@@ -250,6 +413,16 @@ export class PhysicsWorld implements CollisionWorld {
     out: RayHit,
   ): boolean {
     const r = this.ray;
+    if (this.frame) {
+      const o = this.toW(vset(this.fW, ox, oy, oz), this.fW);
+      const d = this.toW(vset(this.fD, dx, dy, dz), this.fD);
+      ox = o.x;
+      oy = o.y;
+      oz = o.z;
+      dx = d.x;
+      dy = d.y;
+      dz = d.z;
+    }
     r.origin.x = ox;
     r.origin.y = oy;
     r.origin.z = oz;
@@ -262,6 +435,12 @@ export class PhysicsWorld implements CollisionWorld {
     out.nx = hit.normal.x;
     out.ny = hit.normal.y;
     out.nz = hit.normal.z;
+    if (this.frame) {
+      const nl = this.toL(vset(this.fN, out.nx, out.ny, out.nz), this.fN);
+      out.nx = nl.x;
+      out.ny = nl.y;
+      out.nz = nl.z;
+    }
     out.id = hit.collider.handle;
     out.wallrun = this.meta.get(out.id)?.wallrun ?? false;
     return true;
@@ -278,12 +457,23 @@ export class PhysicsWorld implements CollisionWorld {
     t.x = x;
     t.y = y + lift + (height - lift) / 2;
     t.z = z;
-    return (
-      this.world.intersectionWithShape(t, IDENTITY, shape, undefined, QUERY_GROUPS, this.player) === null
-    );
+    let rot = IDENTITY;
+    if (this.frame) {
+      this.toW(t, t);
+      rot = this.frame;
+    }
+    return this.world.intersectionWithShape(t, rot, shape, undefined, QUERY_GROUPS, this.player) === null;
   }
 
   overlapPush(feet: V3, height: number, out: V3): number {
+    if (!this.frame) return this.overlapPushW(feet, height, out, IDENTITY);
+    const fw = this.toW(feet, this.fP);
+    const r = this.overlapPushW(fw, height, out, this.frame, true);
+    this.toL(out, out);
+    return r;
+  }
+
+  private overlapPushW(feet: V3, height: number, out: V3, rot: Quat, resolve = false): number {
     const lift = Math.min(cfg.stepHeight, Math.max(0, height - 2 * cfg.radius));
     let shape = this.fitShapes.get(height);
     if (!shape) {
@@ -291,9 +481,11 @@ export class PhysicsWorld implements CollisionWorld {
       this.fitShapes.set(height, shape);
     }
     const t = this.tmp;
-    const cx = feet.x,
-      cy = feet.y + lift + (height - lift) / 2,
-      cz = feet.z;
+    const ch = lift + (height - lift) / 2;
+    const upv = rot === IDENTITY ? Y_AXIS : quatRotate(rot, Y_AXIS, this.t3);
+    const cx = feet.x + upv.x * ch,
+      cy = feet.y + upv.y * ch,
+      cz = feet.z + upv.z * ch;
     t.x = cx;
     t.y = cy;
     t.z = cz;
@@ -301,14 +493,32 @@ export class PhysicsWorld implements CollisionWorld {
     let best = 0;
     let overlapped = false;
     const d = this.t3;
+    // framed only: static penetration (a capsule that turned in place with gravity) is pushed out
+    const dep = this.dep;
+    dep.x = dep.y = dep.z = 0;
+    let depen = false;
+    const centre = this.depC;
+    centre.x = cx;
+    centre.y = cy;
+    centre.z = cz;
     this.world.intersectionsWithShape(
       t,
-      IDENTITY,
+      rot,
       shape,
       (c) => {
         overlapped = true;
+        if (resolve) {
+          const ct = c.contactShape(shape, centre, rot, 0);
+          if (ct && ct.distance < 0) {
+            const k = -ct.distance + 0.004;
+            dep.x += ct.normal1.x * k;
+            dep.y += ct.normal1.y * k;
+            dep.z += ct.normal1.z * k;
+            depen = true;
+          }
+        }
         if (!this.meta.get(c.handle)?.motion) return true;
-        this.surfaceDelta(c.handle, feet, d);
+        this.surfaceDeltaW(c.handle, feet, d);
         // only the part of its motion that drives INTO the player pushes; sliding past does not drag
         t.x = cx;
         t.y = cy;
@@ -341,10 +551,26 @@ export class PhysicsWorld implements CollisionWorld {
       QUERY_GROUPS,
       this.player,
     );
-    return !overlapped ? 0 : best > 0 ? 2 : 1;
+    if (!overlapped) return 0;
+    if (best > 0) return 2;
+    if (depen) {
+      out.x = dep.x;
+      out.y = dep.y;
+      out.z = dep.z;
+      return 3;
+    }
+    return 1;
   }
+  private dep = v3();
+  private depC = v3();
 
   surfaceDelta(id: number, p: V3, out: V3): void {
+    if (!this.frame) return this.surfaceDeltaW(id, p, out);
+    this.surfaceDeltaW(id, this.toW(p, this.fP), out);
+    this.toL(out, out);
+  }
+
+  private surfaceDeltaW(id: number, p: V3, out: V3): void {
     out.x = out.y = out.z = 0;
     const m = this.meta.get(id)?.motion;
     if (!m) return;
@@ -362,5 +588,6 @@ export class PhysicsWorld implements CollisionWorld {
 }
 
 const DOWN = { x: 0, y: -1, z: 0 };
+const Y_AXIS = { x: 0, y: 1, z: 0 };
 const PROBE_R = cfg.radius * 0.8;
 const WALKABLE_NY = Math.cos((cfg.maxSlopeDeg * Math.PI) / 180);

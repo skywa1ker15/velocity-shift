@@ -200,6 +200,32 @@ export const levels: LevelEntry[] = [
     },
     load: () => import('./data/core'),
   },
+  {
+    meta: {
+      id: 'shiftpoint',
+      index: 9,
+      name: 'SHIFT POINT',
+      subtitle: 'Level 9',
+      description:
+        'The world will not hold still. Halls turn, walls become floors, bridges fall and gravity reverses.',
+      env: 'shiftpoint',
+      music: 'momentum',
+      spawn: { p: [0, 0, -4], yaw: Math.PI },
+      killY: -60,
+      bounds: [
+        [-70, -60, -30],
+        [70, 80, 560],
+      ],
+      medals: { bronze: 82, silver: 59, gold: 46, platinum: 40 },
+      objectives: [
+        { id: 'sp-clean', kind: 'noDeath', label: 'Finish without dying' },
+        { id: 'sp-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
+        { id: 'sp-gems', kind: 'allCollectibles', label: 'Collect all three shards' },
+      ],
+      seed: 101,
+    },
+    load: () => import('./data/shiftpoint'),
+  },
 ];
 
 export const levelById = (id: string): LevelEntry | undefined => levels.find((l) => l.meta.id === id);

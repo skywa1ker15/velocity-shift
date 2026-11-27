@@ -10,6 +10,7 @@ import { BreakableView, type BreakInfo } from '../render/BreakableView';
 import { SlashFx } from '../fx/SlashFx';
 import { SLASHES, SwordPhase } from '../gameplay/Sword';
 import * as THREE from 'three';
+import type { Entity } from '../entities/Entities';
 import { AudioEngine } from '../audio/AudioEngine';
 import { CameraRig } from '../camera/CameraRig';
 import { Body } from '../character/Body';
@@ -60,6 +61,12 @@ const WHITE = new THREE.Color(1, 1, 1);
 const WOOD_CHIP = new THREE.Color(0xd99a5c);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
+const damp = (a: number, b: number, rate: number, dt: number) => a + (b - a) * (1 - Math.exp(-rate * dt));
+
+const _gq0 = new THREE.Quaternion();
+const _eq = new THREE.Quaternion();
+const _gq1 = new THREE.Quaternion();
+const _lvel = { x: 0, y: 0, z: 0 };
 
 export class Game {
   readonly save = new SaveSystem();
@@ -77,6 +84,11 @@ export class Game {
   private stickers!: Stickers;
   private streaks!: Streaks;
   private sparks = new Sparks(420);
+  private debrisLook: { shape: 'cube' | 'shard' | 'slab'; amount: number; push: number } = {
+    shape: 'slab',
+    amount: 1,
+    push: 3,
+  };
   private dust = new THREE.Color(0xf6f2e6);
   private sparkCol = new THREE.Color();
   private slideLook: FxLook['slide'] = { colors: [], size: 1, rate: 1, life: 0.3 };
@@ -353,6 +365,7 @@ export class Game {
     this.dust.set(fx.dust);
     this.slideLook = fx.slide;
     this.slash.setLook(fx.trail);
+    this.debrisLook = fx.debris;
     this.streaks.setLook(env.streak, fx.darkStreaks);
     document.documentElement.style.setProperty(
       '--uni',
@@ -1016,6 +1029,25 @@ export class Game {
         audio.collapse();
         this.rig.shake(Math.max(0, 0.5 - d * 0.02));
       }
+      // Phase G
+      if (kind === 'collapse' || kind === 'fall') this.breakApart(entity, d);
+      else if (kind === 'impulse') {
+        audio.impulse();
+        this.rig.onDash();
+        this.flowMove();
+        _v.set(entity.p.x, entity.p.y, entity.p.z);
+        const dir = (entity.def as { dir: [number, number, number] }).dir;
+        this.sparks.emit(_v, _n.set(dir[0], dir[1], dir[2]).normalize(), this.count(26), this.accent, {
+          speed: 9,
+          spread: 0.6,
+          life: 0.5,
+          size: 0.08,
+          gravity: 0,
+        });
+      } else if (kind === 'structure' && d < 120) {
+        audio.structure();
+        this.rig.shake(Math.max(0, 0.35 - d * 0.004) * this.motion.shake);
+      }
     });
     sim.events.on('sword', ({ action, kind, fromSheath }) => {
       if (action === 'draw') audio.swordDraw();
@@ -1271,6 +1303,9 @@ export class Game {
       inp.jumpPressed = inp.dashPressed = inp.slidePressed = inp.attackPressed = inp.swordPressed = false;
     }
     sim.tick(inp);
+    // Phase G: a gravity round trip folded its leftover turn into the look; keep the view still
+    const fix = sim.gravity.takeYawFix();
+    if (fix) this.input.setLook(this.input.yaw + fix, this.input.pitch);
     if (sim.stats.started && !sim.stats.finished) this.recorder.sample(sim.player);
   }
 
@@ -1325,7 +1360,7 @@ export class Game {
    */
   private updateBrace(pl: Simulation['player']) {
     let brace = 0;
-    if (!pl.grounded && pl.vel.y < -4 && this.sim) {
+    if (!pl.grounded && !pl.framed && pl.vel.y < -4 && this.sim) {
       const p = pl.pos;
       if (this.sim.physics.raycast(p.x, p.y + 0.1, p.z, 0, -1, 0, 6, this.groundRay)) {
         const tti = Math.max(0, this.groundRay.dist - 0.1) / Math.max(1, -pl.vel.y);
@@ -1334,6 +1369,52 @@ export class Game {
     }
     this.rig.brace = brace;
     this.body.brace = brace;
+  }
+
+  /** Phase G: a collapsing piece or a falling structure breaks into this universe's debris. */
+  private breakApart(entity: Entity, dist: number) {
+    if (!this.view || dist > 140) return;
+    const look = this.debrisLook;
+    const parts =
+      'parts' in entity.def
+        ? (entity.def.parts as { p: [number, number, number]; s: [number, number, number] }[])
+        : [
+            {
+              p: [0, 0, 0] as [number, number, number],
+              s: (entity.def as { s: [number, number, number] }).s,
+            },
+          ];
+    for (const part of parts) {
+      _v.set(part.p[0], part.p[1], part.p[2]).applyQuaternion(
+        _eq.set(entity.q.x, entity.q.y, entity.q.z, entity.q.w),
+      );
+      _v.add(_w.set(entity.p.x, entity.p.y, entity.p.z));
+      const vol = part.s[0] * part.s[1] * part.s[2];
+      const n = this.count(Math.min(40, 6 + Math.sqrt(vol) * 2) * look.amount);
+      this.view.spawnDebris(_v, part.s, n, look.shape, look.push);
+      this.sparks.emit(_v, UP, this.count(10), this.dust, {
+        speed: 3,
+        spread: 1.2,
+        life: 0.9,
+        size: 0.12,
+        gravity: 2,
+      });
+    }
+  }
+
+  /** Phase G: the world turning around the player — a short FOV breath, a low rumble, a cue. */
+  private turnFov = 0;
+  private lastTurning = 0;
+  private gravityFeedback(sim: Simulation, dt: number) {
+    const turning = sim.gravity.turning;
+    if (turning > 0.35 && this.lastTurning <= 0.05) {
+      // a new turn starts: the view breathes out a touch, the world groans
+      this.rig.shake(0.12 * this.motion.shake);
+      this.audio.gravityShift(Math.min(1, turning / Math.PI));
+    }
+    this.lastTurning = turning;
+    const target = Math.min(1, turning / 1.2) * this.motion.speedFov;
+    this.turnFov = damp(this.turnFov, target, target > this.turnFov ? 10 : 3, dt);
   }
 
   private frameLevel(alpha: number, dt: number) {
@@ -1346,7 +1427,24 @@ export class Game {
     const kick = this.shiftKick * this.shiftKick * (this.motion.speedLines > 0 ? 1 : 0.3);
     this.gait.update(pl, dt, yaw);
     this.updateBrace(pl);
-    this.rig.update(pl, alpha, dt, yaw, pitch, this.settings.fov + kick * 4, this.motion, this.gait);
+    // the gravity frame, interpolated between ticks like everything else
+    const gf = sim.gravity.prevFrame,
+      cf = pl.frame;
+    _gq0.set(gf.x, gf.y, gf.z, gf.w);
+    _gq1.set(cf.x, cf.y, cf.z, cf.w);
+    _gq0.slerp(_gq1, alpha);
+    this.gravityFeedback(sim, dt);
+    this.rig.update(
+      pl,
+      alpha,
+      dt,
+      yaw,
+      pitch,
+      this.settings.fov + kick * 4 + this.turnFov * 6,
+      this.motion,
+      this.gait,
+      _gq0,
+    );
     this.body.update(pl, this.rig.feet, this.gait, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
@@ -1363,10 +1461,12 @@ export class Game {
       fwdZ = -Math.cos(yaw) * cp;
     const rtX = Math.cos(yaw),
       rtZ = -Math.sin(yaw);
-    const vf = pl.vel.x * fwdX + pl.vel.y * fwdY + pl.vel.z * fwdZ;
-    const vr = pl.vel.x * rtX + pl.vel.z * rtZ;
-    const vu = pl.vel.y * cp - (pl.vel.x * -Math.sin(yaw) + pl.vel.z * -Math.cos(yaw)) * sp_;
-    const speed3 = Math.hypot(speed, pl.vel.y);
+    // (speed lines read velocity in the player's own frame, whichever way gravity points)
+    const lv = pl.toLocal(pl.vel, _lvel);
+    const vf = lv.x * fwdX + lv.y * fwdY + lv.z * fwdZ;
+    const vr = lv.x * rtX + lv.z * rtZ;
+    const vu = lv.y * cp - (lv.x * -Math.sin(yaw) + lv.z * -Math.cos(yaw)) * sp_;
+    const speed3 = Math.hypot(speed, lv.y);
     const den = Math.max(vf, speed3 * 0.45, 1);
     this.impactFx = Math.max(0, this.impactFx - dt * 4.5);
     const impact = this.impactFx > this.dashFx;

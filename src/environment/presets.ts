@@ -391,4 +391,30 @@ envPresets.core = derive(E.momentum, 'core', {
   },
 });
 
+envPresets.shiftpoint = derive(E.momentum, 'shiftpoint', {
+  sky: {
+    ...E.momentum.sky,
+    top: 0x1a0638,
+    horizon: 0xff5ab8,
+    bottom: 0x2a0a4a,
+    sun: 0xfff0a0,
+    sunDir: [0.2, 0.4, -0.9],
+    sunGlow: 0.7,
+    clouds: 0.4,
+    cloudColor: 0xb05aff,
+    stars: 0.5,
+    aurora: 0.7,
+    auroraColor: 0x3dffd2,
+  },
+  fog: { color: 0x5a1a7a, density: 0.0035, base: -40, falloff: 0.02 },
+  light: { sun: 0xffe8d0, sunIntensity: 2.5, skyAmbient: 0xc08aff, groundAmbient: 0x2a1040, ambient: 1.5 },
+  palette: {
+    base: 0xd8c8f0,
+    alt: 0x7a5ad8,
+    dark: 0x1c0e30,
+    accent: 0x3dffd2,
+    glass: 0xfff0ff,
+    hazard: 0xff3d6e,
+  },
+});
 export const getEnv = (id: string): EnvPreset => envPresets[id] ?? envPresets.training;

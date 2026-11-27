@@ -1,4 +1,4 @@
-import type { V3 } from '../core/math';
+import type { Quat, V3 } from '../core/math';
 
 /** One simulation tick of player input. Deterministic: the same stream always gives the same run. */
 export interface InputFrame {
@@ -108,8 +108,11 @@ export interface CollisionWorld {
   /**
    * Is a solid overlapping the capsule? 0 = no, 1 = yes, 2 = yes and it is moving into the player:
    * `out` then holds the shove for this tick. Staying overlapped means being crushed.
+   * 3 (gravity frames only) = overlapping static geometry; `out` is the push back out.
    */
   overlapPush(feet: V3, height: number, out: V3): number;
+  /** Gravity frame for the queries that follow (null = world). Optional: tests may use a plain world. */
+  setFrame?(q: Quat | null): void;
 }
 
 export interface MoveEvents {

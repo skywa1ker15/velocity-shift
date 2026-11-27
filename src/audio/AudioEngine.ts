@@ -329,6 +329,23 @@ export class AudioEngine {
     this.burst('sfx', 'lowpass', 900, 80, 0.7, 0.55, 0.6);
     this.tone('sfx', 'sine', 70, 28, 0.6, 0.5);
   }
+  /** Phase G: gravity turning (0..1 = how far): a falling-then-rising sweep under a soft whoosh. */
+  gravityShift(amount: number) {
+    const k = 0.5 + 0.5 * amount;
+    this.tone('sfx', 'sine', 220, 90, 0.22 * k + 0.1, 0.22);
+    this.tone('sfx', 'triangle', 90, 330, 0.35 * k + 0.15, 0.14, 0.12);
+    this.burst('sfx', 'bandpass', 400, 2400, 0.5 * k + 0.2, 0.18, 0.9);
+  }
+  /** Phase G: an impulse ring or slingshot exit: a bright rising snap. */
+  impulse() {
+    this.tone('sfx', 'sawtooth', 300, 1400, 0.2, 0.12);
+    this.tone('sfx', 'sine', 600, 2400, 0.22, 0.16, 0.03);
+  }
+  /** Phase G: a structure starts to move — a deep groan of metal and stone. */
+  structure() {
+    this.tone('sfx', 'sawtooth', 55, 42, 0.9, 0.16);
+    this.burst('sfx', 'lowpass', 300, 120, 0.9, 0.25, 0.5);
+  }
   checkpoint() {
     this.tone('ui', 'sine', 660, 660, 0.12, 0.2);
     this.tone('ui', 'sine', 990, 990, 0.22, 0.2, 0.09);

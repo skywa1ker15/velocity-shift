@@ -1,0 +1,226 @@
+/**
+ * LEVEL 9 — SHIFT POINT
+ * The Dynamic World showcase (Phase G). Calm stretches separate the set-pieces:
+ *   B  the Turning Hall: the building rolls 90° while you sprint through it (gravity follows its floor)
+ *   C  the Wall Run: sideways gravity — the wall becomes the floor
+ *   D  the Falling Bridge: sections drop behind you while a tower topples across the chasm
+ *   E  Gravity Chaos: a slingshot ring through low gravity, then reverse gravity — run the ceiling
+ *   F  the carousel and the finish
+ * Home universe: Psyche. Every moving or falling element telegraphs first; collapses are timed to
+ * fall behind a 7 m/s runner, not only a sprinter.
+ */
+import { LevelBuilder } from '../LevelBuilder';
+import type { LevelData } from '../types';
+
+const D = -4; // bridge deck
+const E = -6; // after the slingshot
+const H = 4; // after the ceiling run
+
+export function build(): LevelData {
+  const b = new LevelBuilder();
+
+  // ===== A. Approach (calm) =================================================================
+  b.spawnCheckpoint(0, 0, -4);
+  b.plat(0, 0, 2, 14, 20); // -8..12
+  b.plat(0, 0, 30, 8, 36); // 12..48
+  b.checkpoint(0, 0, 20);
+  b.prompt([0, 1.5, 22], [8, 4, 8], 'forward', 'Glowing arrows show which way gravity will pull. Trust them');
+
+  // ===== B. The Turning Hall ================================================================
+  // a 52 m hall that rolls a quarter turn about the course's axis while you run through it;
+  // its own gravity field keeps you on its floor all the way round
+  const hall = { p: [0, 3, 74] as [number, number, number] };
+  const ribs = [];
+  for (let z = -24; z <= 24; z += 6)
+    ribs.push({
+      p: [0, 4.3, z] as [number, number, number],
+      s: [8, 0.6, 1] as [number, number, number],
+      mat: 'accent' as const,
+    });
+  b.entity({
+    type: 'structure',
+    id: 'hall',
+    on: 'hall',
+    p: hall.p,
+    warn: 0.9,
+    steps: [{ t: 2.4, rot: [0, 0, 1, 90] }],
+    parts: [
+      { p: [0, -3.5, 0], s: [6, 1, 52] },
+      { p: [3.5, 0.5, 0], s: [1, 9, 52], mat: 'base' },
+      { p: [-3.5, 0.5, 0], s: [1, 9, 52], mat: 'base' },
+      ...ribs,
+    ],
+  });
+  b.entity({ type: 'field', mode: 'structure', link: 'hall', p: [0, 0, 0], s: [6, 7, 52] });
+  b.checkpoint(0, 0, 44);
+  b.trigger([0, 1.5, 51], [6, 4, 3], 'hall');
+  b.prompt(
+    [0, 1.5, 44],
+    [8, 4, 4],
+    'forward',
+    'The hall is turning. Keep running: its floor stays your floor',
+  );
+
+  // ===== C. The Wall Run =====================================================================
+  b.plat(0, 0, 114, 8, 28); // 100..128 (meets the hall's end)
+  b.checkpoint(0, 0, 106);
+  b.checkpoint(0, 0, 123);
+  b.solid({ p: [8, 2, 162], s: [1, 20, 70], mat: 'alt', wallrun: false }); // wall face at x = 7.5, z 127..197
+  b.entity({ type: 'field', mode: 'dir', dir: [1, 0, 0], p: [3.5, 2, 162], s: [8, 20, 66] }); // z 129..195
+  b.collectible('s1', 6.6, 0.4, 166);
+  b.prompt(
+    [0, 1.5, 116],
+    [8, 4, 6],
+    'forward',
+    'Run off the edge: gravity turns sideways and the wall becomes the floor',
+  );
+  b.plat(4, D, 212, 12, 30); // 197..227, x -2..10
+  b.checkpoint(4, D, 201);
+  // hidden: wall-run the lit wall on the left, kick off and double jump onto the beam over the lane
+  b.wall(-4.2, D - 1.2, 210.5, 0.8, 8, 15); // 203..218, face x = -3.8
+  b.plat(2.2, D + 3.4, 225.5, 3, 12, { h: 0.6, mat: 'alt', dress: false }); // 219.5..231.5, x 0.7..3.7
+  b.strip([-3.75, D + 0.1, 201.5], [0.06, 0.06, 2.4], 1);
+  b.collectible('s3', 2.2, D + 4.7, 226);
+  b.shortcut('sp-hidden', [2.2, D + 4.9, 225.5], [4, 3, 11], true);
+
+  // ===== D. The Falling Bridge ================================================================
+  // the sections collapse in turn behind you (timed for a 7 m/s run as well as a sprint) while a
+  // tower ahead topples across the chasm and becomes the next bridge
+  b.checkpoint(0, D, 215); // lined up with the bridge, with room to reach speed
+  b.trigger([4, D + 1.5, 226], [12, 4, 2], 'bridge');
+  // seven sections from the deck's edge to the fallen tower (no gaps); section i drops 1.4 + 0.86 i s
+  // after the trigger, i.e. just behind a 7 m/s runner and well behind a sprinter
+  for (let i = 0; i < 7; i++)
+    b.entity({
+      type: 'collapse',
+      on: 'bridge',
+      p: [0, D - 0.3, 230 + i * 6],
+      s: [6, 0.6, 5.8],
+      delay: 1.4 + 0.86 * i,
+    });
+  b.entity({
+    type: 'structure',
+    id: 'tower',
+    on: 'bridge',
+    p: [0, D - 2, 272],
+    warn: 1.0,
+    delay: 0.6,
+    steps: [{ t: 1.6, rot: [1, 0, 0, 90], ease: 'in' }],
+    parts: [
+      { p: [0, 10, 0], s: [4, 20, 4] },
+      { p: [0, 20.4, 0], s: [5, 0.8, 5], mat: 'accent' },
+    ],
+  });
+  b.plat(0, D - 3, 272, 6, 6, { h: 30, mat: 'dark', dress: false }); // the tower's footing
+  b.prompt([4, D + 1.5, 212], [12, 4, 8], 'forward', 'The bridge will not hold. Sprint, and watch the tower');
+  b.plat(0, D, 305, 12, 22); // 294..316
+  b.checkpoint(0, D, 298);
+
+  // ===== E. Gravity Chaos ========================================================================
+  // a slingshot ring throws you through a low-gravity gap...
+  b.entity({ type: 'impulse', p: [0, D + 2, 324], s: [6, 6, 3], dir: [0, 1, 1], add: 4, min: 22 });
+  b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, D, 337], s: [14, 16, 40] }); // z 317..357
+  b.plat(0, E, 366, 12, 24); // 354..378
+  b.checkpoint(0, E, 358);
+  b.prompt([0, D + 1.5, 306], [12, 4, 6], 'jump', 'Jump through the ring: low gravity carries you over');
+  // ...then gravity reverses: fall UP onto the ceiling, run along it, drop back down when it ends
+  b.solid({ p: [0, 14.5, 401], s: [10, 1, 42], mat: 'alt' }); // underside y = 14, z 380..422
+  b.entity({ type: 'field', mode: 'dir', dir: [0, 1, 0], p: [0, 4, 401], s: [12, 22, 42] }); // z 380..422
+  b.collectible('s2', 0, 13.0, 406);
+  b.prompt([0, E + 1.5, 368], [12, 4, 6], 'forward', 'Up is down. Run off the end and keep going');
+  b.plat(0, H, 440, 12, 28); // 426..454
+  b.checkpoint(0, H, 430);
+
+  // ===== F. Carousel and finish (calm control after the chaos) =======================================
+  b.plat(0, H, 468.5, 8, 8, { h: 20, mat: 'dark', dress: false }); // hub 464.5..472.5
+  b.entity({
+    type: 'rotator',
+    p: [0, H - 0.5, 468.5],
+    axis: [0, 1, 0],
+    speed: 0.3,
+    parts: [
+      { p: [9.5, 0, 0], s: [7, 1, 7] },
+      { p: [-9.5, 0, 0], s: [7, 1, 7] },
+      { p: [0, 0, 9.5], s: [7, 1, 7] },
+      { p: [0, 0, -9.5], s: [7, 1, 7] },
+      { p: [0, -0.25, 0], s: [20, 0.3, 0.6], mat: 'accent' },
+      { p: [0, -0.25, 0], s: [0.6, 0.3, 20], mat: 'accent' },
+    ],
+  });
+  b.plat(0, H, 493.5, 16, 22); // 482.5..504.5
+  b.finish(0, H, 497, 12);
+  b.gate(0, H, 504, 10, 8);
+
+  scenery(b);
+
+  b.bot(
+    [0, 0, 6],
+    [0, 0, 40],
+    // inside the hall: points on its rotation axis do not move as it turns
+    [0, 3, 60, undefined, 3],
+    [0, 3, 97, undefined, 3],
+    [0, 0, 106, undefined, 2],
+    [0, 0, 127],
+    [7.5, 0, 150, undefined, 2],
+    [7.5, 0, 190, undefined, 2],
+    [4, D, 205, undefined, 2],
+    [0, D, 222],
+    [0, D, 232],
+    [0, D, 262],
+    [0, D, 280],
+    [0, D, 300],
+    [0, D, 315.2, 'j', 0.8],
+    [0, E, 360, undefined, 3],
+    [0, E, 376],
+    [0, E, 379, undefined, 1.5],
+    [0, 14, 400, undefined, 3],
+    [0, 14, 421],
+    [0, H, 436, undefined, 3],
+    [0, H, 448.5, 'w2', 0.6],
+    [0, H, 453, 'j', 0.6],
+    [0, H, 459, undefined, 1.6],
+    [0, H, 461.3, 'j', 1],
+    [0, H, 468, 'w2', 0.6],
+    [0, H, 472, 'j', 0.6],
+    [0, H, 478, undefined, 1.6],
+    [0, H, 480.3, 'j', 1],
+    [0, H, 490],
+    [0, H, 497],
+  );
+  // destructibles beside the line
+  b.breakable('relic', 2.6, 0, 8);
+  b.breakable('column', -2.6, 0, 30);
+  b.breakable('relic', 2.6, 0, 112);
+  b.breakable('column', -2.6, 0, 120);
+  b.breakable('relic', 8, D, 215);
+  b.breakable('column', 9, D, 212);
+  b.breakable('relic', 3, D, 312);
+  b.breakable('column', -3, E, 370);
+  b.breakable('relic', 3, H, 446);
+  b.breakable('column', 4, H, 500);
+  return b.data;
+}
+
+function scenery(b: LevelBuilder) {
+  // impossible architecture: towers hanging at angles, rings, floating slabs
+  for (let i = 0; i < 18; i++) {
+    const side = i % 2 ? 1 : -1;
+    const z = -10 + i * 30;
+    b.decor('box', [side * (34 + (i % 3) * 10), 10 + (i % 4) * 8, z], [12, 50, 12], i % 3 ? 'base' : 'alt', {
+      r: [0.4 * side, i * 0.3, 0.6 * side],
+    });
+  }
+  for (let i = 0; i < 6; i++)
+    b.ring(i % 2 ? 40 : -40, 30, 40 + i * 85, 26, 1, [1.2, i * 0.5, 0.3], [0.02, 0.03, 0], 'accent', 0.6);
+  for (let i = 0; i < 40; i++)
+    b.shard(
+      ((i * 37) % 70) - 35,
+      ((i * 11) % 40) - 10,
+      i * 13,
+      1 + (i % 3) * 0.7,
+      i % 4 ? 'base' : 'accent',
+      0.8,
+    );
+  b.monolith(-150, -120, 300, 50, 400, 50, 'dark');
+  b.monolith(160, -120, 420, 50, 400, 50, 'dark');
+}

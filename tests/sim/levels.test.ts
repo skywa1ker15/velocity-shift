@@ -93,8 +93,8 @@ describe.each(levels.map((l) => [l.meta.id, l] as const))('level %s', (id, entry
   });
 });
 
-test('there are eight courses plus training, each with its own look and home universe', () => {
-  expect(levels.filter((l) => !l.meta.training)).toHaveLength(8);
+test('there are nine courses plus training, each with its own look and home universe', () => {
+  expect(levels.filter((l) => !l.meta.training)).toHaveLength(9);
   expect(levels.filter((l) => l.meta.training)).toHaveLength(1);
   expect(new Set(levels.map((l) => l.meta.env)).size).toBe(levels.length);
   for (const l of levels) expect(envPresets[l.meta.env], l.meta.id).toBeDefined();

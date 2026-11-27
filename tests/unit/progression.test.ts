@@ -237,6 +237,7 @@ describe('course achievements (Phase F)', () => {
         'faceted-done',
         'blockfall-done',
         'core-done',
+        'shiftpoint-done',
         'world-tour',
       ]),
     );
