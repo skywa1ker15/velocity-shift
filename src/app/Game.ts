@@ -17,7 +17,7 @@ import { Body } from '../character/Body';
 import { Gait } from '../character/Gait';
 import { FixedLoop, SIM_DT } from '../core/loop';
 import { getEnv, type EnvPreset } from '../environment/presets';
-import { Motes, Sparks, SpeedLines, Sprite, Stickers, Streaks } from '../fx/Fx';
+import { Motes, Sparks, Sprite, Stickers } from '../fx/Fx';
 import { worldUniforms } from '../render/WorldMaterial';
 import { Director } from '../multiverse/Director';
 import { Scenery } from '../multiverse/Scenery';
@@ -51,7 +51,7 @@ import { motionProfile, type MotionProfile, type Settings } from '../settings/se
 import { ui, type EvoHud } from './store';
 import { EvoView } from '../render/EvoView';
 import { ABILITIES, FLOW_NAMES, FLOW_TIERS, T as EVO_T, SYNERGIES } from '../evolution/abilities';
-import { KINDS, type Rarity } from '../evolution/collectibles';
+import { KINDS, type CollectibleKind, type Rarity } from '../evolution/collectibles';
 import type { Slot } from '../evolution/slots';
 
 const SLOT_FILES = import.meta.glob('../evolution/slots/*.json', { import: 'default' }) as Record<
@@ -64,7 +64,6 @@ const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, m
 /** Flow tier colours for the energy wisps (tier 1..4). */
 const FLOW_COLORS = [0x7ff3ff, 0x7ff3ff, 0x9dff7a, 0xffb547, 0xff5cf0];
 const FLOW_COLS = FLOW_COLORS.map((c) => new THREE.Color(c));
-const LOCK_COL = new THREE.Color(0x7ff3ff);
 
 type Mode = 'idle' | 'menu' | 'loading' | 'ready' | 'playing' | 'paused' | 'results';
 
@@ -97,9 +96,7 @@ export class Game {
   private loop: FixedLoop;
   private rig: CameraRig;
   private body: Body;
-  private lines: SpeedLines;
   private stickers!: Stickers;
-  private streaks!: Streaks;
   private sparks = new Sparks(420);
   private debrisLook: { shape: 'cube' | 'shard' | 'slab'; amount: number; push: number } = {
     shape: 'slab',
@@ -166,11 +163,9 @@ export class Game {
     this.rig = new CameraRig(this.renderer.camera, this.renderer.viewCamera);
     this.body = new Body(this.renderer.viewScene, this.renderer.scene);
     this.body.setMotion(this.motion);
-    this.lines = new SpeedLines();
     this.stickers = new Stickers(200);
-    this.streaks = new Streaks();
-    this.renderer.viewScene.add(this.lines.mesh, this.slash.group);
-    this.renderer.scene.add(this.stickers.mesh, this.sparks.points, this.streaks.mesh);
+    this.renderer.viewScene.add(this.slash.group);
+    this.renderer.scene.add(this.stickers.mesh, this.sparks.points);
     this.ghost = new GhostPlayer(0xffffff);
     this.renderer.scene.add(this.ghost.group);
     // rebuilt courses: best times, medals and ghosts set on an old layout no longer apply
@@ -287,7 +282,6 @@ export class Game {
     this.trailStyle = cosmeticFor(s, 'trail').style ?? 0;
     const lines = cosmeticFor(s, 'lines');
     this.streak.set(lines.color || this.universeStreak || this.env.streak);
-    this.lines.setColor(this.streak.getHex());
     document.documentElement.dataset.hud = cosmeticFor(s, 'hud').id;
   }
 
@@ -295,7 +289,6 @@ export class Game {
     const w = window.innerWidth,
       h = window.innerHeight;
     this.renderer.resize(w, h);
-    this.lines.setAspect(w / Math.max(1, h));
     this.sparks.setViewportHeight(h);
     this.motes?.setViewportHeight(h);
   }
@@ -365,7 +358,6 @@ export class Game {
       // each transition leaves its own mark on the lens as it passes
       fx.flash = kind === 3 ? 0.9 : kind === 2 || kind === 5 ? 0.25 : 0.6;
       if (kind === 2 || def.id === 'corrupt') fx.burst = 1;
-      if (kind === 5 || def.id === 'voxel') fx.pixelBurst = 18;
       this.shiftKick = 1;
       this.audio.shift(kind);
     },
@@ -396,15 +388,13 @@ export class Game {
   /** Movement feedback drawn in the current universe's style. */
   private applyFxLook(id: UniverseId, env: EnvPreset) {
     const fx = FX[id];
-    if (!fx || !this.lines) return;
+    if (!fx) return;
     // brush universes use the true stroke colour (black ink); the rest keep the cosmetic tint
-    this.lines.setStyle(fx.lines, fx.lines === 4 ? env.streak : undefined);
     this.stickers.setMode(fx.sprites);
     this.dust.set(fx.dust);
     this.slideLook = fx.slide;
     this.slash.setLook(fx.trail);
     this.debrisLook = fx.debris;
-    this.streaks.setLook(env.streak, fx.darkStreaks);
     document.documentElement.style.setProperty(
       '--uni',
       '#' + env.palette.accent.toString(16).padStart(6, '0'),
@@ -439,6 +429,37 @@ export class Game {
   /** Tests / debugging: seed for the next Evolve runs (null = a fresh random one each load). */
   evoSeed: number | null = null;
 
+  private staminaWarned = false;
+  /** Stamina for the HUD; warns once (a soft tick) each time a sprint drags it below a quarter. */
+  private staminaFrac(pl: Simulation['player']) {
+    const f = pl.stamina / pl.cfg.staminaMax;
+    if (pl.sprinting && f < pl.cfg.staminaLow / pl.cfg.staminaMax && !this.staminaWarned) {
+      this.staminaWarned = true;
+      this.audio.staminaLow();
+    }
+    return Math.round(f * 200) / 200;
+  }
+
+  private ended = new Map<string, { row: EvoHud['effects'][number]; at: number }>();
+  private lastEffects = new Map<string, EvoHud['effects'][number]>();
+  /** Active effects for the HUD, with ones that just ran out kept for a moment as ended. */
+  private effectRows(now: EvoHud['effects']): EvoHud['effects'] {
+    const ids = new Set(now.map((e) => e.id));
+    for (const [id, row] of this.lastEffects)
+      if (!ids.has(id) && !this.ended.has(id) && row.max > 0) {
+        // timed effects show ENDED for a moment; a state with no clock (Overdrive) simply goes
+        this.ended.set(id, { row: { ...row, left: 0, ended: true }, at: this.time });
+        // and only the long power-ups chime as they run out (not every hover or shield blink)
+        if (row.max >= 3) this.audio.effectEnd();
+      }
+    this.lastEffects = new Map(now.map((e) => [e.id, e]));
+    for (const [id, e] of this.ended) if (ids.has(id) || this.time - e.at > 0.9) this.ended.delete(id);
+    return [
+      ...now.map((e) => ({ ...e, left: e.left < 0 ? -1 : Math.round(e.left * 10) / 10 })),
+      ...[...this.ended.values()].map((e) => e.row),
+    ];
+  }
+
   /** HUD snapshot for Evolve (the same object while nothing visible changed). */
   private evoHud(force: boolean): EvoHud | null {
     const evo = this.sim?.evo;
@@ -463,6 +484,7 @@ export class Game {
       streakFrac: Math.round(h.streakLeft * 20) / 20,
       mult: Math.round(h.mult * 10) / 10,
       lock: h.lock > 0,
+      effects: this.effectRows(h.effects),
       canSurge:
         evo.level('timeslip') > 0 &&
         (h.flux >= EVO_T.timeslipCost || (evo.level('chrono') > 0 && h.tier >= 3)),
@@ -484,6 +506,7 @@ export class Game {
     const store = () => ui.getState();
     evo.events.on('pickup', ({ index, kind }) => {
       const it = evo.items[index];
+      this.lastPickup = { kind, at: this.time };
       const def = KINDS[kind];
       const rank = RARITY_RANK[def.rarity];
       audio.evoPickup(rank);
@@ -492,16 +515,30 @@ export class Game {
         rank === 0 ? 0x7ff3ff : rank === 1 ? 0x9dff7a : rank === 2 ? 0xffb547 : 0xff5cf0,
       );
       this.glints(_v, this.count(rank === 0 ? 3 : 8 + rank * 4), 2 + rank, 0.3 + rank * 0.12, col, 1);
+      if (rank > 0)
+        this.stickers.spawn(_v, col, {
+          sprite: Sprite.ring,
+          frames: 2,
+          size: 1,
+          grow: 4 + rank,
+          life: 0.45,
+          normal: UP,
+        });
       if (rank >= 2 && (kind !== 'echo' || it.order === 3))
         store().call('rare', def.name.toUpperCase(), 'Rare find');
     });
     evo.events.on('upgrade', ({ id, level, evolution }) => {
       const def = ABILITIES[id];
       audio.evoUpgrade(!!evolution);
+      // say where it came from and what it now does
+      const src =
+        this.lastPickup && this.time - this.lastPickup.at < 0.05
+          ? KINDS[this.lastPickup.kind].name
+          : 'Full Flux';
       store().call(
         'evolve',
         evolution ? evolution.toUpperCase() : `${def.name.toUpperCase()} ${level}`,
-        evolution ? `${def.name} ${level}` : def.levels[level - 1],
+        `${src} → ${def.name} ${level}: ${def.levels[level - 1]}`,
       );
       this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, evolution ? 0.35 : 0.15);
     });
@@ -538,6 +575,12 @@ export class Game {
       this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.45);
     });
     evo.events.on('reflex', () => store().call('close', 'REFLEX', 'Time slows'));
+    evo.events.on('effect', ({ id, on }) => {
+      if (id === 'overcharge' && on) {
+        store().call('evolve', 'OVERCHARGE', 'Sprint costs no stamina · Flux ×1.5');
+        this.audio.evoBoost(true);
+      }
+    });
     evo.events.on('chain', ({ node, failed }) => {
       if (failed) store().call('close', 'CHAIN LOST', 'The echo faded: start again from the first node');
       else if (node > 0 && node < 4) store().call('rare', `ECHO ${node}/4`, 'Catch the next node');
@@ -597,8 +640,8 @@ export class Game {
     });
   }
 
+  private lastPickup: { kind: CollectibleKind; at: number } | null = null;
   private evoTint = -1;
-  private streakT = 0;
   private slowFx = 0;
   /**
    * The runner's look follows the run: trims glow brighter with each evolution stage, take the
@@ -619,35 +662,6 @@ export class Game {
     if (tint !== this.evoTint) {
       this.evoTint = tint;
       this.body.setAccent(tint >= 0 ? tint : cosmeticFor(this.save.data, 'suit').color);
-    }
-    // Overdrive and Momentum Lock: speed streaks pour past the view while they hold your speed
-    this.streakT -= dt;
-    if (
-      (evo.overdriveOn || evo.lockLeft > 0) &&
-      pl.speed > 12 &&
-      this.streakT <= 0 &&
-      this.settings.particles > 0
-    ) {
-      this.streakT = 0.05;
-      const e = this.rig.eye;
-      const fx0 = -Math.sin(this.input.yaw),
-        fz0 = -Math.cos(this.input.yaw);
-      const a = this.time * 53.7;
-      const side = Math.sin(a) > 0 ? 1 : -1;
-      _v.set(
-        e.x + fx0 * 3 - fz0 * side * (1.1 + Math.abs(Math.cos(a)) * 0.8),
-        e.y - 0.7 + Math.abs(Math.sin(a * 1.3)) * 1.6,
-        e.z + fz0 * 3 + fx0 * side * (1.1 + Math.abs(Math.cos(a)) * 0.8),
-      );
-      _w.set(pl.vel.x * 0.9, 0, pl.vel.z * 0.9);
-      this.stickers.spawn(_v, evo.lockLeft > 0 ? LOCK_COL : WHITE, {
-        sprite: Sprite.streak,
-        size: 0.35,
-        grow: 0.4,
-        life: 0.18,
-        vel: _w,
-        drag: 0.2,
-      });
     }
     this.wispT -= dt;
     if ((tier >= 1 || stage >= 2) && pl.speed > 5 && this.wispT <= 0 && this.settings.particles > 0) {
@@ -1007,6 +1021,21 @@ export class Game {
       ev = pl.events,
       audio = this.audio;
     this.wireEvo(sim);
+    // world events and mechanisms: a light cue and a sound so nothing changes unannounced
+    sim.events.on('event', ({ name }) => {
+      const vis = sim.director.dims.visual;
+      if (name.startsWith('ev-')) {
+        this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.18 + 0.25 * vis);
+        audio.evoShock();
+        ui.getState().call('flow', 'THE WORLD MOVES', 'Hold on: it is telegraphed');
+      } else if (name.startsWith('open-')) {
+        audio.evoBoost(true);
+        ui.getState().call('rare', 'BYPASS OPEN', 'The glass is gone: the clear lane is yours');
+      } else if (name.startsWith('off-')) {
+        audio.staminaEmpty();
+        ui.getState().call('rare', 'GATE POWERED DOWN', 'You cut its conduit');
+      }
+    });
     const feet = () => _v.set(pl.pos.x, pl.pos.y + 0.04, pl.pos.z);
     // a spot on the ground a moment ahead: where a first-person player actually sees a decal
     const ahead = (t: number) => _v.set(pl.pos.x + pl.vel.x * t, pl.pos.y + 0.04, pl.pos.z + pl.vel.z * t);
@@ -1049,6 +1078,17 @@ export class Game {
         gravity: 6,
       });
     });
+    ev.on('sprintStart', () => {
+      audio.sprint();
+      this.rig.onSprint();
+      this.staminaWarned = false;
+    });
+    ev.on('staminaEmpty', () => {
+      audio.staminaEmpty();
+      this.input.clearSprintLatch();
+      ui.getState().call('close', 'STAMINA EMPTY', 'Sprint is back once the bar refills past the mark');
+    });
+    ev.on('staminaBack', () => audio.staminaBack());
     ev.on('dash', () => {
       this.flowMove();
       audio.dash();
@@ -1778,38 +1818,21 @@ export class Game {
 
     const speed = pl.speed;
     this.dashFx = Math.max(0, this.dashFx - dt * 3.2);
-    // speed lines converge on where the motion is heading on screen
-    const cp = Math.cos(pitch),
-      sp_ = Math.sin(pitch);
+    const cp = Math.cos(pitch);
     const fwdX = -Math.sin(yaw) * cp,
-      fwdY = sp_,
       fwdZ = -Math.cos(yaw) * cp;
-    const rtX = Math.cos(yaw),
-      rtZ = -Math.sin(yaw);
-    // (speed lines read velocity in the player's own frame, whichever way gravity points)
+    // velocity in the player's own frame, whichever way gravity points
     const lv = pl.toLocal(pl.vel, _lvel);
-    const vf = lv.x * fwdX + lv.y * fwdY + lv.z * fwdZ;
-    const vr = lv.x * rtX + lv.z * rtZ;
-    const vu = lv.y * cp - (lv.x * -Math.sin(yaw) + lv.z * -Math.cos(yaw)) * sp_;
     const speed3 = Math.hypot(speed, lv.y);
-    const den = Math.max(vf, speed3 * 0.45, 1);
     this.impactFx = Math.max(0, this.impactFx - dt * 4.5);
-    const impact = this.impactFx > this.dashFx;
-    // a landing throws a short burst of lines up from the ground; a dash pulls them in from ahead
-    this.lines.update(
-      this.time,
-      dt,
-      Math.max(speed, speed3 * 0.9),
-      Math.max(this.dashFx, this.impactFx * 0.8, kick * 0.75, this.flowKick * 0.6),
-      this.motion.speedLines,
-      impact ? 0 : clamp((vr / den) * 0.55, -0.6, 0.6),
-      impact ? -1.15 : clamp((vu / den) * 0.75, -0.85, 0.85),
-      impact,
-    );
+    // speed reads through a steady edge vignette (the old flickering speed lines are gone)
+    this.renderer.universeFx.speed =
+      clamp((Math.max(speed, speed3 * 0.9) - 11.5) / 14, 0, 1) * this.motion.speedLines;
     this.carry.set(pl.vel.x * 0.8, 0, pl.vel.z * 0.8);
     worldUniforms.uPlayer.value.set(pl.pos.x, pl.pos.y + 1, pl.pos.z);
+    // visual intensity (Difficulty Director): the world's glow rises a little as the run builds
+    worldUniforms.uGlow.value = this.renderer.glowBase * (0.9 + 0.3 * sim.director.dims.visual);
     this.flowKick = Math.max(0, this.flowKick - dt * 2.6);
-    this.streaks.update(dt, pl.vel.x, pl.vel.y, pl.vel.z, this.motion.speedLines);
     if (this.mode === 'playing') this.watchNearMisses(sim);
     this.multiverse.update(dt, this.rig.eye, _n.set(fwdX, 0, fwdZ));
     this.scenery?.update();
@@ -2100,7 +2123,7 @@ export class Game {
       cam.updateProjectionMatrix();
     }
     this.view?.update(1, this.time, dt);
-    this.lines.update(this.time, dt, 0, 0, 0);
+    this.renderer.universeFx.speed = 0;
   }
 
   private pushHud(force: boolean) {
@@ -2150,6 +2173,9 @@ export class Game {
         sword: swordHud,
         restartHold: hold,
         dashMax: pl.cfg.dashCharges,
+        stamina: this.staminaFrac(pl),
+        sprinting: pl.sprinting,
+        exhausted: pl.exhausted,
         evo,
       },
     });
@@ -2210,6 +2236,7 @@ export class Game {
       attack: boolean;
       sword: boolean;
       surge: boolean;
+      burst: boolean;
     }> = {},
   ) {
     if (!this.sim) return;
@@ -2223,6 +2250,7 @@ export class Game {
         jumpHeld: !!keys.jump,
         jumpPressed: !!keys.jump && i === 0,
         sprint: true,
+        burst: !!keys.burst,
         slideHeld: !!keys.slide,
         slidePressed: !!keys.slide && i === 0,
         dashPressed: !!keys.dash && i === 0,
@@ -2259,6 +2287,7 @@ export class Game {
       attack: boolean;
       sword: boolean;
       surge: boolean;
+      burst: boolean;
     }>,
   ) {
     const sim = this.sim;
@@ -2279,6 +2308,7 @@ export class Game {
           jumpHeld: !!keys.jump,
           jumpPressed: !!keys.jump && i === 0,
           sprint: true,
+          burst: !!keys.burst,
           slideHeld: !!keys.slide,
           slidePressed: !!keys.slide && i === 0,
           dashPressed: false,

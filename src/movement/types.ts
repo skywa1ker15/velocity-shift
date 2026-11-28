@@ -8,7 +8,10 @@ export interface InputFrame {
   pitch: number; // radians, positive looks up
   jumpHeld: boolean;
   jumpPressed: boolean;
+  /** Run at full pace (always on for players; the autopilot sets it too). */
   sprint: boolean;
+  /** Sprint: the stamina-limited burst above full pace (the sprint key). */
+  burst: boolean;
   slideHeld: boolean;
   slidePressed: boolean;
   dashPressed: boolean;
@@ -27,6 +30,7 @@ export const emptyInput = (): InputFrame => ({
   jumpHeld: false,
   jumpPressed: false,
   sprint: false,
+  burst: false,
   slideHeld: false,
   slidePressed: false,
   dashPressed: false,
@@ -133,4 +137,9 @@ export interface MoveEvents {
   footstep: { wall: boolean; speed: number };
   bump: { speed: number };
   crushed: Record<string, never>;
+  sprintStart: Record<string, never>;
+  sprintEnd: Record<string, never>;
+  /** Stamina ran out: sprint is locked out until it recovers to `staminaRestart`. */
+  staminaEmpty: Record<string, never>;
+  staminaBack: Record<string, never>;
 }

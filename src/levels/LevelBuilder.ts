@@ -230,7 +230,14 @@ export class LevelBuilder {
     const id = o.id ?? `${kind}-${this.data.breakables.length}`;
     // hanging / floating kinds have no floor of their own (debris falls away)
     const floats =
-      kind === 'panel' || kind === 'sign' || kind === 'lantern' || kind === 'prism' || kind === 'seal';
+      kind === 'panel' ||
+      kind === 'sign' ||
+      kind === 'lantern' ||
+      kind === 'prism' ||
+      kind === 'seal' ||
+      kind === 'core' ||
+      kind === 'chain' ||
+      kind === 'mote';
     const ground = floats ? o.ground : (o.ground ?? y);
     this.data.breakables.push({ ...o, id, kind, p: [x, y, z], ground });
   }

@@ -113,6 +113,10 @@ export abstract class Entity {
   /** Extra visual offset used for the collapse fall animation. */
   drop = 0;
   active = true;
+  /** Director variants: an absent entity does nothing and is not drawn. */
+  present = true;
+  /** Switched off by its `off` event this attempt. */
+  switchedOff = false;
   protected startTime = 0;
 
   constructor(public readonly def: EntityDef) {

@@ -635,9 +635,18 @@ test('Evolve (real keyboard): V triggers Surge, which spends Flux and slows the 
   expect(s.surge).toBeGreaterThan(0);
   expect(s.world).toBeLessThan(0.6);
   expect(s.flux).toBeLessThan(before.flux - 25);
-  await expect(page.locator('.evo-meters .tm.surge')).toBeVisible();
+  // the active-effects panel lists it with its name, what it does and a running clock
+  const row = page.locator('.effects .fx-surge');
+  await expect(row).toBeVisible();
+  await expect(row.locator('.fx-name')).toHaveText(/surge/i);
+  const t0 = parseFloat((await row.locator('.fx-time').textContent()) ?? '0');
+  await page.waitForTimeout(500);
+  const t1 = parseFloat((await row.locator('.fx-time').textContent()) ?? '0');
+  expect(t1).toBeLessThan(t0);
   await page.waitForTimeout(3000);
   expect((await evoState(page)).world).toBe(1);
+  // once it runs out it leaves the panel (after a brief ENDED)
+  await expect(row).toHaveCount(0, { timeout: 3000 });
 });
 
 test('the ready card switches between Evolve and Pure: a Pure run has no collectibles and no Evolve HUD', async ({

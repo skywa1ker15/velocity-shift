@@ -133,14 +133,14 @@ vec3 mvNeonStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
     vec2 wc = floor(wg);
     vec2 wf = fract(wg);
     float lit = step(0.74, mvH2(wc + floor(vWPos.xz / 13.0)));
-    float flick = 0.75 + 0.25 * step(0.2, fract(uTime * 0.7 + mvH2(wc) * 9.0));
+    float flick = 0.75 + 0.25 * step(0.2, mvH2(wc + 17.0)); // steady: lit windows never flicker
     float win = step(0.18, wf.x) * step(wf.x, 0.82) * step(0.25, wf.y) * step(wf.y, 0.8) * lit * big * mvDetail(0.5);
     vec3 winCol = mix(vec3(1.0, 0.75, 0.4), neon, step(0.55, mvH2(wc + 5.0)));
     glow += winCol * win * flick * 0.7;
     // a vertical sign strip on some faces, with scrolling glyph blocks
     float stripX = mvFw * (0.2 + 0.6 * mvH2(floor(vWPos.xz / 9.0) + 2.0));
     float inStrip = (1.0 - smoothstep(0.32, 0.34, abs(mvU - stripX))) * step(7.0, mvFh) * step(0.55, mvH2(floor(vWPos.xz / 9.0) + 8.0));
-    float glyph = step(0.45, mvH2(vec2(floor(mvV * 1.4 + uTime * 0.8), floor(mvU * 6.0))));
+    float glyph = step(0.45, mvH2(vec2(floor(mvV * 1.4), floor(mvU * 6.0)))); // static glyphs
     glow += mix(mag, cyan, 1.0 - pick) * inStrip * (0.35 + glyph * 1.4) * mvDetail(0.3);
     c *= 1.0 - inStrip * 0.5;
     // light pooling at the foot of every wall from the wet street
@@ -248,9 +248,8 @@ vec3 mvSynthStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
     vec2 g = vWPos.xz / 2.0;
     float lines = max(mvLine(g.x, 0.02), mvLine(g.y, 0.02));
     float soft = max(mvLine(g.x, 0.09), mvLine(g.y, 0.09));
-    // pulses race down the grid toward the horizon
-    float pulse = smoothstep(0.75, 1.0, fract(vWPos.z * 0.035 - uTime * 0.45));
-    glow += cool * (lines * (1.1 + pulse * 1.6) + soft * 0.16) * gridFade;
+    // a steady grid (no bands sweeping along it)
+    glow += cool * (lines * 1.6 + soft * 0.16) * gridFade;
     c += cool * 0.04;
   } else if (abs(mvUp) < 0.5) {
     // walls: a magenta grid that burns hot at the foot and cools as it rises
@@ -259,9 +258,6 @@ vec3 mvSynthStyle(vec3 base, vec3 pal[7], vec3 sun, vec3 amb) {
     float lines = max(mvLine(mvU / 2.0, 0.02), mvLine(mvV / 2.0, 0.02));
     float soft = max(mvLine(mvU / 2.0, 0.08), mvLine(mvV / 2.0, 0.08));
     glow += wallC * (lines * (0.55 + heat * 1.3) + soft * 0.12) * gridFade * mvBox;
-    // horizontal scan bands slide up the towers
-    float bandS = smoothstep(0.92, 1.0, fract(vWPos.y * 0.09 - uTime * 0.22));
-    glow += hot * bandS * 0.3;
     c += hot * heat * 0.1;
   } else {
     c *= 0.5;
@@ -543,8 +539,8 @@ vec3 mvCompose(vec3 camPos) {
     c *= 1.0 - (1.0 - smoothstep(0.1, 0.9, d)) * step(0.0, d) * 0.85 * fade;
     c += vec3(1.6, 1.5, 1.4) * (1.0 - smoothstep(0.0, 0.12, ad)) * 2.5 * fade + seamCol * exp(-ad * 2.5) * 0.5 * fade;
   } else if (kind < 2.5) {
-    // glitch: no seam, just scan lines across whatever is mid-flip
-    c = mix(c, c.gbr * 1.3, step(ad, 1.5) * step(0.5, fract(gl_FragCoord.y * 0.25)) * 0.6);
+    // glitch: a soft hue-swapped band where the worlds meet (no scan lines)
+    c = mix(c, c.gbr * 1.3, (1.0 - smoothstep(0.0, 1.5, ad)) * 0.6 * fade);
   } else if (kind < 3.5) {
     c += vec3(1.0) * exp(-ad * 0.6) * 0.25 * fade;
   } else if (kind < 4.5) {

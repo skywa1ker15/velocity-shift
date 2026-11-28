@@ -75,7 +75,11 @@ export class Bot {
     // aim for the moment the blade's reach meets the object, given how fast we close on it
     const lead = Math.max(0, pl.speed) * 0.12;
     for (let i = 0; i < bs.length; i++) {
-      if (sim.broken[i]) continue;
+      // nothing that is not there, and no mechanisms (seals, chains, conduits): cutting those is a
+      // choice that changes the course, not something the line brushes past
+      const k = bs[i].kind;
+      if (sim.broken[i] || !sim.breakPresent[i] || k === 'glass' || k === 'chain' || k === 'conduit')
+        continue;
       const c = breakableCentre(bs[i]);
       const dx = c.x - pl.pos.x,
         dy = c.y - (pl.pos.y + pl.height - 0.16),
@@ -124,7 +128,13 @@ export class Bot {
     if (this.gating) {
       let next: Mover | undefined;
       for (const e of sim.entities)
-        if (e instanceof Mover && e.def.telegraph && e.p.z > pl.pos.z && (!next || e.p.z < next.p.z))
+        if (
+          e instanceof Mover &&
+          e.present &&
+          e.def.telegraph &&
+          e.p.z > pl.pos.z &&
+          (!next || e.p.z < next.p.z)
+        )
           next = e;
       const rest = next ? (next.def.rest ?? next.def.pause ?? 0) : 0;
       if (next && !(next.atRest && next.restLeft > rest - 0.1)) {

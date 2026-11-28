@@ -15,6 +15,7 @@
  * fall behind a 7 m/s runner, not only a sprinter.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 import { arc, faceAt, floorAt, type Lane } from '../profile';
 import { tube } from '../tubes';
@@ -251,9 +252,26 @@ export function build(): LevelData {
   b.entity({ type: 'field', mode: 'dir', dir: [0, -1, 0], scale: 0.4, p: [0, 20, 1005.5], s: [16, 40, 60] }); // z 975.5..1035.5
   b.prompt([0, LP + 1.5, 963.5], [12, 4, 6], 'jump', 'Through the ring, and fly');
   b.plat(0, H, 1035.5, 20, 40); // 1015.5..1055.5
-  b.finish(0, H, 1033.5, 14);
+  b.checkpoint(0, H, 1040);
   b.gate(0, H, 1054.5, 10, 8);
   b.ring(0, H + 14, 1033.5, 16, 0.8, [0, 0, 0], [0, 0, 0.25], 'accent', 1);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, H, 1055.5], { id: 'shi', level: 9 });
+  ext.roll(1);
+  ext.climbOver();
+  ext.runway();
+  ext.hurdles();
+  ext.laserGate();
+  ext.gaps();
+  ext.roll(-1, 180);
+  ext.wallChain();
+  ext.drawbridge();
+  ext.climbOver();
+  ext.collapseRun();
+  ext.doubleGap();
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -323,6 +341,7 @@ export function build(): LevelData {
     [0, H, 1027.5, undefined, 5],
     [0, H, 1033.5],
   );
+  b.bot(...ext.bot);
   // destructibles beside the line
   b.breakable('relic', 2.6, 0, 8);
   b.breakable('column', -2.6, 0, 30);

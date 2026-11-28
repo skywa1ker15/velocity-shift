@@ -4,7 +4,7 @@ import { getEnv } from '../../src/environment/presets';
 import { Director, FRONT_DONE, frontRadius } from '../../src/multiverse/Director';
 import { planRun } from '../../src/multiverse/plan';
 import { mv } from '../../src/multiverse/uniforms';
-import { FX, getUniverse, UNIVERSE_IDS, type UniverseId } from '../../src/multiverse/universes';
+import { getUniverse, UNIVERSE_IDS, type UniverseId } from '../../src/multiverse/universes';
 
 const LIB: UniverseId[] = [
   'anime',
@@ -319,6 +319,5 @@ describe('the Corrupt universe holds still (no flickering blocks)', () => {
       const u = getUniverse(id) as unknown as { screen: Record<string, number> };
       expect(Object.keys(u.screen)).not.toContain('glitch');
     }
-    expect(FX.corrupt.lines).toBe(1);
   });
 });

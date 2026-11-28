@@ -39,6 +39,10 @@ export interface HudState {
   restartHold: number;
   /** Dash charges available at most (Phase Dash raises it). */
   dashMax: number;
+  /** Sprint stamina 0..1, whether a sprint is on, and the lock-out after running dry. */
+  stamina: number;
+  sprinting: boolean;
+  exhausted: boolean;
   /** Evolve mode HUD (null in Pure). */
   evo: EvoHud | null;
 }
@@ -62,6 +66,11 @@ export interface EvoHud {
   mult: number;
   /** Momentum Lock is holding your speed. */
   lock: boolean;
+  /**
+   * Temporary effects running now (real durations from the simulation; left -1 = no clock), plus
+   * ones that just ended (shown briefly as ended).
+   */
+  effects: { id: string; name: string; desc: string; left: number; max: number; ended?: boolean }[];
   canSurge: boolean;
   abilities: {
     id: string;
@@ -165,6 +174,9 @@ export const useUi = create<UiState>((set) => ({
     sword: { phase: 0, combo: 0, idle: 0, cuts: 0, total: 0 },
     restartHold: -1,
     dashMax: 2,
+    stamina: 1,
+    sprinting: false,
+    exhausted: false,
     evo: null,
   },
   results: null,

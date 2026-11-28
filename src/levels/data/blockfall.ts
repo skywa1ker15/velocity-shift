@@ -9,6 +9,7 @@
  * (the Turnover); last, the climb, a jump and the drop back to back. Home universe: Voxel.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 import { arc, ceilingAt, faceAt, floorAt, type Lane } from '../profile';
 
@@ -129,8 +130,21 @@ export function build(): LevelData {
   faceAt(b, B, 431, Y0 + 5, Y0 + 11, 1);
   arc(b, B, Y0 + 5, 436, 5, -90, 0, 'inside');
   b.plat(6, Y0, 455, 14, 38); // 436..474
-  b.finish(6, Y0, 460, 12);
   b.gate(6, Y0, 473, 10, 8);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [6, Y0, 474], { id: 'blo', level: 7 });
+  ext.climbOver();
+  ext.gaps();
+  ext.climbOver();
+  ext.hurdles();
+  ext.laserGate();
+  ext.roll(1);
+  ext.wallChain();
+  ext.climbOver();
+  ext.collapseRun();
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -198,6 +212,7 @@ export function build(): LevelData {
     [6, Y0, 445, undefined, 2.5],
     [6, Y0, 460],
   );
+  b.bot(...ext.bot);
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('crate', 1.5, 0, 8);
   b.breakable('energy', -2.7, 0, 26, { scale: 0.7 });

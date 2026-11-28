@@ -50,6 +50,13 @@ export class MovementController {
 
   dashEnergy = this.cfg.dashCharges;
   canDoubleJump = true;
+  /** Sprint stamina (0..cfg.staminaMax), the lock-out after running dry, and whether a sprint is on. */
+  stamina = this.cfg.staminaMax;
+  exhausted = false;
+  sprinting = false;
+  /** Evolve: sprinting costs nothing while this is set (Overcharge). */
+  freeSprint = false;
+  private staminaIdle = 0;
   /** Evolve: give back one air jump (and the triple jump's extra, if owned). */
   refundAirJump() {
     this.canDoubleJump = true;
@@ -168,6 +175,9 @@ export class MovementController {
     this.height = this.cfg.standHeight;
     this.crouched = false;
     this.dashEnergy = this.cfg.dashCharges;
+    this.stamina = this.cfg.staminaMax;
+    this.exhausted = this.sprinting = false;
+    this.staminaIdle = 0;
     this.canDoubleJump = true;
     this.airJumpsLeft = this.extraAirJumps;
     this.coyote = this.wallCoyote = this.jumpBuffer = this.dashBuffer = this.dashCooldown = 0;
@@ -317,6 +327,7 @@ export class MovementController {
     // timers
     if (this.dashEnergy < this.cfg.dashCharges)
       this.dashEnergy = Math.min(this.cfg.dashCharges, this.dashEnergy + dt / this.cfg.dashRecharge);
+    this.updateStamina(inp, dt);
     this.dashCooldown -= dt;
     this.slideBoostCd -= dt;
     this.sinceDash += dt;
@@ -472,10 +483,11 @@ export class MovementController {
       this.crouched = false;
       this.height = this.cfg.standHeight;
     }
+    const fullPace = inp.sprint && inp.moveZ > 0;
     const top = this.crouched
       ? this.cfg.crouchSpeed
-      : inp.sprint && inp.moveZ > 0
-        ? this.cfg.sprintSpeed
+      : fullPace
+        ? this.cfg.sprintSpeed + (this.sprinting ? this.cfg.sprintBoost : 0)
         : this.cfg.runSpeed;
     if (this.hasWish) {
       let ns: number;
@@ -504,6 +516,43 @@ export class MovementController {
     if (this.stepDist > stride) {
       this.stepDist = 0;
       this.events.emit('footstep', { wall: false, speed });
+    }
+  }
+
+  /**
+   * Sprint and stamina. A sprint runs while the key is held, you are running forward on the ground
+   * and there is stamina; it drains, and refills after a short pause once you let go (also in the
+   * air). Running dry locks sprint out until the bar is back to `staminaRestart`.
+   */
+  private updateStamina(inp: InputFrame, dt: number) {
+    const c = this.cfg;
+    const st = this.state;
+    const running =
+      this.grounded && (st === MoveState.Run || st === MoveState.Sprint || st === MoveState.Idle);
+    const want = inp.burst && inp.sprint && inp.moveZ > 0 && !this.crouched;
+    // keeps going through the air between strides of a sprint, but only starts on the ground
+    const on = want && !this.exhausted && this.stamina > 0 && (running || (this.sprinting && !this.grounded));
+    if (on !== this.sprinting) {
+      this.sprinting = on;
+      this.events.emit(on ? 'sprintStart' : 'sprintEnd', {});
+    }
+    if (on) {
+      if (!this.freeSprint && this.grounded) this.stamina = Math.max(0, this.stamina - c.staminaDrain * dt);
+      this.staminaIdle = 0;
+      if (this.stamina <= 0) {
+        this.exhausted = true;
+        this.sprinting = false;
+        this.events.emit('sprintEnd', {});
+        this.events.emit('staminaEmpty', {});
+      }
+    } else {
+      this.staminaIdle += dt;
+      if (this.staminaIdle >= c.staminaDelay)
+        this.stamina = Math.min(c.staminaMax, this.stamina + c.staminaRegen * dt);
+      if (this.exhausted && this.stamina >= c.staminaRestart) {
+        this.exhausted = false;
+        this.events.emit('staminaBack', {});
+      }
     }
   }
 
@@ -982,7 +1031,13 @@ export class MovementController {
 
     if (st === MoveState.WallRun) {
       if (r.grounded) this.land(inp, 0);
-      else if (r.hitWall && r.wallNx * this.wallDir.x + r.wallNz * this.wallDir.z < -0.5)
+      // a wall straight ahead ends the run; a slanted contact normal (a numerical glancing touch
+      // on the very wall being run, which the solver sometimes reports) does not
+      else if (
+        r.hitWall &&
+        Math.abs(r.wallNy) < 0.3 &&
+        r.wallNx * this.wallDir.x + r.wallNz * this.wallDir.z < -0.5
+      )
         this.endWallRun(false);
       return;
     }

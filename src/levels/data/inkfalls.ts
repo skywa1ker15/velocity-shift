@@ -10,6 +10,7 @@
  * Home universe: Ink. Main line heads +Z down x = 0; a hidden ledge runs left of the chute.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 
 const C = -22; // the gorge floor
@@ -155,8 +156,24 @@ export function build(): LevelData {
   b.collectible('i3', 0, F + 1.4, 745);
   b.prompt([0, F + 1.5, 730], [8, 4, 5], 'jump', 'The bridge is going: double jump the last gap');
   b.plat(0, F, 774, 12, 16); // 766..782
-  b.finish(0, F, 776, 10);
   b.gate(0, F, 781.5, 10, 8);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, F, 782], { id: 'ink', level: 5 });
+  ext.runway();
+  ext.hurdles();
+  ext.drawbridge();
+  ext.gaps();
+  ext.chute(6);
+  ext.collapseRun();
+  ext.laserGate();
+  ext.roll(-1);
+  ext.wallChain();
+  ext.collapseRun(6);
+  ext.stairs(4, 0.6);
+  ext.hurdles(4);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -229,6 +246,7 @@ export function build(): LevelData {
     [0, F, 771.0],
     [0, F, 774.5],
   );
+  b.bot(...ext.bot);
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('relic', 1.5, 0, 8);
   b.breakable('column', -1.5, 0, 20);

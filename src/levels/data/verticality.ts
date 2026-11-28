@@ -7,6 +7,7 @@
  * last wall chain and launch to the true summit, fifty metres above the first.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 
 export function build(): LevelData {
@@ -236,8 +237,24 @@ export function build(): LevelData {
   b.plat(0, 73, 584, 9, 12); // 578..590
   b.entity({ type: 'jumppad', p: [0, 73.6, 586], s: [4, 1.2, 4], v: [0, 22, 5] });
   b.plat(0, 80, 606, 16, 24); // 594..618
-  b.finish(0, 80, 611, 12);
   b.ring(0, 92, 612, 12, 0.6, [1.57, 0, 0], [0, 0, 0.1], 'accent', 0.9);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, 80, 618], { id: 'ver', level: 2 });
+  ext.stairs(4, 0.6);
+  ext.wallChain();
+  ext.gaps();
+  ext.drawbridge();
+  ext.hurdles();
+  ext.chute(6);
+  ext.runway();
+  ext.laserGate();
+  ext.collapseRun();
+  ext.wallChain();
+  ext.stairs(4, 0.6);
+  ext.gaps(5);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
   b.bot(
@@ -326,6 +343,7 @@ export function build(): LevelData {
     [0, 80, 602],
     [0, 80, 611],
   );
+  b.bot(...ext.bot);
   // ----- destructibles (Phase B): suspended panels and neon signs hung along the climb, in
   // reach of a running, aerial or wall-run slash
   b.breakable('panel', -1.5, 16.9, 129.4);

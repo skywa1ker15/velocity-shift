@@ -187,7 +187,7 @@ export function LevelSelect() {
 const categoryNames: Record<CosmeticCategory, string> = {
   suit: 'Suit accent',
   trail: 'Burst style',
-  lines: 'Speed lines',
+  lines: 'Action lines',
   hud: 'HUD theme',
 };
 

@@ -21,6 +21,8 @@ export function tube(
     steps: { t: number; rot: [number, number, number, number]; ease?: 'linear' | 'smooth' | 'in' | 'out' }[];
     gap?: [number, number];
     wallrun?: boolean;
+    /** Lane centre (default 0). */
+    x?: number;
   },
 ) {
   const len = z1 - z0,
@@ -54,7 +56,7 @@ export function tube(
     type: 'structure',
     id,
     on: id,
-    p: [0, base + 2, zc],
+    p: [o.x ?? 0, base + 2, zc],
     r: o.r0 ? [0, 0, (o.r0 * Math.PI) / 180] : undefined,
     warn: 0.75,
     steps: o.steps,

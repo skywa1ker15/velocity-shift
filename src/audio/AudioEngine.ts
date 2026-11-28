@@ -207,6 +207,29 @@ export class AudioEngine {
     this.tone('sfx', 'sine', 95, 38, 0.3, 0.6);
     this.tone('sfx', 'sawtooth', 220 * this.vary(0.03), 660, 0.14, 0.08);
   }
+  /** Sprint kicking in: a short rising rush of air. */
+  sprint() {
+    this.burst('sfx', 'bandpass', 700, 2600, 0.22, 0.18);
+    this.tone('sfx', 'triangle', 180, 320, 0.12, 0.05);
+  }
+  /** Stamina running low: a soft double tick. */
+  staminaLow() {
+    this.tone('sfx', 'sine', 520, 500, 0.05, 0.06);
+    this.tone('sfx', 'sine', 520, 500, 0.05, 0.06, 0.11);
+  }
+  /** Stamina empty: a dull downward thud. */
+  staminaEmpty() {
+    this.tone('sfx', 'sine', 160, 70, 0.28, 0.16);
+    this.burst('sfx', 'lowpass', 600, 150, 0.2, 0.12);
+  }
+  /** A temporary effect ran out. */
+  effectEnd() {
+    this.tone('sfx', 'triangle', 700, 420, 0.12, 0.06);
+  }
+  /** Sprint available again. */
+  staminaBack() {
+    this.tone('sfx', 'triangle', 660, 880, 0.08, 0.06);
+  }
   land(impact: number) {
     const k = Math.min(1, impact / 26);
     this.tone('sfx', 'sine', 120 - k * 40, 38, 0.14 + k * 0.16, 0.25 + k * 0.5);

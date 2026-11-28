@@ -57,10 +57,27 @@ export class EvoView {
   private geos: THREE.BufferGeometry[] = [];
   private builtFor: CollectibleState[] | null = null;
   private ink = new THREE.MeshBasicMaterial({ color: 0x0b0d14, side: THREE.BackSide, fog: false });
+  /**
+   * Power-ups (everything but Glints, which are Flux) stand out at speed: a tall beam of their
+   * rarity colour rises from each, and a halo turns slowly round it. Both are one instanced draw
+   * call for the whole course, additive and steady (they breathe, they never flicker).
+   */
+  private beams: THREE.InstancedMesh | null = null;
+  private halos: THREE.InstancedMesh | null = null;
+  private powerIdx: number[] = [];
+  private fxMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: false,
+  });
 
   constructor(private evo: Evolution) {
     this.group.name = 'evo';
-    this.mats.push(this.ink);
+    this.mats.push(this.ink, this.fxMat);
   }
 
   /** (Re)build the pools whenever the run's layout changes (a restart reseeds it). */
@@ -72,8 +89,31 @@ export class EvoView {
       p.shell.dispose();
     }
     this.pools = [];
+    for (const m of [this.beams, this.halos]) {
+      m?.removeFromParent();
+      m?.dispose();
+    }
     const items = this.evo.items;
     this.builtFor = items;
+    this.powerIdx = [];
+    items.forEach((it, i) => it.kind !== 'glint' && this.powerIdx.push(i));
+    if (this.powerIdx.length) {
+      const beamGeo = new THREE.CylinderGeometry(0.05, 0.16, 7, 6, 1, true).translate(0, 3.9, 0);
+      const haloGeo = new THREE.RingGeometry(0.85, 1.0, 28).rotateX(-Math.PI / 2);
+      this.geos.push(beamGeo, haloGeo);
+      this.beams = new THREE.InstancedMesh(beamGeo, this.fxMat, this.powerIdx.length);
+      this.halos = new THREE.InstancedMesh(haloGeo, this.fxMat, this.powerIdx.length);
+      this.powerIdx.forEach((i, j) => {
+        const c = new THREE.Color(RARITY_COLOR[KINDS[items[i].kind].rarity]);
+        this.beams!.setColorAt(j, c);
+        this.halos!.setColorAt(j, c);
+      });
+      for (const m of [this.beams, this.halos]) {
+        m.frustumCulled = false;
+        m.renderOrder = 3;
+        this.group.add(m);
+      }
+    }
     for (const kind of ORDER) {
       const idx: number[] = [];
       items.forEach((it, i) => it.kind === kind && idx.push(i));
@@ -140,11 +180,36 @@ export class EvoView {
       pool.shell.instanceMatrix.needsUpdate = true;
       if (pool.mesh.instanceColor) pool.mesh.instanceColor.needsUpdate = true;
     }
+    this.updateBeacons(time);
+  }
+
+  private updateBeacons(time: number) {
+    const evo = this.evo;
+    if (!this.beams || !this.halos) return;
+    for (let j = 0; j < this.powerIdx.length; j++) {
+      const it = evo.items[this.powerIdx[j]];
+      const show =
+        !it.taken && (it.kind !== 'echo' || it.live) && !(it.kind === 'paradox' && evo.flowTier < 3);
+      _u.set(it.u[0], it.u[1], it.u[2]);
+      _q.setFromUnitVectors(Y, _u);
+      _p.set(it.p[0], it.p[1], it.p[2]);
+      _s.setScalar(show ? 1 : 0);
+      _m.compose(_p, _q, _s);
+      this.beams.setMatrixAt(j, _m);
+      // the halo breathes slowly and turns
+      _q2.setFromAxisAngle(Y, time * 0.8 + j);
+      _q.multiply(_q2);
+      _s.setScalar(show ? 1 + Math.sin(time * 2.4 + j) * 0.08 : 0);
+      _m.compose(_p, _q, _s);
+      this.halos.setMatrixAt(j, _m);
+    }
+    this.beams.instanceMatrix.needsUpdate = true;
+    this.halos.instanceMatrix.needsUpdate = true;
   }
 
   /** Draw calls this view adds (for the performance report). */
   get drawCalls() {
-    return this.pools.length * 2;
+    return this.pools.length * 2 + (this.beams ? 2 : 0);
   }
 
   dispose() {
@@ -152,6 +217,8 @@ export class EvoView {
       p.mesh.dispose();
       p.shell.dispose();
     }
+    this.beams?.dispose();
+    this.halos?.dispose();
     for (const g of this.geos) g.dispose();
     for (const m of this.mats) m.dispose();
     this.group.removeFromParent();

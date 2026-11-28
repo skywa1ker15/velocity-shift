@@ -7,6 +7,7 @@
  * Main line heads +Z down the centre lane (x = 0). One hidden high route, one air shortcut.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 
 export function build(): LevelData {
@@ -220,12 +221,29 @@ export function build(): LevelData {
   b.checkpoint(0, -4.4, 762);
   b.wall(3.0, -6.4, 778.25, 0.8, 9, 22.5); // 767..789.5
   b.plat(0, -2.4, 801, 16, 26); // 788..814
-  b.finish(0, -2.4, 808, 12);
   b.gate(0, -2.4, 813.5, 10, 8);
   for (let z = 792; z <= 812; z += 5) {
     b.column(-7.2, -2.4, z, 8, 0.5);
     b.column(7.2, -2.4, z, 8, 0.5);
   }
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, -2.4, 814], { id: 'awa', level: 1 });
+  ext.runway();
+  ext.hurdles();
+  ext.gaps();
+  ext.drawbridge();
+  ext.wallChain();
+  ext.stairs(4, 0.6);
+  ext.chute(6);
+  ext.collapseRun();
+  ext.laserGate();
+  ext.doubleGap();
+  ext.runway(50);
+  ext.hurdles(4);
+  ext.gaps(5);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -322,6 +340,7 @@ export function build(): LevelData {
     [0, -2.4, 796],
     [0, -2.4, 808],
   );
+  b.bot(...ext.bot);
   // ----- destructibles (Phase B): fragile marble columns that slide apart, and floating relics
   // that answer the blade
   b.breakable('column', 1.5, 0, 19.9);

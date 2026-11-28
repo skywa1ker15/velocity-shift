@@ -17,6 +17,7 @@ import { bodyTouches, breakableCentre } from './breakables';
 import { GravityDirector } from './Gravity';
 import { Sword, SwordPhase, type SwordHit, type SwordTarget, type Slash } from './Sword';
 import { Evolution } from '../evolution/Evolution';
+import { Director } from './Director';
 import type { Slot } from '../evolution/slots';
 
 export interface RunStats {
@@ -129,6 +130,10 @@ export class Simulation {
   readonly evo: Evolution | null = null;
   /** World clock step this tick (SIM_DT, or less while Timeslip / Reflex slow the world). */
   dt = SIM_DT;
+  /** Phase 3: the Difficulty Director (both modes). */
+  readonly director: Director;
+  /** Director variants: whether breakable i exists in this attempt. */
+  readonly breakPresent: boolean[] = [];
 
   constructor(
     readonly meta: LevelMeta,
@@ -169,6 +174,8 @@ export class Simulation {
     for (const e of this.entities) if (e.def.id) this.byId.set(e.def.id, e);
     this.targetsLive = (data.breakables ?? []).map((b) => breakableCentre(b));
     this.wireStats();
+    for (let i = 0; i < this.targetsLive.length; i++) this.breakPresent.push(true);
+    this.director = new Director(this);
     if (opts.evolve) this.evo = new Evolution(this, opts.evolve.slots, opts.evolve.seed);
     this.physics.step();
     this.restart();
@@ -212,6 +219,7 @@ export class Simulation {
     this.broken.length = 0;
     this.targets = this.targetsLive.slice();
     for (let i = 0; i < this.targets.length; i++) this.broken.push(false);
+    this.director?.reset(true);
     this.evo?.newRun();
     this.placeAtCheckpoint();
   }
@@ -228,6 +236,27 @@ export class Simulation {
   private rearm() {
     for (const e of this.entities) e.reset(this.physics, false);
     this.fired.clear();
+    // switched-off mechanisms come back with the attempt; absent variants stay off
+    for (const e of this.entities)
+      if (e.switchedOff) {
+        e.switchedOff = false;
+        this.setPresent(e.index, this.director.allows(e.def));
+      } else if (!e.present) this.physics.setEntityEnabled(e.index, false);
+    this.director.reset(false);
+  }
+
+  /** Director: entity `i` exists (or not) in this attempt. */
+  setPresent(i: number, on: boolean) {
+    const e = this.entities[i];
+    if (!e) return;
+    e.present = on;
+    this.physics.setEntityEnabled(i, on);
+  }
+
+  /** Director: breakable `i` exists (or not) in this attempt. */
+  setBreakablePresent(i: number, on: boolean) {
+    this.breakPresent[i] = on;
+    if (!this.broken[i]) this.targets[i] = on ? this.targetsLive[i] : null;
   }
 
   private placeAtCheckpoint() {
@@ -249,6 +278,7 @@ export class Simulation {
     this.dead = true;
     this.deadTicks = RESPAWN_TICKS;
     this.stats.deaths++;
+    this.director.onDeath(this.time);
     this.player.kill();
     this.events.emit('death', { reason });
   }
@@ -256,7 +286,14 @@ export class Simulation {
   fire(name: string) {
     if (this.fired.has(name)) return;
     this.fired.add(name);
-    for (const e of this.entities) e.onEvent(name, this.time);
+    for (const e of this.entities) {
+      e.onEvent(name, this.time);
+      // a mechanism switched off (a cut conduit): gone for the rest of the attempt
+      if (e.def.off === name) {
+        e.switchedOff = true;
+        this.setPresent(e.index, false);
+      }
+    }
     this.events.emit('event', { name });
   }
 
@@ -285,6 +322,7 @@ export class Simulation {
       this.time += this.dt;
     } else this.time += SIM_DT;
     pl.gravityScale = 1;
+    this.director.tick(SIM_DT);
     this.updateEntities();
     if (this.dead) return;
 
@@ -373,13 +411,15 @@ export class Simulation {
     const pl = this.player,
       bs = this.data.breakables;
     for (let i = 0; i < bs.length; i++) {
-      if (this.broken[i]) continue;
+      if (this.broken[i] || !this.breakPresent[i]) continue;
+      // (a glass seal is the one exception: it is backed by an invisible wall and only the blade opens it)
+      if (bs[i].kind === 'glass') continue;
       if (bodyTouches(bs[i], pl.pos.x, pl.pos.y, pl.pos.z, pl.height)) this.breakObject(i, 'body');
     }
   }
 
   private breakObject(i: number, by: 'sword' | 'body', hit?: SwordHit) {
-    if (this.broken[i]) return;
+    if (this.broken[i] || !this.breakPresent[i]) return;
     this.broken[i] = true;
     this.targets[i] = null;
     if (by === 'sword') this.stats.cuts++;
@@ -402,7 +442,7 @@ export class Simulation {
     c.time = this.time;
     c.dt = this.dt;
     this.gravity.begin();
-    for (const e of this.entities) e.update(c, this.physics);
+    for (const e of this.entities) if (e.present) e.update(c, this.physics);
     this.physics.step();
     if (!this.dead) this.gravity.apply(this.player, SIM_DT);
   }

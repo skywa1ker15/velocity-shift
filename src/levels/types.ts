@@ -46,6 +46,35 @@ interface EntityBase {
   /** Event that activates this entity (otherwise it is always active). */
   on?: string;
   mat?: MatId;
+  /**
+   * Difficulty Director variant: this entity exists only while encounter `enc` runs at a tier in
+   * [tiers[0], tiers[1]] (inclusive). Absent entities have no collision, no effect and are not drawn.
+   */
+  enc?: string;
+  tiers?: [number, number];
+  /** Event that switches this entity off for the rest of the attempt (a cut conduit, a broken lock). */
+  off?: string;
+}
+
+/** Difficulty dimensions the Director tracks (each 0..1). */
+export type DifficultyDim =
+  'traversal' | 'obstacle' | 'environment' | 'reaction' | 'precision' | 'ability' | 'density' | 'visual';
+
+/**
+ * A Director encounter: a stretch of course whose variants (entities and breakables tagged with its
+ * id) are chosen when the runner comes within sight of its start, from the dimensions it uses.
+ */
+export interface EncounterDef {
+  id: string;
+  /** Where it starts (decided when the runner is within `look` metres). */
+  p: Vec3Tuple;
+  /** Highest tier it has (tiers run 0..max). */
+  max: number;
+  dims: DifficultyDim[];
+  /** A set piece: the encounter after it is held back one tier (recovery). */
+  intense?: boolean;
+  /** Short label for the debug overlay and tests. */
+  kind: string;
 }
 
 /** A solid box that travels between waypoints. Covers moving/rising platforms, moving walls and doors. */
@@ -62,6 +91,8 @@ export interface MoverDef extends EntityBase {
   lethal?: boolean;
   /** No collision, only the lethal volume (energy sweeps). */
   ghost?: boolean;
+  /** Draw nothing (an invisible blocker behind a glass pane). */
+  visible?: boolean;
   /** Pingpong dwell at path[0] in seconds. Defaults to `pause`; when set, `pause` is the far-end dwell only. */
   rest?: number;
   /**
@@ -276,7 +307,13 @@ export type BreakableKind =
   | 'bloom'
   | 'spindle'
   | 'sentinel'
-  | 'seal';
+  | 'seal'
+  // Phase 3: mechanisms and new materials
+  | 'glass'
+  | 'core'
+  | 'conduit'
+  | 'chain'
+  | 'mote';
 export interface BreakableDef {
   id: string;
   kind: BreakableKind;
@@ -287,6 +324,9 @@ export interface BreakableDef {
   scale?: number;
   /** Chain Spindles: the gate (row) this one belongs to; cut a whole gate quickly for a reward. */
   gate?: number;
+  /** Difficulty Director variant (see EntityBase.enc). */
+  enc?: string;
+  tiers?: [number, number];
   /** Floor height debris lands on (omitted: debris falls away). */
   ground?: number;
   /** Hanging kinds: length of the cables / chains up to the anchor. */
@@ -344,6 +384,8 @@ export interface LevelData {
    * spawner for this course.
    */
   evoItems?: { kind: string; p: [number, number, number]; group?: number; order?: number }[];
+  /** Difficulty Director encounters (Phase 3 sections). */
+  encounters?: EncounterDef[];
 }
 
 export interface LevelMeta {

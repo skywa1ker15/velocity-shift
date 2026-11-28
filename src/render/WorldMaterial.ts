@@ -232,7 +232,7 @@ vec3 vsMotif(vec2 p, float px) {
     float pr = length(f - vec2(0.25 + hsh * 0.5));
     float pad = (1.0 - smoothstep(0.045, 0.045 + fwidth(f.x) * 2.0, pr)) * smoothstep(0.025, 0.025 + fwidth(f.x) * 2.0, pr);
     float along = horiz > 0.5 ? p.x : p.y;
-    float pulse = smoothstep(0.85, 1.0, fract(along * 0.12 - uTime * 0.6 + hsh * 7.0));
+    float pulse = smoothstep(0.85, 1.0, fract(along * 0.12 + hsh * 7.0));
     float edge = max(vsLine(p.x / 2.0, 0.004), vsLine(p.y / 2.0, 0.004));
     m = vec3(edge * 0.45 + tline * 0.25, 0.0, (tline + pad) * (0.25 + pulse * 1.3));
   }
@@ -305,7 +305,7 @@ vec3 vsMotif(vec2 p, float px) {
     float inside = smoothstep(0.55, 0.75, v) * smoothstep(fh - 0.55, fh - 0.75, v);
     float vv = mod(v - 0.45, 3.2) - 1.6;
     float strip = (1.0 - smoothstep(0.3, 0.31 + px, abs(vv))) * inside;
-    float chev = abs(fract(u * 0.8 - uTime * 0.45 - abs(vv) * 1.1) - 0.5);
+    float chev = abs(fract(u * 0.8 - abs(vv) * 1.1) - 0.5);
     float chevron = (1.0 - smoothstep(0.09, 0.1 + fwidth(chev), chev)) * strip;
     float guide = (1.0 - smoothstep(0.02, 0.03 + px, abs(abs(vv) - 0.33))) * inside;
     // the wall wakes up as the player gets close

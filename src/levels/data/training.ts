@@ -20,7 +20,12 @@ export function build(): LevelData {
 
   // --- 1. sprint lane -------------------------------------------------------------------
   b.plat(0, 0, 23, W, 30);
-  b.prompt([0, 1.5, 22], [W, 4, 26], 'sprint', 'Speed builds as you run — momentum is everything');
+  b.prompt(
+    [0, 1.5, 22],
+    [W, 4, 26],
+    'sprint',
+    'Hold Sprint for a burst of speed: it drains the stamina bar, which refills when you let go',
+  );
   for (let z = 12; z <= 36; z += 8) b.strip([0, 0.012, z], [1.2, 0.02, 0.18], 0.7);
 
   // --- 2. jump gaps ---------------------------------------------------------------------

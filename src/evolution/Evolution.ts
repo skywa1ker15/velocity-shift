@@ -70,6 +70,8 @@ export interface EvoEvents {
   overflow: Record<string, never>;
   /** Kinetic Chain: consecutive cuts and pickups. `milestone` names a reward at 5 / 10 / 15... */
   streak: { n: number; milestone?: string; broken?: boolean };
+  /** A temporary effect started or ended (the active-effects HUD lists them). */
+  effect: { id: string; on: boolean };
   /** A Chain Spindle gate was cleared (or ran out of time). */
   gate: { gate: number; cleared: boolean; left: number };
 }
@@ -120,6 +122,10 @@ export class Evolution {
   peakStreak = 0;
   /** Momentum Lock time left (Stride 3). */
   lockLeft = 0;
+  /** The length of the current Momentum Lock (for its countdown). */
+  lockMax = 0;
+  /** Overcharge time left (from an Energy Core): free sprint, Flux x1.5. */
+  overchargeLeft = 0;
 
   private cfg: MovementConfig;
   /** What the runner has been doing lately, per family: a full Flux meter evolves that. */
@@ -232,6 +238,7 @@ export class Evolution {
     this.safe.length = 0;
     this.streak = this.streakLeft = 0;
     this.lockLeft = 0;
+    this.overchargeLeft = 0;
     this.skimming = false;
     this.gates.clear();
     // an Echo Chain in progress starts over
@@ -283,6 +290,8 @@ export class Evolution {
       }
     }
     this.apply();
+    // a bigger bar arrives full
+    if (id === 'endurance') this.sim.player.stamina = this.cfg.staminaMax;
     return true;
   }
 
@@ -334,6 +343,13 @@ export class Evolution {
     c.dashCharges = base.dashCharges + (L.phase >= 2 ? 1 : 0);
     c.dashMaxPitchDeg = this.has('skybreaker') ? 60 : base.dashMaxPitchDeg;
     c.dashExitSpeed = L.flywheel >= 3 ? c.dashSpeed * 0.7 : base.dashExitSpeed;
+    // sprint and stamina (Endurance)
+    c.staminaMax = base.staminaMax + at(T.staminaAdd, L.endurance);
+    c.staminaRegen = base.staminaRegen * at(T.staminaRegen, L.endurance);
+    c.staminaDrain = base.staminaDrain * at(T.staminaDrain, L.endurance);
+    c.sprintBoost = base.sprintBoost + (L.endurance >= 3 ? T.afterburner : 0);
+    c.staminaRestart = L.endurance >= 3 ? 0 : base.staminaRestart;
+    pl.freeSprint = this.overchargeLeft > 0;
     c.wallDurationBase = base.wallDurationBase + at(T.wallDuration, L.wallrunner);
     c.wallDurationMax = base.wallDurationMax + at(T.wallDuration, L.wallrunner);
     c.wallJumpUp = base.wallJumpUp + at(T.wallJumpUp, L.wallrunner);
@@ -358,7 +374,7 @@ export class Evolution {
 
   // ----- Flux and Flow --------------------------------------------------------------------------
   addFlux(n: number) {
-    const gain = n * (1 + this.flowTier * 0.15) * this.streakMult();
+    const gain = n * (1 + this.flowTier * 0.15) * this.streakMult() * (this.overchargeLeft > 0 ? 1.5 : 1);
     const before = this.flux;
     this.flux += gain;
     this.stats.fluxGained += gain;
@@ -427,7 +443,7 @@ export class Evolution {
     const ev = this.sim.player.events;
     const L = this.levels;
     const lock = () => {
-      if (L.stride >= 3) this.lockLeft = T.lockTime;
+      if (L.stride >= 3) this.lock(T.lockTime);
     };
     ev.on('jump', ({ fromSlide }) => {
       this.action('jump', 6);
@@ -447,7 +463,7 @@ export class Evolution {
       // Dash Jump: a jump straight out of a dash keeps (and adds to) its speed
       if (L.phase >= 2 && pl.sinceDash < T.dashJumpWindow) {
         this.forward(T.dashJumpBoost);
-        this.lockLeft = Math.max(this.lockLeft, 1);
+        this.lock(1);
         this.events.emit('boost', { kind: 'dashjump' });
       }
       if (this.has('updraft') && pl.speed > 14 && this.committed()) {
@@ -603,6 +619,22 @@ export class Evolution {
       case 'spindle':
         if (def.gate !== undefined) this.spindle(def.gate);
         break;
+      case 'core':
+        // Energy Core: it bursts, and its charge is yours for a while
+        flux += 5;
+        this.overcharge();
+        if (this.areaDepth === 0) this.wave(def.p[0], def.p[1] + 1.35, def.p[2], 5);
+        break;
+      case 'glass':
+        flux += 1;
+        break;
+      case 'conduit':
+      case 'chain':
+        flux += 3;
+        break;
+      case 'mote':
+        flux -= 2;
+        break;
     }
     this.addFlux(flux);
     this.bumpStreak();
@@ -642,7 +674,7 @@ export class Evolution {
       if (step === 1) {
         milestone = 'Kinetic Burst';
         this.forward(2.5);
-        this.lockLeft = Math.max(this.lockLeft, 1);
+        this.lock(1);
       } else if (step === 2) {
         milestone = 'Recharge';
         pl.dashEnergy = this.cfg.dashCharges;
@@ -652,6 +684,7 @@ export class Evolution {
         this.addFlux(20);
       }
       this.events.emit('boost', { kind: 'streak' });
+      this.secondWind();
     }
     this.events.emit('streak', { n: this.streak, milestone });
   }
@@ -670,11 +703,101 @@ export class Evolution {
     if (cleared) {
       const pl = this.sim.player;
       this.forward(2.5);
+      this.secondWind();
       pl.dashEnergy = this.cfg.dashCharges;
-      this.lockLeft = Math.max(this.lockLeft, 1.2);
+      this.lock(1.2);
       this.addFlux(20);
       this.events.emit('boost', { kind: 'gate' });
     }
+  }
+
+  /** Start (or extend) Momentum Lock. */
+  private lock(seconds: number) {
+    if (seconds >= this.lockLeft) {
+      this.lockLeft = seconds;
+      this.lockMax = seconds;
+    }
+  }
+
+  /**
+   * Every temporary effect running now, with its real time left (the active-effects HUD). Permanent
+   * abilities are not here; Overdrive has no clock (it lasts while you keep sprinting).
+   */
+  effects(): { id: string; name: string; desc: string; left: number; max: number }[] {
+    const out: { id: string; name: string; desc: string; left: number; max: number }[] = [];
+    const L = this.levels,
+      pl = this.sim.player;
+    if (this.surgeLeft > 0)
+      out.push({
+        id: 'surge',
+        name: 'Surge',
+        desc: 'The world runs slow; you do not',
+        left: this.surgeLeft,
+        max: at(T.timeslipTime, L.timeslip) * (L.chrono > 0 ? 1.5 : 1),
+      });
+    if (this.reflexLeft > 0)
+      out.push({
+        id: 'reflex',
+        name: 'Reflex',
+        desc: 'Time slows as a hazard comes up',
+        left: this.reflexLeft,
+        max: T.reflexTime,
+      });
+    if (this.overchargeLeft > 0)
+      out.push({
+        id: 'overcharge',
+        name: 'Overcharge',
+        desc: 'Sprint costs no stamina · Flux ×1.5',
+        left: this.overchargeLeft,
+        max: T.overchargeTime,
+      });
+    if (this.lockLeft > 0)
+      out.push({
+        id: 'lock',
+        name: 'Momentum Lock',
+        desc: 'Speed above your sprint is held',
+        left: this.lockLeft,
+        max: Math.max(this.lockLeft, this.lockMax),
+      });
+    if (this.invuln > 0)
+      out.push({
+        id: 'shield',
+        name: 'Shielded',
+        desc: 'Hazards pass through you (falls still count)',
+        left: this.invuln,
+        max: 1,
+      });
+    if (L.spring >= 4 && this.hoverLeft < T.hoverTime && !pl.grounded && this.hoverLeft > 0)
+      out.push({
+        id: 'hover',
+        name: 'Hover',
+        desc: 'Hold jump to slow your fall',
+        left: this.hoverLeft,
+        max: T.hoverTime,
+      });
+    if (this.overdriveOn && pl.state === MoveState.Sprint)
+      out.push({
+        id: 'overdrive',
+        name: 'Overdrive',
+        desc: '+2 m/s while you keep sprinting',
+        left: -1,
+        max: -1,
+      });
+    return out;
+  }
+
+  /** Endurance 2: a full stamina bar. */
+  private secondWind() {
+    if (this.levels.endurance < 2) return;
+    const pl = this.sim.player;
+    pl.stamina = this.cfg.staminaMax;
+    pl.exhausted = false;
+  }
+
+  /** Start (or extend) Overcharge. */
+  overcharge(seconds: number = T.overchargeTime) {
+    this.overchargeLeft = Math.max(this.overchargeLeft, seconds);
+    this.events.emit('effect', { id: 'overcharge', on: true });
   }
 
   /** Air Burst: a push toward the held direction (the look direction when nothing is held). */
@@ -1056,6 +1179,17 @@ export class Evolution {
     if (!pl.grounded) this.airPeak += dt;
     this.landBoostLeft = Math.max(0, this.landBoostLeft - dt);
     this.lockLeft = Math.max(0, this.lockLeft - dt);
+    if (this.overchargeLeft > 0) {
+      this.overchargeLeft -= dt;
+      if (this.overchargeLeft <= 0) {
+        this.overchargeLeft = 0;
+        this.events.emit('effect', { id: 'overcharge', on: false });
+      }
+    }
+    if (pl.sprinting) this.use('ground', dt * 0.6);
+    // Redline: sprinting in Overdrive keeps the Kinetic Chain from breaking
+    if (this.streak > 0 && this.has('redline') && pl.sprinting && this.overdriveOn)
+      this.streakLeft = Math.max(this.streakLeft, 0.6);
     this.invuln = Math.max(0, this.invuln - dt);
     if (this.streak > 0) {
       this.streakLeft -= dt;
@@ -1210,6 +1344,7 @@ export class Evolution {
       streakLeft: this.streak > 0 ? this.streakLeft / (STREAK_WINDOW + (this.levels.siphon >= 3 ? 1 : 0)) : 0,
       mult: this.streakMult(),
       lock: this.lockLeft,
+      effects: this.effects(),
       chainLeft: this.echoNext > 0 && this.echoNext < 4 ? Math.max(0, this.echoDeadline - this.now) : 0,
       abilities: ABILITY_IDS.filter((id) => this.levels[id] > 0).map((id) => ({
         id,

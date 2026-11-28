@@ -262,8 +262,12 @@ export class Renderer {
     u.uMotifAmt.value = k.motifAmt;
     u.uLip.value = k.lip;
     u.uGlow.value = k.glow;
+    this.glowBase = k.glow;
     this.applyEnvPost();
   }
+
+  /** The universe's own glow; the Director's visual intensity scales it a little. */
+  glowBase = 1;
 
   /** Lights and grading for whichever universe (or blend of two) the camera is in. */
   applyAmbient(l: EnvPreset['light'], post: EnvPreset['post']) {

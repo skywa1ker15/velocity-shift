@@ -225,10 +225,12 @@ describe('Level 4, Breakpoint: the gravity blocks, one at a time', () => {
     ['a plain run', RUN],
     ['a sprint', SPRINT],
   ])('(7) launch + light gravity: %s floats to the finish', async (_n, keys) => {
-    const { sim, d, deaths } = await at('breakpoint', 664);
+    const { d, deaths } = await at('breakpoint', 664);
     hold(d, keys, 740, 20);
     expect(deaths()).toBe(0);
-    expect(sim.stats.finished).toBe(true);
+    // the old finish line: since Phase 3 the course goes on from here
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(740);
+    expect(d.pl.grounded || d.pl.vel.y <= 0.5).toBe(true);
   });
 });
 
@@ -372,7 +374,7 @@ describe('Level 6, Faceted: the folds (left and right rotation)', () => {
     ['a wall-run', true],
     ['a double jump', false],
   ])('(4) unfold, then %s over the floor gap and out over the falling tiles', async (_n, wallrun) => {
-    const { sim, d, deaths } = await at('faceted', 462);
+    const { d, deaths } = await at('faceted', 462);
     let jumped = 0;
     hold(d, SPRINT, 590, 30, (p) => {
       if (p.z > 496 && p.z < 512 && wallrun) {
@@ -384,7 +386,9 @@ describe('Level 6, Faceted: the folds (left and right rotation)', () => {
       if (!wallrun && jumped === 1 && !p.grounded && d.pl.vel.y < 0) return (jumped++, { jump: true });
     });
     expect(deaths()).toBe(0);
-    expect(sim.stats.finished).toBe(true);
+    // the old finish line: since Phase 3 the course goes on from here
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(590);
+    expect(d.pl.grounded || d.pl.vel.y <= 0.5).toBe(true);
   });
 });
 
@@ -468,14 +472,16 @@ describe('Level 7, Blockfall: the blocks turn (up/down rotation)', () => {
     ['a plain run with the double jump', RUN, true],
     ['a sprint', SPRINT, false],
   ])('(4) climb, jump, drop: %s reaches the finish', async (_n, keys, dbl) => {
-    const { sim, d, deaths } = await at('blockfall', 368);
+    const { d, deaths } = await at('blockfall', 368);
     let j = 0;
     hold(d, keys, 470, 30, (p) => {
       if (j === 0 && p.grounded && p.z > 414.4 && p.y > 14) return (j++, { jump: true });
       if (dbl && j === 1 && !p.grounded && d.pl.vel.y < 0) return (j++, { jump: true });
     });
     expect(deaths()).toBe(0);
-    expect(sim.stats.finished).toBe(true);
+    // the old finish line: since Phase 3 the course goes on from here
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(470);
+    expect(d.pl.grounded || d.pl.vel.y <= 0.5).toBe(true);
   });
 });
 
@@ -558,7 +564,9 @@ describe('Level 8, Corrupted Core: Meltdown (everything at once)', () => {
         for (const p of panels) if (p.phase !== 0) gone.add(p);
       });
       expect(deaths()).toBe(0);
-      expect(sim.stats.finished).toBe(true);
+      // the old finish line: since Phase 3 the course goes on from here
+      expect(d.pl.pos.z).toBeGreaterThanOrEqual(605);
+      expect(d.pl.grounded || d.pl.vel.y <= 0.5).toBe(true);
       expect(Math.min(...s.map((p) => p.y))).toBeLessThan(-40);
       expect(s.some((p) => p.grounded && p.up.x < -0.99 && Math.abs(p.x - 6) < 0.15)).toBe(true);
       expect(gone.size).toBeGreaterThanOrEqual(3);
@@ -611,9 +619,11 @@ describe('Level 9, Shift Point: the finale', () => {
     ['a plain run', RUN],
     ['a sprint', SPRINT],
   ])('the Last Slingshot: %s flies through the ring and floats down to the finish', async (_n, keys) => {
-    const { sim, d, deaths } = await at('shiftpoint', 958.5);
+    const { d, deaths } = await at('shiftpoint', 958.5);
     hold(d, keys, 1050, 20);
     expect(deaths()).toBe(0);
-    expect(sim.stats.finished).toBe(true);
+    // the old finish line: since Phase 3 the course goes on from here
+    expect(d.pl.pos.z).toBeGreaterThanOrEqual(1050);
+    expect(d.pl.grounded || d.pl.vel.y <= 0.5).toBe(true);
   });
 });

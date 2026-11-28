@@ -108,6 +108,11 @@ export class CameraRig {
     this.fovPunch.kick(150 * this.fxK);
     this.lurch.kick(1.4 * this.fxK);
   }
+  /** Sprint kicking in: a gentle push of the lens (the speed itself then widens it further). */
+  onSprint() {
+    this.fovPunch.kick(45 * this.fxK);
+    this.lurch.kick(0.5 * this.fxK);
+  }
   onDoubleJump() {
     this.dip.kick(0.9 * this.fxK);
     this.nod.kick(0.16 * this.fxK);
@@ -259,7 +264,7 @@ export class CameraRig {
     // total speed counts (a long fall widens the view too); slides and wall-runs add a touch more
     const speed3 = Math.hypot(speed, pl.grounded ? 0 : lv.y * 0.7);
     const k = clamp((speed3 - cfg.runSpeed) / (25 - cfg.runSpeed), 0, 1);
-    const stateFov = sliding ? 2.5 + slideK * 2 : onWall ? 2 : 0;
+    const stateFov = (sliding ? 2.5 + slideK * 2 : onWall ? 2 : 0) + (pl.sprinting ? 2.5 : 0);
     const punch = clamp(this.fovPunch.update(0, dt), -4, 12);
     const target = vertical + (k * 12 + stateFov) * m.speedFov + punch * (m.screenFx ? 1 : 0.3);
     // widen promptly, relax slowly: the view never snaps shut when speed drops

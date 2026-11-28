@@ -10,6 +10,7 @@
  * Main line heads +Z down x = 0. One hidden high beam over the boost straight.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 
 const L = -8; // the lot, below the street
@@ -187,8 +188,25 @@ export function build(): LevelData {
     'Launch, then float. Everything you have learned, together',
   );
   b.plat(0, G, 723, 16, 46); // 700..746
-  b.finish(0, G, 734, 12);
+  b.checkpoint(0, G, 722);
   b.gate(0, G, 745, 10, 8);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, G, 746], { id: 'bre', level: 4 });
+  ext.runway();
+  ext.hurdles();
+  ext.gaps();
+  ext.chute(6);
+  ext.roll(1);
+  ext.drawbridge();
+  ext.collapseRun();
+  ext.laserGate();
+  ext.wallChain();
+  ext.doubleGap();
+  ext.stairs(4, 0.6);
+  ext.gaps(5);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -246,6 +264,7 @@ export function build(): LevelData {
     [0, G, 716, undefined, 3],
     [0, G, 734],
   );
+  b.bot(...ext.bot);
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('crate', 1.5, 0, 8);
   b.breakable('sign', -1.5, 0 + 1.9, 27);

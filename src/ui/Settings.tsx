@@ -173,9 +173,11 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
               />
             </Row>
             <Row label="Invert vertical look">{toggle('invertY')}</Row>
-            <Row label="Sprint" hint="Auto: always sprint when moving forward">
+            <Row
+              label="Sprint"
+              hint="You always run at full pace; Sprint is a burst on top that draws stamina"
+            >
               {select('sprintMode', [
-                ['auto', 'Auto-sprint'],
                 ['hold', 'Hold to sprint'],
                 ['toggle', 'Toggle'],
               ])}
@@ -213,7 +215,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
               {slider('cameraRoll', 0, 1, 0.05, pct)}
             </Row>
             <Row label="Camera shake">{slider('cameraShake', 0, 1, 0.05, pct)}</Row>
-            <Row label="Speed lines">{slider('speedLines', 0, 1, 0.05, pct)}</Row>
+            <Row label="Speed vignette">{slider('speedLines', 0, 1, 0.05, pct)}</Row>
             <Row
               label="High-contrast hazards"
               hint="Stronger stripe pattern on lethal surfaces (colour-blind friendly)"

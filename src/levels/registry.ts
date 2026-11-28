@@ -42,9 +42,9 @@ export const levels: LevelEntry[] = [
       env: 'awakening',
       music: 'awakening',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // doubled: the second half (bests reset)
+      layout: 3, // 2: doubled: the second half; 3: Phase 3, the course goes on (bests reset)
       killY: -45,
-      medals: { bronze: 148, silver: 103, gold: 78, platinum: 65.5 },
+      medals: { bronze: 310, silver: 217, gold: 163, platinum: 140 },
       objectives: [
         { id: 'aw-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'aw-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -64,9 +64,9 @@ export const levels: LevelEntry[] = [
       env: 'verticality',
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // doubled: the upper spires (bests reset)
+      layout: 3, // 2: doubled: the upper spires; 3: Phase 3, the course goes on (bests reset)
       killY: -50,
-      medals: { bronze: 146, silver: 101, gold: 77, platinum: 64.5 },
+      medals: { bronze: 302, silver: 211, gold: 159, platinum: 136.5 },
       objectives: [
         { id: 've-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 've-wall', kind: 'wallTime', value: 12, label: 'Spend 12 seconds wall-running in one run' },
@@ -86,9 +86,9 @@ export const levels: LevelEntry[] = [
       env: 'momentum',
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 3, // 2: the first Dynamic World act; 3: doubled with the overdrive (bests reset)
+      layout: 4, // 2: the first Dynamic World act; 3: doubled with the overdrive; 4: Phase 3, the course goes on (bests reset)
       killY: -90,
-      medals: { bronze: 168, silver: 120, gold: 90, platinum: 75.5 },
+      medals: { bronze: 321, silver: 225, gold: 169, platinum: 145.5 },
       objectives: [
         { id: 'mo-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'mo-dash', kind: 'maxDashes', value: 6, label: 'Finish using 6 dashes or fewer' },
@@ -109,9 +109,9 @@ export const levels: LevelEntry[] = [
       env: 'breakpoint',
       music: 'awakening',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // rebuilt with the gravity blocks (bests reset)
+      layout: 3, // 2: rebuilt with the gravity blocks; 3: Phase 3, the course goes on (bests reset)
       killY: -45,
-      medals: { bronze: 110, silver: 78, gold: 60, platinum: 52 },
+      medals: { bronze: 264, silver: 185, gold: 139, platinum: 119.5 },
       objectives: [
         { id: 'bp-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'bp-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -132,9 +132,9 @@ export const levels: LevelEntry[] = [
       env: 'inkfalls',
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 3, // 2: the destruction act; 3: doubled with the lower gorge (bests reset)
+      layout: 4, // 2: the destruction act; 3: doubled with the lower gorge; 4: Phase 3, the course goes on (bests reset)
       killY: -90,
-      medals: { bronze: 138, silver: 97, gold: 74, platinum: 62 },
+      medals: { bronze: 300, silver: 210, gold: 158, platinum: 136 },
       objectives: [
         { id: 'if-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'if-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -155,13 +155,13 @@ export const levels: LevelEntry[] = [
       env: 'faceted',
       music: 'training',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // rebuilt with the folds (bests reset)
+      layout: 3, // 2: rebuilt with the folds; 3: Phase 3, the course goes on (bests reset)
       killY: -40,
       bounds: [
         [-60, -40, -30],
-        [60, 60, 640],
+        [60, 60, 2600],
       ],
-      medals: { bronze: 104, silver: 74, gold: 57, platinum: 49 },
+      medals: { bronze: 241, silver: 169, gold: 127, platinum: 109 },
       objectives: [
         { id: 'fa-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'fa-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -182,13 +182,13 @@ export const levels: LevelEntry[] = [
       env: 'blockfall',
       music: 'verticality',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // rebuilt with the turning blocks (bests reset)
+      layout: 3, // 2: rebuilt with the turning blocks; 3: Phase 3, the course goes on (bests reset)
       killY: -35,
       bounds: [
         [-60, -35, -30],
-        [60, 60, 520],
+        [60, 60, 2600],
       ],
-      medals: { bronze: 112, silver: 79, gold: 61, platinum: 52.5 },
+      medals: { bronze: 268, silver: 188, gold: 141, platinum: 121.5 },
       objectives: [
         { id: 'bf-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'bf-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -209,13 +209,13 @@ export const levels: LevelEntry[] = [
       env: 'core',
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
-      layout: 2, // rebuilt with Meltdown (bests reset)
+      layout: 3, // 2: rebuilt with Meltdown; 3: Phase 3, the course goes on (bests reset)
       killY: -70,
       bounds: [
         [-60, -70, -30],
-        [60, 60, 660],
+        [60, 60, 2600],
       ],
-      medals: { bronze: 112, silver: 79, gold: 60.5, platinum: 51.5 },
+      medals: { bronze: 285, silver: 200, gold: 150, platinum: 129 },
       objectives: [
         { id: 'co-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'co-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },
@@ -237,12 +237,12 @@ export const levels: LevelEntry[] = [
       music: 'momentum',
       spawn: { p: [0, 0, -4], yaw: Math.PI },
       killY: -60,
-      layout: 3, // 2: the finale added; 3: doubled with the reprise (bests reset)
+      layout: 4, // 2: the finale added; 3: doubled with the reprise; 4: Phase 3, the course goes on (bests reset)
       bounds: [
         [-70, -60, -30],
-        [70, 80, 1090],
+        [70, 80, 2600],
       ],
-      medals: { bronze: 160, silver: 116, gold: 89, platinum: 75 },
+      medals: { bronze: 344, silver: 241, gold: 181, platinum: 155.5 },
       objectives: [
         { id: 'sp-clean', kind: 'noDeath', label: 'Finish without dying' },
         { id: 'sp-hidden', kind: 'hiddenRoute', label: 'Find the hidden route' },

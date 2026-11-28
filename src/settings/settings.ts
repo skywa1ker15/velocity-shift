@@ -1,7 +1,7 @@
 /** Player settings: one typed model, defaults, and the Reduce Motion derivation. */
 
 export type GraphicsPreset = 'low' | 'medium' | 'high' | 'ultra' | 'auto';
-export type SprintMode = 'auto' | 'hold' | 'toggle';
+export type SprintMode = 'hold' | 'toggle';
 export type SlideMode = 'hold' | 'toggle';
 
 export interface Settings {
@@ -77,7 +77,7 @@ export const defaultSettings: Settings = {
   brightness: 1,
   sensitivity: 1,
   invertY: false,
-  sprintMode: 'auto',
+  sprintMode: 'hold',
   slideMode: 'hold',
   reduceMotion: false,
   headBob: 1,
@@ -192,7 +192,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!['dynamic', 'home', 'classic'].includes(out.multiverse)) out.multiverse = 'dynamic';
   if (!['evolve', 'pure'].includes(out.gameMode)) out.gameMode = 'evolve';
   if (!['low', 'medium', 'high', 'ultra', 'auto'].includes(out.preset)) out.preset = 'auto';
-  if (!['auto', 'hold', 'toggle'].includes(out.sprintMode)) out.sprintMode = 'auto';
+  // 'auto' (always sprint) predates stamina: full pace is now always on, the key is the sprint
+  if (!['hold', 'toggle'].includes(out.sprintMode)) out.sprintMode = 'hold';
   if (!['hold', 'toggle'].includes(out.slideMode)) out.slideMode = 'hold';
   if (!['dot', 'ring', 'off'].includes(out.crosshair)) out.crosshair = 'dot';
   return out as Settings;

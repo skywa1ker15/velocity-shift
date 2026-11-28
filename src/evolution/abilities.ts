@@ -10,6 +10,7 @@
 export type AbilityCategory = 'movement' | 'combat' | 'survival' | 'special' | 'mythic';
 export type AbilityId =
   | 'stride'
+  | 'endurance'
   | 'glide'
   | 'spring'
   | 'phase'
@@ -60,6 +61,20 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
       'Slipstream: above 15 m/s you smash straight through objects, and each one pushes you faster',
     ],
     evolutions: { 2: 'Overdrive', 3: 'Momentum Lock', 4: 'Slipstream' },
+  }),
+  endurance: A({
+    id: 'endurance',
+    name: 'Endurance',
+    category: 'movement',
+    family: 'ground',
+    max: 3,
+    glyph: 'En',
+    levels: [
+      'Stamina bar 40% bigger, and it refills 30% faster',
+      'Second Wind: every Kinetic Chain milestone and cleared gate refills stamina; sprinting costs 25% less',
+      'Afterburner: sprint is 1.5 m/s faster and running dry no longer locks it out',
+    ],
+    evolutions: { 2: 'Second Wind', 3: 'Afterburner' },
   }),
   glide: A({
     id: 'glide',
@@ -289,7 +304,7 @@ export const ABILITY_IDS = Object.keys(ABILITIES) as AbilityId[];
 
 /** Abilities each collectible family can grant. */
 export const FAMILY_POOL: Record<AbilityDef['family'], AbilityId[]> = {
-  ground: ['stride', 'glide', 'magnet'],
+  ground: ['stride', 'glide', 'magnet', 'endurance'],
   air: ['spring', 'steady'],
   dash: ['phase', 'flywheel'],
   wall: ['wallrunner'],
@@ -312,6 +327,11 @@ export const T = {
   overdriveBonus: 2.0,
   overdriveAfter: 1.0,
   lockTime: 1.6,
+  staminaAdd: [0, 40, 60, 75],
+  staminaRegen: [1, 1.3, 1.45, 1.55],
+  staminaDrain: [1, 0.85, 0.75, 0.7],
+  afterburner: 1.5,
+  overchargeTime: 8,
   slipstreamSpeed: 15,
   slipstreamPush: 1.2,
   glideFriction: [1, 0.5, 0.42, 0.36, 0.32],
@@ -372,7 +392,16 @@ export const T = {
 
 /** Synergies: two abilities at these levels together unlock something neither does alone. */
 export type SynergyId =
-  'phantom' | 'skybreaker' | 'railgun' | 'dynamo' | 'updraft' | 'guardian' | 'tempest' | 'comet' | 'ricochet';
+  | 'phantom'
+  | 'skybreaker'
+  | 'railgun'
+  | 'dynamo'
+  | 'updraft'
+  | 'guardian'
+  | 'tempest'
+  | 'comet'
+  | 'ricochet'
+  | 'redline';
 export interface SynergyDef {
   id: SynergyId;
   name: string;
@@ -406,6 +435,15 @@ export const SYNERGIES: SynergyDef[] = [
       ['spring', 1],
     ],
     text: 'Slide-jumps launch 40% further and higher',
+  },
+  {
+    id: 'redline',
+    name: 'Redline',
+    needs: [
+      ['endurance', 1],
+      ['stride', 2],
+    ],
+    text: 'Sprinting in Overdrive keeps your Kinetic Chain alive',
   },
   {
     id: 'skybreaker',

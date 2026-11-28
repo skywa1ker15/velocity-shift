@@ -98,14 +98,9 @@ vec3 mvChar(float id, vec3 alb, float lit, float rim, float hull, vec3 glow, vec
     return c + glow * 0.9;
   }
   if (id > 8.5) {
-    // CORRUPTION: untextured grey with scan tears and a split-colour outline
-    float tick = floor(uTime * 7.0);
+    // CORRUPTION: untextured grey with a split-colour outline (no flickering scan tears)
     if (hull > 0.5) return mix(vec3(1.6, 0.1, 0.2), vec3(0.1, 0.4, 1.6), step(0.0, n.x));
     vec3 c = vec3(0.25 + chLum(alb) * 0.5) * (0.45 + 0.7 * lit);
-    float row = floor(fc.y / 6.0);
-    float tear = step(0.9, mvH2(vec2(row, tick)));
-    c = mix(c, alb.gbr * 1.4, tear);
-    c = mix(c, vec3(0.1, 1.0, 0.45), step(0.97, mvH2(floor(fc / 8.0) + tick)) * 0.8);
     return c + glow * 1.3;
   }
   // a universe without a character style yet: simple lit colour

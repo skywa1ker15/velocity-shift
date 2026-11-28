@@ -224,6 +224,7 @@ export class LevelView {
       const b = new GeoBuilder();
       if (e instanceof Mover) {
         const d = e.def;
+        if (d.visible === false) continue;
         const m: MatId = d.lethal ? 'hazard' : (d.mat ?? 'alt');
         b.addBox(0, 0, 0, d.s[0], d.s[1], d.s[2], null, this.palette[m], this.fxOf(m, d.wallrun));
         // glowing underside strip so moving terrain reads as "alive"
@@ -628,7 +629,7 @@ export class LevelView {
       o.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w);
       if (alpha < 1) o.quaternion.slerpQuaternions(_q, o.quaternion, alpha);
       if (v.warn) v.warn.value = e.warn;
-      let visible = e.visible;
+      let visible = e.visible && e.present;
       if (e instanceof Mover && e.def.telegraph && e.atRest && e.warn > 0) {
         // a crusher about to drop rattles in its housing as it glows
         o.position.x += Math.sin(time * 67) * 0.03 * e.warn;

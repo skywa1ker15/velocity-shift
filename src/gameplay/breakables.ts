@@ -35,6 +35,12 @@ export const BREAKABLE_SPECS: Record<BreakableKind, BreakableSpec> = {
   spindle: { hx: 0.16, hy: 1.0, hz: 0.16, cy: 1.15, mat: 'metal' },
   sentinel: { hx: 0.42, hy: 1.05, hz: 0.3, cy: 1.1, mat: 'stone' },
   seal: { hx: 0.75, hy: 0.75, hz: 0.12, cy: 1.45, mat: 'energy' },
+  // Phase 3
+  glass: { hx: 1.4, hy: 1.4, hz: 0.05, cy: 1.45, mat: 'glass' },
+  core: { hx: 0.45, hy: 0.45, hz: 0.45, cy: 1.35, mat: 'energy' },
+  conduit: { hx: 0.32, hy: 0.55, hz: 0.22, cy: 1.15, mat: 'metal' },
+  chain: { hx: 0.14, hy: 1.6, hz: 0.14, cy: 0, mat: 'metal' },
+  mote: { hx: 0.22, hy: 0.22, hz: 0.22, cy: 1.4, mat: 'energy' },
 };
 
 /** World-space hit-box centre and a bounding radius for the sword sweep. */

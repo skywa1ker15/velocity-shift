@@ -23,6 +23,16 @@ export const movementConfig = {
   maxSlopeDeg: 50,
   snapDistance: 0.3,
 
+  // Sprint (hold the sprint key): a burst above the normal full pace that draws stamina. No gap
+  // anywhere needs it; it is speed and route choice only.
+  sprintBoost: 3, // m/s above sprintSpeed while sprinting
+  staminaMax: 100,
+  staminaDrain: 20, // per second while sprinting (a full bar lasts 5 s)
+  staminaRegen: 18, // per second once you stop (about 5.5 s from empty to full)
+  staminaDelay: 0.7, // s after letting go before it refills
+  staminaRestart: 30, // run dry and sprint is locked out until the bar is back to this
+  staminaLow: 25, // below this the bar warns
+
   // Air
   gravity: 28,
   fallMultiplier: 1.6,

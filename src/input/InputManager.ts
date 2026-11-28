@@ -43,6 +43,7 @@ export class InputManager {
     jumpHeld: false,
     jumpPressed: false,
     sprint: false,
+    burst: false,
     slideHeld: false,
     slidePressed: false,
     dashPressed: false,
@@ -215,8 +216,9 @@ export class InputManager {
     f.attackPressed = this.pressed.attack;
     f.swordPressed = this.pressed.sword;
     f.surgePressed = this.pressed.surge;
-    const mode = this.settings.sprintMode;
-    f.sprint = mode === 'auto' ? true : mode === 'hold' ? this.isDown('sprint') : this.sprintLatch;
+    // full pace is always on; the sprint key is the stamina-limited sprint above it
+    f.sprint = true;
+    f.burst = this.settings.sprintMode === 'toggle' ? this.sprintLatch : this.isDown('sprint');
     f.slideHeld = this.settings.slideMode === 'hold' ? this.isDown('slide') : this.slideLatch;
     this.pressed.jump =
       this.pressed.dash =
@@ -226,6 +228,11 @@ export class InputManager {
       this.pressed.surge =
         false;
     return f;
+  }
+
+  /** Toggle-mode sprint ends when stamina runs out. */
+  clearSprintLatch() {
+    this.sprintLatch = false;
   }
 
   /** Toggle-mode slide ends when the slide itself ends. */

@@ -11,6 +11,7 @@
  * corridor.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 import { arc, faceAt, floorAt, type Lane } from '../profile';
 import { tube } from '../tubes';
@@ -178,9 +179,24 @@ export function build(): LevelData {
   );
   b.plat(6, CP, 597, 16, 48); // the core platform, z 573..621
   b.checkpoint(6, CP, 580);
-  b.finish(6, CP, 600, 12);
   b.gate(6, CP, 620, 10, 8);
   b.ring(6, CP + 9, 628, 9, 0.6, [0, 0, 0], [0, 0, 0.4], 'accent', 1);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [6, CP, 621], { id: 'cor', level: 8 });
+  ext.roll(1);
+  ext.climbOver();
+  ext.hurdles();
+  ext.gaps();
+  ext.drawbridge();
+  ext.roll(-1);
+  ext.chute(6);
+  ext.laserGate();
+  ext.wallChain();
+  ext.climbOver();
+  ext.collapseRun();
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -234,6 +250,7 @@ export function build(): LevelData {
     [6, CP, 588, undefined, 4],
     [6, CP, 600],
   );
+  b.bot(...ext.bot);
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('pylon', 1.5, 0, 8);
   b.breakable('energy', -2.7, 0, 18, { scale: 0.7 });

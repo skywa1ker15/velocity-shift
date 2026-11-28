@@ -167,3 +167,25 @@ lane is a wall-run, a kick-off, then a double jump (a kick-off alone gains only 
 - Floating kinds (panel, sign, lantern, prism, seal) get no floor by default.
 - `tests/sim/breakables.test.ts` holds every object, including the spawned ones, to the placement rules.
 - Slots are recorded from the raw course, so adding slashables never makes slot files stale. Adding hand-placed breakables does, so run `npm run gen:slots`.
+
+## Sections and the Difficulty Director (Phase 3)
+
+Every course continues past its original act with a `Course` from `src/levels/sections.ts`:
+
+```ts
+const ext = new Course(b, [x, y, zStart], { id: 'awa', level: 1, base?, alt? });
+ext.runway(); ext.hurdles(4); ext.gaps(5); ext.drawbridge(); …
+const { finishZ } = ext.finale();
+ext.finish(finishZ);
+// … after the course's own bot line:
+b.bot(...ext.bot);
+```
+
+- Each section lays its geometry in the course's materials, a checkpoint (20–85 m apart; a long hurdle set gets a second one) and its own reference line.
+- Library: `runway`, `hurdles` (with a glass bypass), `gaps`, `collapseRun`, `wallChain`, `doubleGap`, `stairs`, `chute`, `drawbridge` (a telegraphed event, or cut a chain), `laserGate` (a timed curtain, or cut its conduit), `climbOver` (level 7 on), `roll` (level 3 on; `roll(-1, 180)` for the later two-axis turns) and `finale`.
+- Keep the established order: levels 1–2 use fundamentals only, rolls start at level 3, left/right and half turns at 6, up/down climbs at 7, and later courses combine them.
+- Sections that vary register an **encounter** (`data.encounters`: id, start, max tier, the dimensions it reads, `intense` for set pieces). Their variants are ordinary entities and breakables tagged `enc` + `tiers: [min, max]`; the Director makes exactly one tier's variants exist when the runner comes within 110 m.
+- Rules for variants (tested): a higher tier may only add things the line already clears (a laser inside a jump arc or a slide), narrower or crumbling footing on the same line, faster telegraphed cycles (never under the telegraph time) or more to cut. It never needs an ability the runner might not have.
+- Mechanisms raise level events: a breakable's `fires: 'name'`, a trigger, and an entity's `on:` (start) or `off:` (switch off for the attempt, restored on respawn). A mover with `visible: false` is an invisible wall (the glass seal).
+- `tests/sim/phase3.test.ts` builds every section on its own and runs its line at tier 0 and tier 2, and runs every full course at tier 2; `levels.test.ts` runs the natural (Director-chosen) line.
+- After any geometry change: `npm run gen:slots`, then re-measure the Pure reference time and set medals (gold just above it, platinum ×0.86, silver ×1.33, bronze ×1.9) and bump the course's `layout` so old bests reset.

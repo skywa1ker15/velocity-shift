@@ -538,9 +538,8 @@ void main() {
     local = vec3(local.x * ca - local.z * sa, local.y, local.x * sa + local.z * ca);
     local *= 1.0 + 0.14 * sin(uTime * 1.3 + local.y * 0.6 + aAnchor.x);
   } else if (uMine > 8.5) {
-    // corruption: pieces snap between a few wrong positions
-    float tk = floor(uTime * 5.0 + aAnchor.x);
-    float r = fract(sin(dot(vec2(tk, aAnchor.z + floor(position.y * 0.4)), vec2(12.9898, 78.233))) * 43758.5453);
+    // corruption: a few pieces sit displaced, fixed in place (they never snap about)
+    float r = fract(sin(dot(vec2(aAnchor.x, aAnchor.z + floor(position.y * 0.4)), vec2(12.9898, 78.233))) * 43758.5453);
     local += step(0.82, r) * (vec3(fract(r * 13.0), fract(r * 7.0), fract(r * 29.0)) - 0.5) * 3.0;
   }
   // a slow bob so the world never stands perfectly still
@@ -586,8 +585,8 @@ void main() {
     vec3 wc = mix(vec3(1.0, 0.75, 0.4), mix(vec3(0.1, 0.95, 1.0), vec3(1.0, 0.12, 0.72), step(0.5, sH(floor(wg) + 7.0))), step(0.5, sH(floor(wg) + 3.0)));
     c += wc * win * step(0.2, vGlow) * step(vGlow, 0.5) * 0.85;
     c += vCol * max(vGlow - 0.5, 0.0) * (0.85 + 0.15 * sin(uTime * 5.0 + vW.y));
-    // big panels show scrolling blocks of light
-    if (vGlow > 3.0) c *= 0.45 + 0.75 * step(0.45, sH(floor(vec2(vW.y * 0.9 + uTime * 0.5, dot(vW.xz, vec2(n.z, -n.x)) * 0.9))));
+    // big panels show a fixed pattern of lit blocks (no scrolling)
+    if (vGlow > 3.0) c *= 0.45 + 0.75 * step(0.45, sH(floor(vec2(vW.y * 0.9, dot(vW.xz, vec2(n.z, -n.x)) * 0.9))));
   } else if (uMine < 2.5) {
     // comic: flat colour, dotted shade, an ink rim standing in for the outline
     vec2 hg = mat2(0.866, -0.5, 0.5, 0.866) * gl_FragCoord.xy / 7.0;
@@ -637,13 +636,12 @@ void main() {
     c += vec3(1.0, 0.16, 0.62) * wire * step(0.5, vGlow) * step(vGlow, 1.5) * 0.9;
     c += vCol * max(vGlow - 1.5, 0.0) * 1.6;
   } else {
-    // corruption: grey untextured geometry, wire edges, error colours flicker
-    float tick = floor(uTime * 7.0);
+    // corruption: grey untextured geometry, wire edges, error colours fixed on a few bands
     c = vec3(0.2 + dot(vCol, vec3(0.333)) * 0.5) * (0.45 + 0.7 * ndl);
     c = mix(c, vCol, step(0.3, vGlow));
     float row = floor(vW.y * 1.5);
-    c = mix(c, c.gbr * 1.5, step(0.9, sH(vec2(row, tick))));
-    c += vCol * vGlow * (0.4 + 0.6 * step(0.3, sH(vec2(tick, floor(vW.x)))));
+    c = mix(c, c.gbr * 1.5, step(0.9, sH(vec2(row, 3.0))));
+    c += vCol * vGlow * (0.4 + 0.6 * step(0.3, sH(vec2(5.0, floor(vW.x)))));
     c = mix(c, vec3(1.5), step(0.9, rim) * 0.6);
   }
   // fog, as on the level geometry

@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 3: the world evolves with you
+
+- **No more flickering rows.** Removed the speed-line and streak overlays, the Overdrive sticker streaks, the transition row glitch and pixel burst, and every shader pattern that stepped or scrolled in time (sky grid, floor pulses, tower scan bands, flickering windows and glyphs, corruption row slips, re-rolled grain). Speed now reads through a steady vignette, the FOV and the camera. A test keeps them out.
+- **Sprint and stamina (both modes).** 11 m/s stays the full running pace; Shift (hold or toggle) adds +3 m/s and draws a 100-point stamina bar (about 5 s). It refills after 0.7 s, an empty bar locks the sprint until 30, and a respawn refills it. No gap needs it. There is a HUD bar with low and empty states, sprint, low, empty and recovered sounds, and an FOV kick. New Evolve ability **Endurance** (bigger bar, faster refill, cheaper sprint; Second Wind, Afterburner) and the **Redline** synergy.
+- **Courses about twice as long.** Each course continues past its old finish through a section library (runways, hurdle sets with a glass bypass, gap runs, collapsing runs, wall chains, stairs, chutes, drawbridges, laser gates, climbs and world rolls) into a finale. Reference distances went from 601–1164 m to 1340–2119 m (1.7–2.3×), and Pure reference runs from 55–87 s to 124–178 s.
+- **The Difficulty Director.** Eight dimensions follow your progress, speed, upgrades, stamina, chain and deaths, with progress caps, rate limits, recovery after set pieces and easing after deaths. Each encounter's variant is chosen before you can see it, and the variants only add hazards the line already clears, faster telegraphed cycles, crumbling footing, bypasses and more to cut.
+- **The world moves.** Drawbridges swing down as you arrive (or cut a chain), laser gates cycle (or cut the conduit to kill them for the attempt), and sealed bypass lanes open to the blade. "THE WORLD MOVES" / "BYPASS OPEN" / "GATE POWERED DOWN" callouts, flashes and sounds go with them.
+- **New destructibles:** glass panes (shatter piece by piece), energy cores (Overcharge in Evolve), conduits, chains and mote trails.
+- **Power-ups you can see:** every power-up has a tall beam and a slowly turning halo in its rarity colour, a ring burst on pickup, and the upgrade callout says where it came from and what it now does.
+- **Active effects panel (Evolve):** every running temporary effect (Surge, Reflex, Overcharge, Momentum Lock, Shielded, Hover, Overdrive) with icon, name, what it does, a countdown bar and seconds. It warns under 30% and shows ENDED briefly. Permanent upgrades never appear there.
+- **Medals and bests:** Pure medals were recalibrated on the new reference runs, and every course's layout version was bumped (old bests reset).
+
 ## Overhaul: power-ups you feel, a slashable world, the Kinetic Chain
 
 - **Every upgrade level is a felt change.** Measured on the same scripted run:

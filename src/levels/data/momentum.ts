@@ -10,6 +10,7 @@
  * A narrow high rail skips a quarter of the course.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import type { LevelData } from '../types';
 
 export function build(): LevelData {
@@ -319,13 +320,29 @@ export function build(): LevelData {
   b.entity({ type: 'jumppad', p: [0, H + 0.6, Z0 + 148], s: [6, 1.2, 4], v: [0, 16, 3] });
   b.ring(0, H + 5.5, Z0 + 158, 6.5, 0.4, [0, 0, 0], [0, 0, 0.5], 'accent', 1);
   b.plat(0, H + 2, Z0 + 178, 16, 28);
-  b.finish(0, H + 2, Z0 + 182, 12);
   b.prompt(
     [0, G2 + 1.5, 938],
     [9, 4, 8],
     'slide',
     'Last line: chute, wall, sinking pads, launcher. Do not stop for anything',
   );
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, H + 2, Z0 + 192], { id: 'mom', level: 3 });
+  ext.runway();
+  ext.roll(1);
+  ext.hurdles();
+  ext.gaps();
+  ext.drawbridge();
+  ext.chute(6);
+  ext.collapseRun();
+  ext.laserGate();
+  ext.roll(-1);
+  ext.wallChain();
+  ext.doubleGap();
+  ext.runway(50);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
   b.bot(
@@ -404,6 +421,7 @@ export function build(): LevelData {
     [0, H + 3, 1100, 'j', 2.5],
     [0, H + 2, 1125],
   );
+  b.bot(...ext.bot);
   // ----- destructibles (Phase B): neon pylons, energy barriers and cargo beside the high-speed
   // lines (none in the crusher hall)
   b.breakable('pylon', 1.6, -10, 83.1);

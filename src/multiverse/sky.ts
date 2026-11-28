@@ -55,7 +55,7 @@ vec3 skyNeon(vec3 d, vec3 k[4]) {
       vec3 body = mix(k[1] * 0.75, vec3(0.012, 0.01, 0.035), fi / 2.0);
       col = mix(col, body, cov * (0.75 + 0.25 * fi / 2.0));
       vec3 wc = mix(vec3(1.0, 0.72, 0.36), mix(cyan, mag, step(0.5, hash(vec2(floor(az * 9.0), fi)))), step(0.5, hash(vec2(floor(az * 61.0), fi + 2.0))));
-      col += wc * win * (0.35 + 0.45 * fi) * (0.7 + 0.3 * step(0.15, fract(uTime * 0.31 + hash(vec2(floor(az * 300.0), fi)))));
+      col += wc * win * (0.35 + 0.45 * fi) * (0.7 + 0.3 * step(0.15, hash(vec2(floor(az * 300.0), fi + 3.0))));
       col += mix(mag, cyan, fi / 2.0) * roof * 0.5;
     }
     // giant holo-signs hanging over the skyline
@@ -64,7 +64,7 @@ vec3 skyNeon(vec3 d, vec3 k[4]) {
     vec2 sf = vec2(fract(sg) - 0.5, (h - 0.13 - hash(vec2(sc, 4.0)) * 0.1) * 9.0);
     float on = step(0.45, hash(vec2(sc, 1.0)));
     float panel = step(abs(sf.x), 0.16) * step(abs(sf.y), 0.32) * on;
-    float glyph = step(0.5, hash(floor(vec2(sf.x * 26.0, sf.y * 18.0 + uTime * 0.6)) + sc));
+    float glyph = step(0.5, hash(floor(vec2(sf.x * 26.0, sf.y * 18.0)) + sc));
     vec3 sgc = mix(mag, cyan, step(0.5, hash(vec2(sc, 9.0))));
     col += sgc * panel * (0.25 + glyph * 0.85) * (0.8 + 0.2 * sin(uTime * 7.0 + sc));
     col += sgc * exp(-length(sf * vec2(3.0, 1.6)) * 2.2) * on * 0.25;
@@ -219,7 +219,7 @@ vec3 skySynth(vec3 d, vec3 k[4]) {
   float R = 0.3;
   float disc = (1.0 - smoothstep(R - 0.004, R, rad)) * front;
   float yy = sp2.y / R;                       // -1 bottom .. 1 top
-  float bandsP = fract((yy + 1.0) * 5.0 + uTime * 0.12);
+  float bandsP = fract((yy + 1.0) * 5.0);
   float cut = step(bandsP, (1.0 - (yy + 1.0) * 0.5) * 0.62) * step(yy, 0.25);
   vec3 sunC = mix(hot, k[3], smoothstep(-0.7, 0.9, yy)) * 1.5;
   col = mix(col, sunC, disc * (1.0 - cut));
@@ -247,7 +247,6 @@ vec3 skySynth(vec3 d, vec3 k[4]) {
   // below the horizon: the grid plane running out to infinity
   if (h < 0.0) {
     vec2 gp = d.xz / max(-h, 0.0005);
-    gp.y += uTime * 0.8;
     float depth = 1.0 / max(-h, 0.0005);
     float fade = exp(-depth * 0.022);
     float lw = 0.03 + depth * 0.004;
@@ -330,7 +329,7 @@ vec3 skyVoxel(vec3 d, vec3 k[4]) {
   // flat block clouds on a plane, drifting one texel at a time
   if (h > 0.03) {
     vec2 cp = qd.xz / h;
-    vec2 cc = floor(cp * 2.2 + vec2(floor(uTime * 0.25) * 0.25, 0.0));
+    vec2 cc = floor(cp * 2.2);
     float cl = step(0.62, noise(cc * 0.37) * 0.7 + noise(cc * 0.11 + 9.0) * 0.5);
     float shade = step(0.62, noise((cc + vec2(0.0, 1.0)) * 0.37) * 0.7 + noise((cc + vec2(0.0, 1.0)) * 0.11 + 9.0) * 0.5);
     col = mix(col, mix(vec3(0.84, 0.9, 0.97), vec3(1.0), shade), cl * smoothstep(0.03, 0.14, h) * 0.95);

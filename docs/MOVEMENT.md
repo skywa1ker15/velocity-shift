@@ -100,6 +100,7 @@ charge. A wall-jump refreshes the double jump.
 |---|---|
 | Body | radius 0.35 · stand 1.8 · slide 0.9 · step-up 0.35 |
 | Ground | run 7 · sprint 11 · run accel 60 · sprint ramp 7 · steer 70 · stop 48 · overspeed decay 4 |
+| Sprint & stamina (Phase 3) | 11 m/s is the full running pace; Shift adds +3 m/s · stamina 100, drains 20/s while sprinting, refills 18/s after 0.7 s · empty locks the sprint until 30 · low warning under 25 · refilled on respawn · no gap needs it |
 | Air | gravity 28 (×1.6 falling) · jump 9 (apex ≈ 1.45 m, 0.58 s airtime, 6.3 m at sprint) · jump cut ×0.5 · coyote 0.1 · buffer 0.12 · air accel 14 toward a 7 m/s wish speed · double jump 8.5 with 60 % redirect |
 | Slide | +2.5 m/s entry boost (0.8 s cooldown, only below ~14 m/s) · friction 8.6 (≈ 1.2 s / 10 m on flat) · slope gain 1.4 · steer 1.4 rad/s · exits at 3 m/s |
 | Dash | 26 m/s for 0.15 s (≈ 4 m) · exit 13 m/s · 2 charges · 1.2 s recharge each · 0.3 s minimum interval |

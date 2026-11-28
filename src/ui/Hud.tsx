@@ -281,6 +281,72 @@ function EvoRail() {
   );
 }
 
+/**
+ * Sprint stamina: drains while sprinting, refills after a pause. Low (under a quarter) turns it
+ * amber; running dry turns it red and says so until it is back to the restart mark.
+ */
+function StaminaBar({ hud }: { hud: { stamina: number; sprinting: boolean; exhausted: boolean } }) {
+  const low = hud.stamina < 0.25;
+  const cls = 'stamina' + (hud.exhausted ? ' empty' : low ? ' low' : '') + (hud.sprinting ? ' on' : '');
+  return (
+    <div
+      className={cls}
+      aria-label={`Stamina ${Math.round(hud.stamina * 100)}%${hud.exhausted ? ', empty' : ''}`}
+    >
+      <span>{hud.exhausted ? 'EMPTY' : 'STAMINA'}</span>
+      <div className="bar">
+        <i style={{ transform: `scaleX(${hud.stamina})` }} />
+        <u style={{ left: '30%' }} />
+      </div>
+    </div>
+  );
+}
+
+const EFFECT_GLYPH: Record<string, string> = {
+  surge: 'Su',
+  reflex: 'Rf',
+  overcharge: 'Oc',
+  lock: 'Lk',
+  shield: 'Sh',
+  hover: 'Hv',
+  overdrive: 'Od',
+};
+
+/**
+ * Active effects: every temporary effect running now, its name, what it does and how long is left
+ * (a bar and seconds). Effects without a clock (Overdrive) say ACTIVE. Under 30% left the row warns
+ * (steady colour, no blinking); an effect that runs out shows ENDED for a moment, then leaves.
+ */
+function EffectsPanel() {
+  const fx = useUi((s) => s.hud.evo?.effects);
+  if (!fx || !fx.length) return null;
+  return (
+    <div className="effects" aria-label="Active effects">
+      {fx.map((e) => {
+        const frac = e.max > 0 ? Math.max(0, Math.min(1, e.left / e.max)) : 1;
+        const low = !e.ended && e.max > 0 && frac < 0.3;
+        return (
+          <div key={e.id} className={'fx-row fx-' + e.id + (low ? ' low' : '') + (e.ended ? ' ended' : '')}>
+            <b className="fx-icon">{EFFECT_GLYPH[e.id] ?? e.name.slice(0, 2)}</b>
+            <div className="fx-text">
+              <span className="fx-name">{e.name}</span>
+              <span className="fx-desc">{e.desc}</span>
+              {e.max > 0 && (
+                <div className="fx-bar">
+                  <i style={{ transform: `scaleX(${frac})` }} />
+                </div>
+              )}
+            </div>
+            <span className="fx-time mono-num">
+              {e.ended ? 'ENDED' : e.left < 0 ? 'ACTIVE' : e.left.toFixed(1) + 's'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Flux meter (with the Surge cost marked), Flow gauge and any running timers. */
 function EvoMeters() {
   const evo = useUi((s) => s.hud.evo);
@@ -320,18 +386,11 @@ function EvoMeters() {
         </div>
       </div>
       <div className="timers">
-        {evo.surge > 0 && (
-          <span className="tm surge">
-            SURGE <b className="mono-num">{evo.surge.toFixed(1)}</b>
-          </span>
-        )}
-        {evo.reflex > 0 && <span className="tm reflex">REFLEX</span>}
         {evo.aegis >= 0 && (
           <span className={'tm aegis' + (evo.aegis >= 1 ? ' ready' : '')} title="Aegis">
             AEGIS {evo.aegis >= 1 ? '●' : <b className="mono-num">{Math.round(evo.aegis * 100)}%</b>}
           </span>
         )}
-        {evo.lock && <span className="tm lock">LOCK</span>}
         {evo.chain > 0 && evo.chain < 4 && (
           <span className="tm chain">
             ECHO {evo.chain}/4 <b className="mono-num">{evo.chainLeft.toFixed(1)}</b>
@@ -451,6 +510,7 @@ export function Hud({ frozen }: { frozen?: boolean }) {
           ))}
           <span>DASH</span>
         </div>
+        <StaminaBar hud={hud} />
         {s.showIndicators && (
           <>
             <div className="indicators">
@@ -469,6 +529,7 @@ export function Hud({ frozen }: { frozen?: boolean }) {
           </>
         )}
         <EvoMeters />
+        <EffectsPanel />
       </div>
       <EvoRail />
 

@@ -228,6 +228,56 @@
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent);
 }
+.stamina {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.stamina span {
+  font-size: 0.58em;
+  letter-spacing: 0.26em;
+  opacity: 0.85;
+  font-weight: 600;
+  min-width: 5.8em;
+  text-align: right;
+}
+.stamina .bar {
+  position: relative;
+  width: 8.4em;
+  height: 0.45em;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 1px rgba(4, 5, 9, 0.5);
+  transform: skewX(-25deg);
+}
+.stamina .bar i {
+  position: absolute;
+  inset: 0;
+  background: #b8ff6a;
+  transform-origin: left;
+  transition: background 0.2s;
+}
+.stamina.on .bar i {
+  box-shadow: 0 0 10px #b8ff6a;
+}
+/* the restart mark: after running dry, sprint comes back once the bar passes it */
+.stamina .bar u {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgba(4, 5, 9, 0.85);
+}
+.stamina.low .bar i {
+  background: #ffb547;
+}
+.stamina.empty span {
+  color: #ff5c5c;
+  opacity: 1;
+}
+.stamina.empty .bar i {
+  background: #ff5c5c;
+  opacity: 0.75;
+}
 .indicators {
   display: flex;
   gap: 0.4em;
@@ -1156,4 +1206,100 @@ html[data-universe='psyche'] .hud-tl {
 }
 .callout.rare {
   animation-duration: 1.5s;
+}
+
+/* ----- active effects (temporary power-ups with real countdowns) ----- */
+.effects {
+  display: grid;
+  gap: 0.3em;
+  margin-top: 0.5em;
+  justify-items: end;
+}
+.fx-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.55em;
+  min-width: 15em;
+  padding: 0.3em 0.55em;
+  background: rgba(7, 9, 15, 0.55);
+  border-left: 2px solid var(--fx, #7ff3ff);
+  transition: opacity 0.4s;
+}
+.fx-row .fx-icon {
+  display: grid;
+  place-items: center;
+  width: 2em;
+  height: 1.6em;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 0.78em;
+  color: #0a0c14;
+  background: var(--fx, #7ff3ff);
+  clip-path: polygon(14% 0, 100% 0, 86% 100%, 0 100%);
+}
+.fx-text {
+  display: grid;
+  gap: 0.1em;
+  text-align: left;
+}
+.fx-name {
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.fx-desc {
+  font-size: 0.62em;
+  opacity: 0.8;
+}
+.fx-bar {
+  height: 0.3em;
+  background: rgba(255, 255, 255, 0.18);
+  margin-top: 0.15em;
+}
+.fx-bar i {
+  display: block;
+  height: 100%;
+  background: var(--fx, #7ff3ff);
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+.fx-time {
+  font-size: 0.8em;
+  font-weight: 700;
+  min-width: 3.6em;
+  text-align: right;
+}
+.fx-row.low .fx-time,
+.fx-row.low .fx-name {
+  color: #ffb547;
+}
+.fx-row.low .fx-bar i {
+  background: #ffb547;
+}
+.fx-row.ended {
+  opacity: 0.45;
+}
+.fx-surge {
+  --fx: #8fd3ff;
+}
+.fx-reflex {
+  --fx: #c39bff;
+}
+.fx-overcharge {
+  --fx: #b8ff6a;
+}
+.fx-lock {
+  --fx: #7ff3ff;
+}
+.fx-shield {
+  --fx: #9dff7a;
+}
+.fx-hover {
+  --fx: #ffd35c;
+}
+.fx-overdrive {
+  --fx: #ff8a5c;
 }

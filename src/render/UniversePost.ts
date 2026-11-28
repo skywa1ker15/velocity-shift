@@ -10,7 +10,7 @@ import { NO_SCREEN, type ScreenLook } from '../multiverse/universes';
 
 const frag = /* glsl */ `
 uniform float uRain;
-uniform float uPixelBurst;
+uniform float uSpeed;
 uniform float uFlash;
 uniform float uSlow;
 uniform float uHalftone, uScan, uPixel, uFringe, uGrain, uPosterize, uPaper, uHueDrift, uT, uBurst;
@@ -34,18 +34,9 @@ vec3 uvHue(vec3 c, float a) {
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 p = uv;
-  // a universe transition's momentary kick: rows jump sideways for a moment
+  // a universe transition's kick is a smooth colour fringe that fades (no rows, no blocks)
   float glitch = uBurst;
-  if (glitch > 0.001) {
-    float row = floor(p.y * 38.0);
-    float tick = floor(uT * 11.0);
-    float r = uvH(vec2(row, tick));
-    float on = step(1.0 - glitch * 0.28, r);
-    p.x += on * (uvH(vec2(tick, row)) - 0.5) * 0.09 * glitch;
-    float blk = step(1.0 - glitch * 0.06, uvH(floor(p * vec2(9.0, 6.0)) + tick));
-    p += blk * (vec2(uvH(vec2(tick, 3.0)), uvH(vec2(tick, 7.0))) - 0.5) * 0.06;
-  }
-  float pixel = max(uPixel, uPixelBurst);
+  float pixel = uPixel;
   if (pixel > 0.5) {
     vec2 px = pixel / uRes;
     p = (floor(p / px) + 0.5) * px;
@@ -101,7 +92,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     }
   }
   if (uGrain > 0.001) {
-    float g = uvH(uv * uRes + fract(uT * 7.0) * 91.7) - 0.5;
+    float g = uvH(uv * uRes) - 0.5; // a fixed grain: it textures the frame without shimmering
     col += g * uGrain * 0.09;
   }
   // Evolve: while the world is slowed (Surge / Reflex) colour drains toward a cool grade and the
@@ -111,6 +102,11 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     col = mix(col, vec3(l2) * vec3(0.82, 0.95, 1.12), uSlow * 0.55);
     float v = length(uv - 0.5);
     col *= 1.0 - uSlow * 0.45 * smoothstep(0.32, 0.75, v);
+  }
+  // speed: the edges of the view darken a little, steadily, the faster you go (never flickers)
+  if (uSpeed > 0.001) {
+    float v = length((uv - 0.5) * vec2(1.25, 1.0));
+    col *= 1.0 - uSpeed * 0.3 * smoothstep(0.38, 0.85, v);
   }
   // a brief lift as the front passes through the lens
   col += uFlash * (0.35 + 0.65 * col);
@@ -122,8 +118,8 @@ export class UniverseEffect extends Effect {
   private look: ScreenLook = { ...NO_SCREEN };
   /** 0..1 momentary glitch kick (transitions). */
   burst = 0;
-  /** Momentary chunky pixels in screen pixels (pixel transition). */
-  pixelBurst = 0;
+  /** 0..1 steady speed vignette (set by the game from the runner's speed). */
+  speed = 0;
   /** 0..1 momentary brightening as a front crosses the camera. */
   flash = 0;
   /** Scales the harsher treatments (accessibility: reduced flashing). */
@@ -137,9 +133,9 @@ export class UniverseEffect extends Effect {
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map<string, Uniform>([
         ['uRain', new Uniform(0)],
-        ['uPixelBurst', new Uniform(0)],
         ['uFlash', new Uniform(0)],
         ['uSlow', new Uniform(0)],
+        ['uSpeed', new Uniform(0)],
         ['uHalftone', new Uniform(0)],
         ['uScan', new Uniform(0)],
         ['uPixel', new Uniform(0)],
@@ -184,8 +180,7 @@ export class UniverseEffect extends Effect {
     this.uniforms.get('uT')!.value = time;
     this.burst = Math.max(0, this.burst - dt * 2.2);
     this.uniforms.get('uBurst')!.value = this.burst * this.intensity;
-    this.pixelBurst = Math.max(0, this.pixelBurst - dt * 34);
-    this.uniforms.get('uPixelBurst')!.value = this.pixelBurst > 1.5 ? Math.round(this.pixelBurst) : 0;
+    this.uniforms.get('uSpeed')!.value = this.speed;
     this.flash = Math.max(0, this.flash - dt * 3.2);
     this.uniforms.get('uFlash')!.value = this.flash * this.flash * 0.5 * this.intensity;
     this.uniforms.get('uSlow')!.value = this.slow;

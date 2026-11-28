@@ -9,6 +9,7 @@
  * a gap inside it and collapsing tiles out to the finish. Home universe: Low-Poly.
  */
 import { LevelBuilder } from '../LevelBuilder';
+import { Course } from '../sections';
 import { tube } from '../tubes';
 import type { LevelData } from '../types';
 
@@ -162,8 +163,21 @@ export function build(): LevelData {
   for (let i = 0; i < 4; i++)
     b.entity({ type: 'collapse', p: [0, T - 0.3, 533 + i * 6], s: [6, 0.6, 5.8], delay: 0.9, mat: 'alt' });
   b.plat(0, T, 569, 14, 30); // 554..584
-  b.finish(0, T, 566, 12);
   b.gate(0, T, 583, 10, 8);
+
+  // ===== Phase 3: the course goes on (section library + Difficulty Director) =================
+  const ext = new Course(b, [0, T, 584], { id: 'fac', level: 6 });
+  ext.roll(1);
+  ext.gaps();
+  ext.roll(-1, 180);
+  ext.hurdles();
+  ext.laserGate();
+  ext.wallChain();
+  ext.roll(1);
+  ext.collapseRun();
+  ext.runway(50);
+  const { finishZ } = ext.finale();
+  ext.finish(finishZ);
 
   scenery(b);
 
@@ -226,6 +240,7 @@ export function build(): LevelData {
     [0, T, 545],
     [0, T, 566],
   );
+  b.bot(...ext.bot);
   // ----- destructibles beside the line: the sword is never needed, but they answer it
   b.breakable('panel', 1.5, 0 + 1.9, 8);
   b.breakable('crate', -1.5, 0, 26);

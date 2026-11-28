@@ -41,7 +41,7 @@ export const makeEvoSim = (build: (b: LevelBuilder) => void, spawn: [number, num
   makeSim(build, spawn, { evolve: { seed: 7, slots: [] } });
 
 export type Keys = Partial<
-  Pick<InputFrame, 'moveX' | 'moveZ' | 'sprint' | 'jumpHeld' | 'slideHeld' | 'yaw' | 'pitch'>
+  Pick<InputFrame, 'moveX' | 'moveZ' | 'sprint' | 'burst' | 'jumpHeld' | 'slideHeld' | 'yaw' | 'pitch'>
 > & {
   jump?: boolean; // press this tick
   dash?: boolean;
@@ -84,6 +84,7 @@ export class Driver {
     if (keys.moveX !== undefined) i.moveX = keys.moveX;
     if (keys.moveZ !== undefined) i.moveZ = keys.moveZ;
     if (keys.sprint !== undefined) i.sprint = keys.sprint;
+    if (keys.burst !== undefined) i.burst = keys.burst;
     if (keys.jumpHeld !== undefined) i.jumpHeld = keys.jumpHeld;
     if (keys.slideHeld !== undefined) i.slideHeld = keys.slideHeld;
     if (keys.yaw !== undefined) i.yaw = keys.yaw;

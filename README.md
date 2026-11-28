@@ -17,7 +17,7 @@ saved in your browser.
 | Jump · double jump · wall jump | Space |
 | Slide | C (or right mouse button) |
 | Dash | Q (or E) |
-| Sprint | automatic by default — hold / toggle on Shift in Settings |
+| Sprint | Shift (hold, or toggle in Settings): +3 m/s on top of the full running pace, drawing stamina |
 | Restart from checkpoint | R (hold R: restart the level) |
 | Pause | Esc or P |
 

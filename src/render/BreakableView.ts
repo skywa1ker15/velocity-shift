@@ -230,6 +230,75 @@ function art(kind: BreakableKind, hang: number, palette: { accent: number; glass
       cut.push(boxPart(0.05, 0.16, 0.006, A, m4(0, 1.3, -0.28), { glow: 0.8, noInk: true }, A));
       break;
     }
+    // ----- Phase 3: mechanisms and new materials ------------------------------------------------
+    case 'glass': {
+      // a tall pane of tinted glass in a thin frame: it shatters into many pieces
+      const G = palette.glass;
+      for (let ix = 0; ix < 3; ix++)
+        for (let iy = 0; iy < 3; iy++)
+          cut.push(
+            boxPart(
+              0.44,
+              0.44,
+              0.025,
+              G,
+              m4(-0.92 + ix * 0.92, 0.53 + iy * 0.92, 0),
+              { glow: 0.18 },
+              0xffffff,
+            ),
+          );
+      for (const x of [-1.42, 1.42]) remain.push(boxPart(0.05, 1.45, 0.06, INKY, m4(x, 1.45, 0)));
+      remain.push(boxPart(1.47, 0.05, 0.06, INKY, m4(0, 2.9, 0)));
+      remain.push(boxPart(1.47, 0.05, 0.08, A, m4(0, 0.03, 0), { glow: 0.9, noInk: true }, A));
+      break;
+    }
+    case 'core': {
+      // an energy core: a bright sphere-ish heart in a cage of four rails
+      cut.push(prismPart(10, 0.3, 0.3, A, m4(0, 1.35, 0), { glow: 2.4, noInk: true }, A, 0.3));
+      cut.push(prismPart(10, 0.2, 0.08, 0xffffff, m4(0, 1.69, 0), { glow: 2, noInk: true }, A, 0.05));
+      cut.push(prismPart(10, 0.05, 0.08, 0xffffff, m4(0, 1.01, 0), { glow: 2, noInk: true }, A, 0.2));
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * PI * 2 + PI / 4;
+        cut.push(
+          boxPart(
+            0.03,
+            0.5,
+            0.03,
+            INKY,
+            m4(Math.cos(a) * 0.42, 1.35, Math.sin(a) * 0.42),
+            undefined,
+            0x55607a,
+          ),
+        );
+      }
+      break;
+    }
+    case 'conduit': {
+      // an energy conduit box on a post, cables to the laser gate it powers
+      remain.push(boxPart(0.08, 0.6, 0.08, INKY, m4(0, 0.6, 0)));
+      cut.push(boxPart(0.3, 0.5, 0.2, 0x3a3f52, m4(0, 1.15, 0), undefined, 0x9098b8));
+      cut.push(boxPart(0.2, 0.36, 0.01, A, m4(0, 1.15, -0.21), { glow: 1.8, noInk: true }, A));
+      for (const y of [0.85, 1.45])
+        cut.push(boxPart(0.32, 0.03, 0.22, A, m4(0, y, 0), { glow: 0.8, noInk: true }, A));
+      break;
+    }
+    case 'chain': {
+      // a hanging chain of glowing links: cut it and it snaps, links flying
+      for (let i = 0; i < 8; i++) {
+        const y = -1.4 + i * 0.4;
+        cut.push(
+          boxPart(i % 2 ? 0.03 : 0.11, 0.17, i % 2 ? 0.11 : 0.03, 0x9aa6c4, m4(0, y, 0), undefined, 0xe8f0ff),
+        );
+      }
+      cut.push(boxPart(0.06, 0.06, 0.06, A, m4(0, -1.62, 0), { glow: 1.5, noInk: true }, A));
+      break;
+    }
+    case 'mote': {
+      // a small floating target: an energy diamond
+      cut.push(prismPart(4, 0.01, 0.18, A, m4(0, 1.22, 0), { glow: 1.4, noInk: true }, A, 0.2, PI / 4));
+      cut.push(prismPart(4, 0.2, 0.18, A, m4(0, 1.58, 0), { glow: 1.4, noInk: true }, A, 0.01, PI / 4));
+      break;
+    }
     case 'seal': {
       // Rift Seal: a ring of eight segments holding a disc of folded space
       for (let i = 0; i < 8; i++) {
@@ -311,6 +380,7 @@ interface Obj {
   parts: ConvexPart[];
   broken: boolean;
   baseY: number;
+  absent?: boolean;
 }
 
 /** What broke, for the game to dress with effects and sound. */
@@ -555,7 +625,29 @@ export class BreakableView {
           .copy(down.normalize())
           .multiplyScalar(isLow ? 0.4 : 1.6)
           .addScaledVector(along, isLow ? 0.3 : 1.4);
-      } else if (kind === 'relic' || kind === 'lantern' || kind === 'bloom' || kind === 'seal') {
+      } else if (kind === 'glass') {
+        // shattered: each half breaks again into its pieces and they spray along the blade
+        vel
+          .copy(n)
+          .multiplyScalar(sgn * 2.4)
+          .addScaledVector(along, 3)
+          .addScaledVector(playerVel, 0.5)
+          .add(new THREE.Vector3(0, 1.2, 0));
+        for (const part of ps) {
+          const v = vel
+            .clone()
+            .add(new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3));
+          this.spawn(i, [part], v, 'fly', 1.2, d.ground, sgn);
+        }
+        continue;
+      } else if (
+        kind === 'relic' ||
+        kind === 'lantern' ||
+        kind === 'bloom' ||
+        kind === 'seal' ||
+        kind === 'core' ||
+        kind === 'mote'
+      ) {
         // energy constructs come apart weightlessly and burn out
         mode = 'float';
         vel
@@ -655,8 +747,14 @@ export class BreakableView {
     for (const m of this.memMats) m.uniforms.uTime.value = this.t;
     // the simulation is the source of truth: a restart brings everything back
     if (this.sim) {
-      const br = this.sim.broken;
-      for (let i = 0; i < this.objs.length; i++) if (this.objs[i].broken && !br[i]) this.restore(i);
+      const br = this.sim.broken,
+        pr = this.sim.breakPresent;
+      for (let i = 0; i < this.objs.length; i++) {
+        const o = this.objs[i];
+        if (o.broken && !br[i]) this.restore(i);
+        // Director variants that are absent this attempt are not drawn
+        o.absent = pr[i] === false;
+      }
     }
     // relics hover
     for (const o of this.objs) {
@@ -707,7 +805,7 @@ export class BreakableView {
     for (const o of this.objs) {
       if (o.broken) continue;
       const p = o.def.p;
-      const far = (p[0] - eye.x) ** 2 + (p[1] - eye.y) ** 2 + (p[2] - eye.z) ** 2 > c2;
+      const far = o.absent || (p[0] - eye.x) ** 2 + (p[1] - eye.y) ** 2 + (p[2] - eye.z) ** 2 > c2;
       if (o.intact) o.intact.visible = !far;
       if (o.remain) o.remain.visible = !far;
       if (o.membrane) o.membrane.visible = !far;

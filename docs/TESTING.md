@@ -88,3 +88,16 @@ Frame-rate figures on the reference hardware have not been measured.
   - that Pure is untouched.
 - The real-keyboard e2e "slashable world" test runs Training's last plaza with an evolved blade.
 - Upgraded builds are not covered by the autopilot: it follows a fixed plan tuned for Pure physics. Hand-play upgraded runs on every course, and note where jump height or speed shortcuts or breaks a section.
+
+## Phase 3 (the world evolves with you)
+
+- `tests/sim/phase3.test.ts`:
+  - the Director: eight dimensions, progress caps, upgrades raise traversal/ability/density, deaths ease them, at most 0.12 per second of change, tiers decided before an encounter is in view, forced tiers, recovery after a set piece, easing after a death, determinism;
+  - every section crossed by its own line at tier 0 and tier 2;
+  - mechanisms: the glass seal (blocked until cut, open after), the conduit (gate off for the attempt, back on respawn), the drawbridge chain, the energy core's Overcharge in Evolve (8 s, listed with its countdown, removed and undone after) and nothing in Pure;
+  - several temporary effects at once keep their own clocks; permanent upgrades never appear in the effects list;
+  - every course is at least 1.7× its pre-Phase-3 length and its line clears every encounter at the hardest tier; the Director escalates through Awakening in Pure.
+- `tests/sim/stamina.test.ts`: the full pace is unchanged, the sprint ramp, about 5 s of sprint and the lockout, regeneration, respawn refill, Endurance levels and Overcharge.
+- `tests/unit/no-flicker.test.ts`: the speed-line and streak classes are gone and no shader steps a pattern with `floor(uTime…)`, re-rolls grain with `fract(uT…)`, scrolls the sky grid, pulses the floor or scans the towers.
+- e2e: the Surge test reads the active-effects panel (name, a falling countdown, gone after expiry).
+- Not covered by automation: how sprint and stamina _feel_ in hand-play, whether the Director's escalation feels right to a person, and frame rate on a real GPU.

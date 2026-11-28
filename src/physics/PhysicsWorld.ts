@@ -158,6 +158,18 @@ export class PhysicsWorld implements CollisionWorld {
     if (c && c.isEnabled() !== enabled) c.setEnabled(enabled);
   }
 
+  private byEntity = new Map<number, number[]>();
+  /** Switch every collider belonging to entity `index` on or off (Director variants). */
+  setEntityEnabled(index: number, enabled: boolean) {
+    let hs = this.byEntity.get(index);
+    if (!hs) {
+      hs = [];
+      for (const [h, m] of this.meta) if (m.entity === index) hs.push(h);
+      this.byEntity.set(index, hs);
+    }
+    for (const h of hs) this.setEnabled(h, enabled);
+  }
+
   metaOf(handle: number): ColliderMeta | undefined {
     return this.meta.get(handle);
   }
