@@ -1,5 +1,11 @@
 # Changelog
 
+## Phase 4: rank, blade score and where to improve
+
+- **Performance rating (Pure and Evolve).** Every finished run is scored 0–1000 on five parts: Pace (time against platinum, gold in Evolve), Blade (cut points against what the course offers), Flow (average speed and wall-run chains), Clean (deaths) and Extras (objectives and shards). Grades are D, C, B, A (780) and S (900). The results screen shows the grade, the score, a bar per part and up to two tips for the weakest parts. Best score and best combo are saved per course (Pure only; Evolve runs are scored but not ranked). Level cards show the rank. Old saves load as unrated and rebuilt courses reset their score with their time.
+- **Blade scoring.** Cuts made within 1.6 s of the last chain: each link is worth 25% more (up to +200%), cuts in the air +35%, cuts during a wall-run +50%. Object values: core 80, conduit 70, glass 60, chain 50, mote 15, others 40; smashing by body earns a fifth and never chains. Tracked as best combo, air cuts, wall cuts and points.
+- **Mastery achievements:** Chain Blade (5 cuts in a row), Skyline Cut (an air cut and a wall cut in one run), Perfect Form (S rank) and Consistent (A or better on every course).
+
 ## Phase 3: the world evolves with you
 
 - **No more flickering rows.** Removed the speed-line and streak overlays, the Overdrive sticker streaks, the transition row glitch and pixel burst, and every shader pattern that stepped or scrolled in time (sky grid, floor pulses, tower scan bands, flickering windows and glyphs, corruption row slips, re-rolled grain). Speed now reads through a steady vignette, the FOV and the camera. A test keeps them out.

@@ -1303,3 +1303,84 @@ html[data-universe='psyche'] .hud-tl {
 .fx-overdrive {
   --fx: #ff8a5c;
 }
+
+/* performance rating (results) */
+.res-body .rating .grade {
+  display: inline-block;
+  min-width: 1.6em;
+  text-align: center;
+  padding: 0 0.3em;
+  border-radius: 6px;
+  font-weight: 800;
+  color: #0b0e14;
+  background: var(--lv, #8fd);
+}
+.res-body .rating .grade.g0 {
+  background: #7b8494;
+}
+.res-body .rating .grade.g1 {
+  background: #9fb4c8;
+}
+.res-body .rating .grade.g2 {
+  background: #7fd1ae;
+}
+.res-body .rating .grade.g3 {
+  background: #ffc857;
+}
+.res-body .rating .grade.g4 {
+  background: #ff7a59;
+  box-shadow: 0 0 12px #ff7a5988;
+}
+.res-body .rating .parts {
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.res-body .rating .parts li {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 3rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+.res-body .rating .parts i {
+  height: 6px;
+  border-radius: 3px;
+  background: #ffffff1a;
+  overflow: hidden;
+}
+.res-body .rating .parts i b {
+  display: block;
+  height: 100%;
+  background: var(--lv, #8fd);
+}
+.res-body .rating .tips {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85em;
+  opacity: 0.9;
+}
+
+.res-body .rating .grade-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0.3rem 0 0.5rem;
+}
+.res-body .rating .grade-row .grade {
+  font-size: 2.6rem;
+  line-height: 1.1;
+  min-width: 1.5em;
+  border-radius: 10px;
+}
+.res-body .rating .grade-row b {
+  font-size: 1.4rem;
+}
+.res-body .rating .grade-row em {
+  color: #5fe3a1;
+  font-style: normal;
+  font-size: 0.8em;
+  margin-left: 0.3rem;
+  text-transform: uppercase;
+}

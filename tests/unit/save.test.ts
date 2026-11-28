@@ -191,7 +191,19 @@ describe('save data', () => {
       completions: 0,
       layout: 1,
       evolveBest: null,
+      bestScore: 0,
+      bestCombo: 0,
     });
+  });
+
+  test('rating fields are clamped, and old saves without them load as unrated', () => {
+    const s = sanitizeSave({
+      version: 2,
+      levels: { a: { bestScore: 99999, bestCombo: -3 }, b: { best: 50 } },
+    });
+    expect(s.levels.a.bestScore).toBe(1000);
+    expect(s.levels.a.bestCombo).toBe(0);
+    expect(s.levels.b.bestScore).toBe(0);
   });
 });
 

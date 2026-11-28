@@ -47,7 +47,23 @@ export interface RunStats {
   slashes: number;
   cuts: number;
   smashes: number;
+  /** Sword mastery: longest run of blade cuts each within COMBO_WINDOW of the last, cuts made in the air / on a wall, and points. */
+  bestCombo: number;
+  airCuts: number;
+  wallCuts: number;
+  cutPoints: number;
 }
+
+/** Seconds between blade cuts that still keep a cut combo alive. */
+export const COMBO_WINDOW = 1.6;
+/** Points per kind of object cut by the blade (smashing by body earns a fifth of it). */
+export const CUT_POINTS: Record<string, number> = {
+  glass: 60,
+  core: 80,
+  conduit: 70,
+  chain: 50,
+  mote: 15,
+};
 
 export const newStats = (): RunStats => ({
   started: false,
@@ -75,6 +91,10 @@ export const newStats = (): RunStats => ({
   slashes: 0,
   cuts: 0,
   smashes: 0,
+  bestCombo: 0,
+  airCuts: 0,
+  wallCuts: 0,
+  cutPoints: 0,
 });
 
 export interface SimEvents {
@@ -267,6 +287,8 @@ export class Simulation {
     this.dead = false;
     this.deadTicks = 0;
     this.wallChain = 0;
+    this.comboRun = 0;
+    this.lastCutTick = -1;
     this.dt = SIM_DT;
     this.evo?.respawn();
     this.events.emit('respawn', { index: this.checkpoint });
@@ -388,6 +410,9 @@ export class Simulation {
     this.breakObject(i, by, hit);
   }
 
+  private lastCutTick = -1;
+  private comboRun = 0;
+
   private tickSword(inp: InputFrame) {
     const sw = this.sword;
     const before = sw.phase,
@@ -422,8 +447,24 @@ export class Simulation {
     if (this.broken[i] || !this.breakPresent[i]) return;
     this.broken[i] = true;
     this.targets[i] = null;
-    if (by === 'sword') this.stats.cuts++;
-    else this.stats.smashes++;
+    const st = this.stats;
+    const pts = CUT_POINTS[this.data.breakables[i].kind] ?? 40;
+    if (by === 'sword') {
+      st.cuts++;
+      const within = this.lastCutTick >= 0 && st.ticks - this.lastCutTick <= COMBO_WINDOW * 120;
+      this.comboRun = within ? this.comboRun + 1 : 1;
+      this.lastCutTick = st.ticks;
+      if (this.comboRun > st.bestCombo) st.bestCombo = this.comboRun;
+      const wall = this.player.state === MoveState.WallRun;
+      if (wall) st.wallCuts++;
+      else if (!this.player.grounded) st.airCuts++;
+      // chaining, airborne and wall cuts are worth more
+      const mult = 1 + Math.min(this.comboRun - 1, 8) * 0.25 + (wall ? 0.5 : this.player.grounded ? 0 : 0.35);
+      st.cutPoints += Math.round(pts * mult);
+    } else {
+      st.smashes++;
+      st.cutPoints += Math.round(pts * 0.2);
+    }
     this.events.emit('break', { index: i, by, hit });
     const ev = this.data.breakables[i].fires;
     if (ev) this.fire(ev);

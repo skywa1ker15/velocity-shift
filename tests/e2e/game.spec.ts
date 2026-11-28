@@ -122,6 +122,10 @@ test('play flow: load, move, pause, resume, restart, finish, results, retry', as
   await expect(page.locator('.big-time')).toBeVisible();
   await expect(page.locator('.record')).toHaveText(/FIRST CLEAR/);
   await expect(page.locator('.splits tr.total')).toBeVisible();
+  // the performance rating: a grade, a score, five parts and at least one tip
+  await expect(page.locator('.rating .grade')).toHaveText(/^[SABCD]$/);
+  await expect(page.locator('.rating .parts li')).toHaveCount(5);
+  await expect(page.locator('.rating')).toContainText('/ 1000');
 
   // retry goes straight back into a fresh run
   await page.click('.results footer >> text=Retry');

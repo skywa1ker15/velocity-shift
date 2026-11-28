@@ -249,8 +249,8 @@
 /* body */
 .res-body {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 8px 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 8px 22px;
   padding: 6px 26px 4px 30px;
   min-height: 0;
   overflow-y: auto;

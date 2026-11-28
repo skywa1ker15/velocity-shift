@@ -3,6 +3,7 @@
  * Everything is earned by playing — there is no currency and no monetisation.
  */
 import type { RunStats } from '../gameplay/Simulation';
+import { rate, GRADE_AT, type Rating } from './Rating';
 import { levels } from '../levels/registry';
 import type { LevelData, LevelMeta, MedalTimes, ObjectiveDef } from '../levels/types';
 import type { SaveData, SaveSystem } from '../save/SaveSystem';
@@ -54,6 +55,7 @@ export function objectiveDone(
 interface AchCtx {
   save: SaveData;
   stats: RunStats | null; // the run that just finished (null when checking outside a run)
+  rating?: Rating | null; // that run's performance rating
   meta: LevelMeta | null;
   data: LevelData | null;
   medal: number;
@@ -238,6 +240,30 @@ export const achievements: AchievementDef[] = [
     name: 'Pure Momentum',
     desc: 'Finish a course using 3 dashes or fewer.',
     test: (c) => !!c.stats && !!c.meta && !c.meta.training && c.stats.finished && c.stats.dashes <= 3,
+  },
+  {
+    id: 'chainblade',
+    name: 'Chain Blade',
+    desc: 'Cut 5 objects in a row, each within 1.6 s of the last.',
+    test: (c) => !!c.stats && c.stats.bestCombo >= 5,
+  },
+  {
+    id: 'skyslash',
+    name: 'Skyline Cut',
+    desc: 'Cut an object while airborne and another during a wall-run, in one run.',
+    test: (c) => !!c.stats && c.stats.airCuts >= 1 && c.stats.wallCuts >= 1,
+  },
+  {
+    id: 'srank',
+    name: 'Perfect Form',
+    desc: 'Earn an S rank on any course.',
+    test: (c) => !!c.rating && c.rating.grade >= 4,
+  },
+  {
+    id: 'arank',
+    name: 'Consistent',
+    desc: 'Earn an A rank or better on every course.',
+    test: (c) => courses().every((l) => (c.save.levels[l.meta.id]?.bestScore ?? 0) >= GRADE_AT[3]),
   },
   {
     id: 'pathfinder',
@@ -445,6 +471,10 @@ export interface ResultsData {
   /** Which mode the run was played in; Evolve runs carry their upgrade summary. */
   mode: 'pure' | 'evolve';
   evolve?: EvolveSummary;
+  /** Performance rating for this run, the best score before it, and whether it is a new best (Pure only). */
+  rating: Rating;
+  previousScore: number;
+  isBestScore: boolean;
 }
 
 /** What an Evolve run became (results screen). */
@@ -468,6 +498,7 @@ export function checkAchievements(
   meta: LevelMeta | null,
   data: LevelData | null,
   medal = 0,
+  rating: Rating | null = null,
 ): AchievementDef[] {
   const out: AchievementDef[] = [];
   // two passes: some achievements depend on others unlocked in the same sweep
@@ -476,7 +507,7 @@ export function checkAchievements(
       if (save.achievements[a.id]) continue;
       let ok: boolean;
       try {
-        ok = a.test({ save, stats, meta, data, medal });
+        ok = a.test({ save, stats, meta, data, medal, rating });
       } catch {
         ok = false;
       }
@@ -546,8 +577,21 @@ export function finishRun(
     return { label: o.label, done, newly: done && !ever, ever: ever || done };
   });
 
+  const done = objectives.filter((o) => o.ever).length;
+  const rating = rate(
+    stats,
+    meta,
+    data,
+    { done: done + rec.collectibles.length, total: objectives.length + data.collectibles.length },
+    !pure,
+  );
+  const previousScore = rec.bestScore;
+  const isBestScore = pure && rating.score > previousScore;
+  if (isBestScore) rec.bestScore = rating.score;
+  if (pure) rec.bestCombo = Math.max(rec.bestCombo, stats.bestCombo);
+
   addTotals(save, stats);
-  const newAchievements = checkAchievements(save, stats, meta, data, medal);
+  const newAchievements = checkAchievements(save, stats, meta, data, medal, pure ? rating : null);
   const newCosmetics = cosmetics.filter(
     (c) => c.unlocked(save) && !unlockedBefore.has(c.category + ':' + c.id),
   );
@@ -573,6 +617,9 @@ export function finishRun(
     nextLevelId: next ? next.meta.id : null,
     mode: pure ? 'pure' : 'evolve',
     evolve: evo,
+    rating,
+    previousScore,
+    isBestScore,
   };
 }
 

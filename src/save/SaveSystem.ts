@@ -23,6 +23,9 @@ export interface LevelRecord {
   layout: number;
   /** Evolve: best time with upgrades (kept apart from the Pure best, medals and ghost). */
   evolveBest: number | null;
+  /** Best performance score (0..1000, Pure runs) and longest blade combo; see progression/Rating. */
+  bestScore: number;
+  bestCombo: number;
 }
 
 export interface Totals {
@@ -64,6 +67,8 @@ export const emptyRecord = (layout = 1): LevelRecord => ({
   completions: 0,
   layout,
   evolveBest: null,
+  bestScore: 0,
+  bestCombo: 0,
 });
 
 /**
@@ -82,6 +87,8 @@ export function applyLayouts(data: SaveData, layouts: Record<string, number>): s
       r.splits = [];
       r.medal = 0;
       r.evolveBest = null;
+      r.bestScore = 0;
+      r.bestCombo = 0;
     }
     r.layout = layout;
   }
@@ -147,6 +154,8 @@ export function sanitizeSave(raw: unknown): SaveData {
         completions: Math.max(0, Math.floor(numOr(r.completions, 0))),
         layout: Math.max(1, Math.floor(numOr(r.layout, 1))),
         evolveBest: typeof r.evolveBest === 'number' && r.evolveBest > 0 ? r.evolveBest : null,
+        bestScore: Math.min(1000, Math.max(0, Math.floor(numOr(r.bestScore, 0)))),
+        bestCombo: Math.max(0, Math.floor(numOr(r.bestCombo, 0))),
       };
     }
   }

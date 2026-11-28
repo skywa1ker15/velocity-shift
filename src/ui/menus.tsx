@@ -13,6 +13,7 @@ import {
   nextTarget,
   type CosmeticCategory,
 } from '../progression/Progression';
+import { GRADES, gradeOf } from '../progression/Rating';
 import { Btn, Panel, useGame, useMenuNav } from './App';
 import { Arrow, LockIcon, MedalIcon } from './parts';
 import { previewFor } from './previews';
@@ -150,6 +151,12 @@ export function LevelSelect() {
                   <div>
                     <span>Best</span>
                     <b className="mono-num">{rec?.best ? formatTime(rec.best) : '--:--.---'}</b>
+                  </div>
+                  <div>
+                    <span>Rank</span>
+                    <b className="mono-num">
+                      {rec?.bestScore ? `${GRADES[gradeOf(rec.bestScore)]} · ${rec.bestScore}` : '—'}
+                    </b>
                   </div>
                   <div className={'lv-medal m' + medal}>
                     <MedalIcon tier={medal} />

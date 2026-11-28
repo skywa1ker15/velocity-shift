@@ -30,6 +30,8 @@ const fakeSaveSystem = (data: SaveData) =>
         completions: 0,
         layout: 1,
         evolveBest: null,
+        bestScore: 0,
+        bestCombo: 0,
       }),
     flush() {},
     save() {},
@@ -226,6 +228,8 @@ describe('level unlocks', () => {
       completions: 1,
       layout: 1,
       evolveBest: null,
+      bestScore: 0,
+      bestCombo: 0,
     };
     expect(isUnlocked(s, 'verticality')).toBe(true);
     expect(isUnlocked(s, 'momentum')).toBe(false);
@@ -244,6 +248,8 @@ describe('course achievements (Phase F)', () => {
     completions: 1,
     layout: 1,
     evolveBest: null,
+    bestScore: 0,
+    bestCombo: 0,
   });
   test('the shard total counts every level, so "Every Last One" means every last one', () => {
     expect(SHARD_COUNT).toBe(levels.length * 3);

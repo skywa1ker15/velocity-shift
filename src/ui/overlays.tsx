@@ -6,6 +6,7 @@ import { getEnv } from '../environment/presets';
 import { keyLabel } from '../input/bindings';
 import { levelById } from '../levels/registry';
 import { isUnlocked, MEDAL_LABELS, nextTarget } from '../progression/Progression';
+import { GRADES } from '../progression/Rating';
 import { Btn, useGame, useMenuNav } from './App';
 import { Stat } from './menus';
 import { Arrow, MedalIcon } from './parts';
@@ -250,6 +251,43 @@ export function Results() {
         </header>
 
         <div className={'res-body' + (stage >= 2 ? ' show' : '')}>
+          <section className="rating">
+            <h3>Rating</h3>
+            <div className="grade-row">
+              <span className={'grade g' + r.rating.grade} aria-label={'Grade ' + GRADES[r.rating.grade]}>
+                {GRADES[r.rating.grade]}
+              </span>
+              <div>
+                <b className="mono-num">{r.rating.score}</b>
+                <span className="quiet"> / 1000</span>
+                {r.isBestScore && <em> new best</em>}
+                {r.mode === 'evolve' && <div className="quiet">Evolve run (not ranked)</div>}
+              </div>
+            </div>
+            <ul className="parts">
+              {r.rating.parts.map((p) => (
+                <li key={p.id}>
+                  <span>{p.label}</span>
+                  <i aria-hidden>
+                    <b style={{ width: Math.round(p.value * 100) + '%' }} />
+                  </i>
+                  <span className="mono-num">{Math.round(p.value * p.weight)}</span>
+                </li>
+              ))}
+            </ul>
+            {r.rating.tips.length > 0 ? (
+              <ul className="tips">
+                {r.rating.tips.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="tips">Nothing left to fix. That is a flawless run.</p>
+            )}
+            <p className="quiet">
+              Blade: {st.cutPoints} pts · best combo {st.bestCombo} · {st.airCuts} air · {st.wallCuts} wall
+            </p>
+          </section>
           <section>
             <h3>Splits</h3>
             <table className="splits">
