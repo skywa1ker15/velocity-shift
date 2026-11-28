@@ -50,6 +50,11 @@ export class MovementController {
 
   dashEnergy = this.cfg.dashCharges;
   canDoubleJump = true;
+  /** Evolve: give back one air jump (and the triple jump's extra, if owned). */
+  refundAirJump() {
+    this.canDoubleJump = true;
+    this.airJumpsLeft = Math.max(this.airJumpsLeft, this.extraAirJumps > 0 ? 1 : 0);
+  }
   /** +1 = wall on the player's right, -1 = wall on the left. */
   wallSide: 1 | -1 = 1;
   readonly wallNormal = v3();
@@ -846,7 +851,9 @@ export class MovementController {
     const k = this.wallTime / this.wallMax;
     v.y -= this.cfg.gravity * this.gravityScale * this.cfg.wallGravityScale * k * k * 2 * dt;
     if (v.y > 0) v.y -= 4 * dt;
-    this.wallSpeed = Math.max(this.cfg.wallRunSpeedFloor, this.wallSpeed - 0.8 * dt);
+    if (this.cfg.wallRunGain)
+      this.wallSpeed = Math.min(this.cfg.softSpeedCap, this.wallSpeed + (this.cfg.wallRunGain - 0.8) * dt);
+    else this.wallSpeed = Math.max(this.cfg.wallRunSpeedFloor, this.wallSpeed - 0.8 * dt);
     v.x = t.x * this.wallSpeed - n.x * 1.2;
     v.z = t.z * this.wallSpeed - n.z * 1.2;
     this.stepDist += this.wallSpeed * dt;

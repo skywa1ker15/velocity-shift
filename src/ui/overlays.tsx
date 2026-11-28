@@ -288,6 +288,7 @@ export function Results() {
               <Stat label="Deaths" value={String(st.deaths)} />
               {ev && <Stat label="Pickups" value={String(ev.pickups)} />}
               {ev && <Stat label="Peak Flow" value={'tier ' + ev.peakTier} />}
+              {ev && <Stat label="Longest chain" value={String(ev.peakStreak ?? 0)} />}
             </div>
           </section>
           <section>

@@ -454,6 +454,8 @@ export interface EvolveSummary {
   pickups: number;
   byKind: Partial<Record<string, number>>;
   peakTier: number;
+  /** Longest Kinetic Chain. */
+  peakStreak?: number;
   stage: number;
   abilities: { name: string; level: number; max: number }[];
   synergies: string[];

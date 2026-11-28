@@ -13,7 +13,12 @@ import {
   T,
   type AbilityId,
 } from '../../src/evolution/abilities';
-import { placeCollectibles, type CollectibleKind, type Placed } from '../../src/evolution/collectibles';
+import {
+  DEFAULT_BUDGET,
+  placeCollectibles,
+  type CollectibleKind,
+  type Placed,
+} from '../../src/evolution/collectibles';
 import type { Evolution } from '../../src/evolution/Evolution';
 import { recordSlots, type Slot } from '../../src/evolution/slots';
 import { Bot } from '../../src/gameplay/Bot';
@@ -87,7 +92,7 @@ describe('slots and the spawner', () => {
       expect(count('glint')).toBeGreaterThanOrEqual(4);
       const unc = a.filter((x) => ['undertow', 'skyknot', 'rift', 'glyph', 'vein'].includes(x.kind));
       expect(unc.length).toBeGreaterThanOrEqual(Math.min(3, slots.length));
-      expect(unc.length).toBeLessThanOrEqual(Math.round(L / 62) + 1);
+      expect(unc.length).toBeLessThanOrEqual(Math.round(L / DEFAULT_BUDGET.uncommonEvery) + 1);
       expect(count('paradox')).toBeLessThanOrEqual(1);
       expect([0, 4]).toContain(count('echo'));
       // every piece sits in a slot whose recorded move catches it
@@ -273,13 +278,16 @@ describe('collection methods: how you catch it is what it gives', () => {
     expect(evo(mag).items[0].taken).toBe(true);
   });
 
-  test('a full Flux meter overflows into upgrades', async () => {
+  test('a full Flux meter becomes an upgrade, then fills again from empty', async () => {
     const d = await flat();
     const e = evo(d);
-    e.addFlux(100);
+    e.addFlux(99);
     expect(e.totalLevels).toBe(0);
-    e.addFlux(61);
+    e.addFlux(1);
     expect(e.totalLevels).toBe(1);
+    expect(e.flux).toBeLessThan(1);
+    e.addFlux(250);
+    expect(e.totalLevels).toBe(3);
   });
 });
 
@@ -303,14 +311,14 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
     }
   });
 
-  test('Stride raises sprint speed; Overdrive adds more after 1.5 s of sprinting', async () => {
+  test('Stride raises sprint speed; Overdrive adds more after 1 s of sprinting', async () => {
     const d = await flat();
-    give(d, 'stride', 2);
+    give(d, 'stride', 1);
     d.run(3, RUN);
-    expect(d.pl.speed).toBeCloseTo(cfg.sprintSpeed + T.strideSprint[2], 1);
+    expect(d.pl.speed).toBeCloseTo(cfg.sprintSpeed + T.strideSprint[1], 1);
     give(d, 'stride', 1);
     d.run(2.5, RUN);
-    expect(d.pl.speed).toBeCloseTo(cfg.sprintSpeed + T.strideSprint[3] + T.overdriveBonus, 1);
+    expect(d.pl.speed).toBeCloseTo(cfg.sprintSpeed + T.strideSprint[2] + T.overdriveBonus, 1);
   });
 
   test('Glide: slides go further; the Charged Slide becomes the Slingshot', async () => {
@@ -337,7 +345,7 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
     expect(d.pl.speed).toBeGreaterThan(before + T.slingshotForward - 0.5);
   });
 
-  test('Spring: higher jumps, a Triple Jump at level 2, Hover at level 5', async () => {
+  test('Spring: higher jumps, a Triple Jump at level 2, Hover at level 4', async () => {
     const apex = async (lv: number) => {
       const d = await flat();
       give(d, 'spring', lv);
@@ -347,7 +355,7 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
       return top;
     };
     expect(await apex(1)).toBeGreaterThan((await apex(0)) + 0.1);
-    expect(await apex(5)).toBeGreaterThan((await apex(0)) + 0.35);
+    expect(await apex(4)).toBeGreaterThan((await apex(0)) + 0.9);
     const d = await flat();
     give(d, 'spring', 2);
     d.tick({ jump: true });
@@ -366,10 +374,10 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
       t.run(0.6, { jumpHeld: true });
       return t.pl.vel.y;
     };
-    expect(await fall(5)).toBeGreaterThan((await fall(4)) + 4);
+    expect(await fall(4)).toBeGreaterThan((await fall(3)) + 4);
   });
 
-  test('Phase Dash: faster dashes, a third charge at level 2, phasing through beams at level 4', async () => {
+  test('Phase Dash: faster dashes, a third charge at level 2, phasing through beams at level 3', async () => {
     const d = await flat();
     give(d, 'phase', 2);
     d.run(1, RUN);
@@ -384,8 +392,8 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
       b.entity({ type: 'hazard', p: [0, 1, 12], s: [12, 3, 0.4] });
     };
     for (const [lv, dies] of [
-      [3, true],
-      [4, false],
+      [2, true],
+      [3, false],
     ] as const) {
       const t = await makeEvoSim(beam);
       t.settle();
@@ -414,8 +422,8 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
       return d;
     };
     expect((await run(4)).pl.wallMax).toBeGreaterThan((await run(0)).pl.wallMax + 0.3);
-    const plain = await run(2),
-      surge = await run(3);
+    const plain = await run(1),
+      surge = await run(2);
     for (const d of [plain, surge]) {
       d.run(0.3, RUN);
       d.tick({ ...RUN, jump: true });
@@ -432,9 +440,9 @@ describe('abilities: levels, caps, diminishing returns, evolutions', () => {
       return d.pl.speed;
     };
     const base = await coast(0),
-      top = await coast(4);
+      top = await coast(3);
     expect(top).toBeGreaterThan(base + 2);
-    expect(top).toBeLessThan(cfg.softSpeedCap + T.flyCap[4] + 8);
+    expect(top).toBeLessThan(cfg.softSpeedCap + T.flyCap[3] + 8);
   });
 
   test('Edge swings faster; Reach cuts further; Mirror Edge further still', async () => {

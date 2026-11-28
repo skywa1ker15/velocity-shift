@@ -31,6 +31,8 @@ import {
 } from './convex';
 
 const MAX_PIECES = 28;
+/** Objects further than this from the eye are not drawn. */
+const CULL = 110;
 const PI = Math.PI;
 
 const m4 = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) =>
@@ -151,6 +153,113 @@ function art(kind: BreakableKind, hang: number, palette: { accent: number; glass
       cut.push(prismPart(6, 0.3, 0.8, palette.glass, m4(0, 0.96, 0), { glow: 0.35 }, 0xffffff, 0.17));
       cut.push(prismPart(6, 0.29, 0.025, A, m4(0, 0.62, 0), { glow: 1.2, noInk: true }, A, 0.28));
       cut.push(prismPart(6, 0.23, 0.025, A, m4(0, 1.22, 0), { glow: 1.2, noInk: true }, A, 0.22));
+      break;
+    }
+    // ----- the slashable world (gameplay/slashables.ts) ---------------------------------------
+    case 'prism': {
+      // Kinetic Prism: a floating bipyramid of charged glass with a spinning collar
+      const G = palette.glass;
+      cut.push(prismPart(5, 0.02, 0.26, G, m4(0, 1.08, 0), { glow: 0.45 }, 0xffffff, 0.32));
+      cut.push(prismPart(5, 0.32, 0.3, G, m4(0, 1.64, 0), { glow: 0.45 }, 0xffffff, 0.02));
+      cut.push(prismPart(10, 0.42, 0.02, A, m4(0, 1.36, 0), { glow: 1.6, noInk: true }, A, 0.42));
+      break;
+    }
+    case 'lantern': {
+      // Drift Lantern: a hexagonal cage around a hot core, hanging in the air on nothing
+      cut.push(prismPart(6, 0.18, 0.2, A, m4(0, 0, 0), { glow: 2, noInk: true }, A, 0.18));
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * PI * 2;
+        cut.push(
+          boxPart(
+            0.025,
+            0.36,
+            0.025,
+            INKY,
+            m4(Math.cos(a) * 0.34, 0, Math.sin(a) * 0.34),
+            undefined,
+            0x55607a,
+          ),
+        );
+      }
+      cut.push(prismPart(6, 0.38, 0.05, 0x2b3348, m4(0, 0.4, 0), undefined, 0x55607a, 0.18));
+      cut.push(prismPart(6, 0.18, 0.05, 0x2b3348, m4(0, -0.4, 0), undefined, 0x55607a, 0.38));
+      cut.push(prismPart(4, 0.05, 0.08, A, m4(0, -0.56, 0), { glow: 1.4, noInk: true }, A, 0.01));
+      break;
+    }
+    case 'bloom': {
+      // Flux Bloom: an energy flower; five petals open around a charged bulb
+      remain.push(prismPart(6, 0.16, 0.04, 0x1f2a3c, m4(0, 0.04, 0), undefined, undefined, 0.1));
+      cut.push(prismPart(5, 0.04, 0.28, 0x2f6b55, m4(0, 0.33, 0), undefined, 0x88ffcc, 0.035));
+      cut.push(prismPart(8, 0.15, 0.13, A, m4(0, 0.68, 0), { glow: 2.2, noInk: true }, A, 0.08));
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * PI * 2;
+        cut.push(
+          boxPart(
+            0.11,
+            0.025,
+            0.24,
+            palette.glass,
+            m4(Math.cos(a) * 0.22, 0.66, Math.sin(a) * 0.22, 0.5, -a + PI / 2, 0),
+            { glow: 0.6 },
+            A,
+          ),
+        );
+      }
+      break;
+    }
+    case 'spindle': {
+      // Chain Spindle: a tall needle threaded with three glowing rings
+      remain.push(prismPart(6, 0.26, 0.05, 0x1c2232, m4(0, 0.05, 0), undefined, undefined, 0.2));
+      cut.push(prismPart(4, 0.07, 1.0, 0x9aa6c4, m4(0, 1.12, 0), undefined, 0xe8f0ff, 0.04, PI / 4));
+      for (const y of [0.55, 1.15, 1.75])
+        cut.push(prismPart(8, 0.17, 0.035, A, m4(0, y, 0), { glow: 1.5, noInk: true }, A, 0.17));
+      cut.push(prismPart(4, 0.11, 0.12, A, m4(0, 2.22, 0), { glow: 1.8, noInk: true }, A, 0.01, PI / 4));
+      break;
+    }
+    case 'sentinel': {
+      // Hollow Sentinel: an empty construct standing guard, a visor slit for a face
+      const S = 0x3a3f52,
+        SI = 0x9098b8;
+      remain.push(boxPart(0.36, 0.05, 0.24, INKY, m4(0, 0.05, 0)));
+      for (const x of [-0.17, 0.17]) cut.push(boxPart(0.09, 0.38, 0.1, S, m4(x, 0.48, 0), undefined, SI));
+      cut.push(prismPart(6, 0.24, 0.42, S, m4(0, 1.3, 0), undefined, SI, 0.34));
+      for (const x of [-0.42, 0.42])
+        cut.push(boxPart(0.12, 0.1, 0.14, 0x2a2e3e, m4(x, 1.66, 0), undefined, SI));
+      cut.push(prismPart(4, 0.16, 0.16, S, m4(0, 1.95, 0), undefined, SI, 0.12, PI / 4));
+      cut.push(boxPart(0.12, 0.025, 0.006, A, m4(0, 1.97, -0.15), { glow: 1.8, noInk: true }, A));
+      cut.push(boxPart(0.05, 0.16, 0.006, A, m4(0, 1.3, -0.28), { glow: 0.8, noInk: true }, A));
+      break;
+    }
+    case 'seal': {
+      // Rift Seal: a ring of eight segments holding a disc of folded space
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * PI * 2;
+        cut.push(
+          boxPart(
+            0.27,
+            0.06,
+            0.08,
+            0x2b2f44,
+            m4(Math.cos(a) * 0.66, 1.45 + Math.sin(a) * 0.66, 0, 0, 0, a + PI / 2),
+            undefined,
+            0x8088aa,
+          ),
+        );
+      }
+      cut.push(prismPart(12, 0.56, 0.02, A, m4(0, 1.45, 0, PI / 2), { glow: 1.1, noInk: true }, A, 0.56));
+      cut.push(
+        prismPart(
+          4,
+          0.12,
+          0.04,
+          0xffffff,
+          m4(0, 1.45, -0.04, PI / 2),
+          { glow: 2.2, noInk: true },
+          A,
+          0.12,
+          PI / 4,
+        ),
+      );
       break;
     }
   }
@@ -436,7 +545,18 @@ export class BreakableView {
           if (down.lengthSq() < 1e-4) down.copy(along);
           vel.copy(down.normalize()).multiplyScalar(1.4).addScaledVector(along, 1.2);
         }
-      } else if (kind === 'relic') {
+      } else if (kind === 'sentinel') {
+        // the construct collapses: the top slides off the cut, the legs fold where they stand
+        mode = 'slide';
+        const g = new THREE.Vector3(0, -1, 0);
+        const down = g.addScaledVector(n, -g.dot(n));
+        if (down.lengthSq() < 1e-4) down.copy(along);
+        vel
+          .copy(down.normalize())
+          .multiplyScalar(isLow ? 0.4 : 1.6)
+          .addScaledVector(along, isLow ? 0.3 : 1.4);
+      } else if (kind === 'relic' || kind === 'lantern' || kind === 'bloom' || kind === 'seal') {
+        // energy constructs come apart weightlessly and burn out
         mode = 'float';
         vel
           .copy(n)
@@ -540,8 +660,10 @@ export class BreakableView {
     }
     // relics hover
     for (const o of this.objs) {
-      if (o.def.kind === 'relic' && o.intact && !o.broken)
-        o.intact.position.y = Math.sin(this.t * 1.7 + o.def.p[0]) * 0.05;
+      if (!o.intact || o.broken) continue;
+      const k = o.def.kind;
+      if (k === 'relic' || k === 'prism' || k === 'lantern')
+        o.intact.position.y = Math.sin(this.t * 1.7 + o.def.p[0]) * (k === 'relic' ? 0.05 : 0.08);
     }
     for (let k = this.pieces.length - 1; k >= 0; k--) {
       const p = this.pieces[k];
@@ -573,6 +695,22 @@ export class BreakableView {
       if (p.mode === 'float' && p.life > 0.9 && p.life - dt <= 0.9) this.onCrumble(p.mesh.position);
       if (left < 0.35) p.mesh.scale.setScalar(Math.max(0.001, left / 0.35));
       if (left <= 0) this.retire(k);
+    }
+  }
+
+  /**
+   * Far objects are not drawn (the courses now carry two to three times as many): anything
+   * beyond CULL metres of the eye is hidden until you come back within range.
+   */
+  cull(eye: THREE.Vector3) {
+    const c2 = CULL * CULL;
+    for (const o of this.objs) {
+      if (o.broken) continue;
+      const p = o.def.p;
+      const far = (p[0] - eye.x) ** 2 + (p[1] - eye.y) ** 2 + (p[2] - eye.z) ** 2 > c2;
+      if (o.intact) o.intact.visible = !far;
+      if (o.remain) o.remain.visible = !far;
+      if (o.membrane) o.membrane.visible = !far;
     }
   }
 

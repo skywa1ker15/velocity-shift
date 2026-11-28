@@ -256,22 +256,27 @@ function EvoRail() {
       {evo.abilities.map((a) => (
         <div
           key={a.id}
-          className={'ab ' + (CAT_CLASS[a.category] ?? '')}
-          title={`${a.name} ${a.level}/${a.max}`}
+          className={'ab ' + (CAT_CLASS[a.category] ?? '') + (a.stageName ? ' evolved' : '')}
+          title={`${a.name} ${a.level}/${a.max}${a.stageName ? ' · ' + a.stageName : ''}`}
         >
           <b>{a.glyph}</b>
           <span className="lv" aria-label={`${a.name} level ${a.level} of ${a.max}`}>
             {Array.from({ length: a.max }, (_, i) => (
-              <i key={i} className={i < a.level ? 'on' : ''} />
+              <i key={i} className={(i < a.level ? 'on' : '') + (a.evoAt.includes(i + 1) ? ' ev' : '')} />
             ))}
           </span>
+          {a.stageName && <em className="stage">{a.stageName}</em>}
         </div>
       ))}
-      {evo.synergies.map((s) => (
-        <div key={s} className="syn">
-          {s}
+      {evo.synergies.length > 0 && (
+        <div className="syns">
+          {evo.synergies.map((s) => (
+            <span key={s} className="syn">
+              {s}
+            </span>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -306,6 +311,14 @@ function EvoMeters() {
           ))}
         </div>
       </div>
+      <div className={'streak' + (evo.streak > 0 ? ' on' : '')} aria-label={`Kinetic chain ${evo.streak}`}>
+        <span>CHAIN</span>
+        <b className="mono-num">{evo.streak}</b>
+        <em className="mono-num">×{evo.mult.toFixed(1)}</em>
+        <div className="bar">
+          <i style={{ transform: `scaleX(${evo.streakFrac})` }} />
+        </div>
+      </div>
       <div className="timers">
         {evo.surge > 0 && (
           <span className="tm surge">
@@ -318,6 +331,7 @@ function EvoMeters() {
             AEGIS {evo.aegis >= 1 ? '●' : <b className="mono-num">{Math.round(evo.aegis * 100)}%</b>}
           </span>
         )}
+        {evo.lock && <span className="tm lock">LOCK</span>}
         {evo.chain > 0 && evo.chain < 4 && (
           <span className="tm chain">
             ECHO {evo.chain}/4 <b className="mono-num">{evo.chainLeft.toFixed(1)}</b>

@@ -1,5 +1,33 @@
 # Changelog
 
+## Overhaul: power-ups you feel, a slashable world, the Kinetic Chain
+
+- **Every upgrade level is a felt change.** Measured on the same scripted run:
+  - first Glide: slides 10 → 27 m;
+  - first Spring: jump 1.48 → 2.21 m;
+  - first Phase Dash: +58% dash distance;
+  - first Wallrunner: wall-runs 1.38 → 2.09 s;
+  - first Stride: sprint 11 → 12.6 m/s.
+- **Evolutions:** the major abilities evolve at levels 2–4 into new behaviour, including Overdrive, Momentum Lock, Slipstream, Slingshot, Kinetic Slide, Skim, Triple Jump, Air Burst, Hover, Dash Jump, Phase, Blink Chain, Wall Surge, Grip, Wall Sprint, Conservation, Inertia, Crescent, Skyward Cut, Wide Arc and Arc Chain.
+- **Synergies:** nine, each changing movement. New ones are Tempest, Comet and Ricochet.
+- **Pacing:** a full Flux meter is an upgrade, and it evolves what you have been doing. Pickups are denser, and owned abilities are favoured so stages are reached. Measured: the first upgrade arrives in 1–16 s on most courses.
+- **The slashable world:**
+  - six new objects: Kinetic Prism, Drift Lantern, Flux Bloom, Chain Spindle gates, Hollow Sentinel and Rift Seal;
+  - each comes apart differently and has its own Evolve reward;
+  - placed by a seeded spawner from each course's reference line, two to three times the old count, the same in both modes.
+- **Kinetic Chain:** consecutive cuts and pickups multiply Flux up to ×3 and pay out every 5 links.
+- **The sword at speed:** swings quicken and reach leads with speed, so cuts land at 30 m/s. It never slows the runner.
+- **Control:** the automatic pushes fire only while sprinting. A tapped jump is never higher than a plain one. You can always make the original move.
+- **HUD:**
+  - stage names and diamond evolution pips on the rail;
+  - a chain readout, a LOCK tag and compact synergies;
+  - callouts only for deliberate moves.
+- **Visual feedback:** Overdrive and Lock speed streaks; slash arcs sized to the real reach.
+- **Performance:** objects beyond 110 m are not drawn, so draw calls are slightly below the previous release.
+- **Pure is unchanged:** same physics, times, medals and ghosts; the new objects are just props to cut there.
+- **Tests:** 39 new simulation tests, the destructible rules extended to the new world, and one new real-keyboard browser test.
+- Report: `docs/overhaul/README.md`. Not human-playtested. The fixed-plan autopilot cannot play many upgraded builds; see the report.
+
 ## Gameplay expansion: longer courses, Evolve mode
 
 - **Corrupt flicker removed.** No more flickering horizontal blocks, screen glitch or moving surface tears.

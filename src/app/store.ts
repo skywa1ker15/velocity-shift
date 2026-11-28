@@ -56,8 +56,24 @@ export interface EvoHud {
   aegis: number;
   chain: number;
   chainLeft: number;
+  /** Kinetic Chain: length, time left 0..1 and the Flux multiplier it gives. */
+  streak: number;
+  streakFrac: number;
+  mult: number;
+  /** Momentum Lock is holding your speed. */
+  lock: boolean;
   canSurge: boolean;
-  abilities: { id: string; glyph: string; name: string; level: number; max: number; category: string }[];
+  abilities: {
+    id: string;
+    glyph: string;
+    name: string;
+    level: number;
+    max: number;
+    category: string;
+    /** Levels that unlock a new behaviour, and the latest one unlocked. */
+    evoAt: number[];
+    stageName: string;
+  }[];
   synergies: string[];
 }
 

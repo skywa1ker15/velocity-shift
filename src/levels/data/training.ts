@@ -334,5 +334,21 @@ export function build(): LevelData {
   b.breakable('crate', 1.5, -7, 476);
   b.breakable('target', -1.5, -7, 560);
   b.breakable('crate', 1.5, -13, 680);
+  // ----- the slashable world, one of each (rewards in Evolve): a Drift Lantern up beside the
+  // Skyknot jump, then a run of them on the last plaza before the finish
+  b.breakable('lantern', 1.4, Y + 2.6, 399);
+  b.breakable('bloom', -1.3, Y, 375, { ground: Y });
+  b.prompt(
+    [0, Y - 6 + 1.5, 663],
+    [12, 4, 3],
+    'attack',
+    'Evolve: Prisms push you on, a Spindle gate cut in time recharges you, a Rift Seal takes everything near it',
+  );
+  b.breakable('prism', 1.3, Y - 6, 666);
+  for (const [i, z] of [670, 674, 678].entries())
+    b.breakable('spindle', i % 2 ? -1.2 : 1.2, Y - 6, z, { ground: Y - 6, gate: 0 });
+  b.breakable('seal', -1.4, Y - 6, 686);
+  b.breakable('sentinel', -3.6, Y - 6, 683, { ground: Y - 6 });
+  b.breakable('sentinel', 3.4, Y - 6, 688, { ground: Y - 6 });
   return b.data;
 }

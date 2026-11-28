@@ -123,8 +123,8 @@ export interface SpawnBudget {
   paradoxChance: number;
 }
 export const DEFAULT_BUDGET: SpawnBudget = {
-  glintEvery: 42,
-  uncommonEvery: 62,
+  glintEvery: 30,
+  uncommonEvery: 36,
   echoChance: 0.85,
   paradoxChance: 0.5,
 };
@@ -132,19 +132,27 @@ export const DEFAULT_BUDGET: SpawnBudget = {
 /**
  * Place one run's collectibles. Same slots + same seed → the same layout (tests rely on it).
  */
-export function placeCollectibles(slots: readonly Slot[], seed: number, budget = DEFAULT_BUDGET): Placed[] {
+export function placeCollectibles(
+  slots: readonly Slot[],
+  seed: number,
+  budget = DEFAULT_BUDGET,
+  /** Points already used by the slashable world: no collectible within 2.5 m of one. */
+  occupied: readonly (readonly [number, number, number])[] = [],
+): Placed[] {
   const r = rng(seed);
   const out: Placed[] = [];
   if (!slots.length) return out;
   const L = slots[slots.length - 1].d;
   const used: number[] = []; // distances already taken (any kind)
   const free = (d: number, gap: number) => used.every((u) => Math.abs(u - d) >= gap);
-  const of = (k: SlotKind) => slots.filter((s) => s.k === k);
+  const clear = (s: Slot) =>
+    !occupied.some((o) => Math.hypot(o[0] - s.p[0], o[1] + 1 - s.p[1], o[2] - s.p[2]) < 2.5);
+  const of = (k: SlotKind) => slots.filter((s) => s.k === k && clear(s));
   const take = (s: Slot, kind: CollectibleKind, extra?: Partial<Placed>) => {
     used.push(s.d);
     out.push({ kind, p: [...s.p], u: [...s.u], d: s.d, ...extra });
   };
-  const body = slots.filter((s) => s.k !== 'cut');
+  const body = slots.filter((s) => s.k !== 'cut' && clear(s));
 
   // rare: an Echo Chain on a stretch of four slots 6..10 m apart
   if (r() < budget.echoChance) {

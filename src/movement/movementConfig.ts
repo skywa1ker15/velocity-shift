@@ -69,6 +69,7 @@ export const movementConfig = {
   wallJumpOut: 7,
   wallJumpUp: 8.5,
   wallCoyote: 0.14,
+  wallRunGain: 0, // Evolve (Wall Sprint): m/s² gained along a wall-run; 0 keeps the original decay
 
   // Vault
   vaultMinHeight: 0.4,

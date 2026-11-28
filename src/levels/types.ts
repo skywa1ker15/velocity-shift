@@ -261,7 +261,22 @@ export interface ShortcutDef {
 
 /** A destructible prop (see gameplay/breakables.ts). Never collides; never required. */
 export type BreakableKind =
-  'target' | 'barrier' | 'crate' | 'column' | 'relic' | 'panel' | 'sign' | 'energy' | 'pylon';
+  | 'target'
+  | 'barrier'
+  | 'crate'
+  | 'column'
+  | 'relic'
+  | 'panel'
+  | 'sign'
+  | 'energy'
+  | 'pylon'
+  // the slashable world (placed by gameplay/slashables.ts; rewards only in Evolve)
+  | 'prism'
+  | 'lantern'
+  | 'bloom'
+  | 'spindle'
+  | 'sentinel'
+  | 'seal';
 export interface BreakableDef {
   id: string;
   kind: BreakableKind;
@@ -270,6 +285,8 @@ export interface BreakableDef {
   /** Rotation about Y; at 0 the object faces -Z. */
   yaw?: number;
   scale?: number;
+  /** Chain Spindles: the gate (row) this one belongs to; cut a whole gate quickly for a reward. */
+  gate?: number;
   /** Floor height debris lands on (omitted: debris falls away). */
   ground?: number;
   /** Hanging kinds: length of the cables / chains up to the anchor. */

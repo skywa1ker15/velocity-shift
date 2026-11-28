@@ -74,3 +74,17 @@ Frame-rate figures on the reference hardware have not been measured.
 ## Evolve (expansion)
 
 `tests/sim/evolution.test.ts` covers slot freshness, the seeded spawner, each catch method, ability caps and diminishing returns, synergies, the run model and wall tunnelling at max speed. `GEN_SLOTS=1` enables `tests/sim/gen-slots.test.ts`, which regenerates slots. Three e2e tests drive Evolve with the real keyboard. Evolve balance is only bot-tested; manual playtesting is still on the checklist.
+
+## Overhaul (power-ups, slashable world)
+
+- `tests/sim/overhaul.test.ts` measures each ability's first level against the plain runner (`tests/sim/measure.ts`, the same scripted inputs on one test course).
+- It also checks:
+  - every evolution stage;
+  - the new synergies;
+  - each slashable kind's reward;
+  - the Kinetic Chain;
+  - usage-weighted Flux upgrades and the exploit guards;
+  - that upgrades never take away the plain move;
+  - that Pure is untouched.
+- The real-keyboard e2e "slashable world" test runs Training's last plaza with an evolved blade.
+- Upgraded builds are not covered by the autopilot: it follows a fixed plan tuned for Pure physics. Hand-play upgraded runs on every course, and note where jump height or speed shortcuts or breaks a section.

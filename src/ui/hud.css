@@ -962,8 +962,34 @@ html[data-universe='psyche'] .hud-tl {
   background: var(--cat, #fff);
   box-shadow: 0 0 6px var(--cat, #fff);
 }
-.evo-rail .syn {
+/* evolution levels are diamonds: you can see the next new behaviour coming */
+.evo-rail .lv i.ev {
+  transform: rotate(45deg) scale(1.15);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.evo-rail .lv i.ev.on {
+  box-shadow:
+    0 0 8px var(--cat, #fff),
+    0 0 0 1px #fff;
+}
+.evo-rail .ab .stage {
+  font-style: normal;
+  font-size: 0.66em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--cat, #fff);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+.evo-rail .syns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15em 0.7em;
+  max-width: 15em;
   margin-top: 0.2em;
+}
+.evo-rail .syn {
   font-size: 0.6em;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -1009,6 +1035,42 @@ html[data-universe='psyche'] .hud-tl {
   bottom: -2px;
   width: 2px;
   background: rgba(4, 5, 9, 0.85);
+}
+.evo-meters .streak {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.evo-meters .streak.on {
+  opacity: 1;
+}
+.evo-meters .streak b {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.05em;
+  min-width: 1.6em;
+  text-align: right;
+  color: #ffd35c;
+}
+.evo-meters .streak em {
+  font-style: normal;
+  font-size: 0.66em;
+  font-weight: 700;
+  color: #ffd35c;
+  min-width: 2.4em;
+}
+.evo-meters .streak .bar {
+  width: 4.2em;
+}
+.evo-meters .streak .bar i {
+  background: #ffd35c;
+  box-shadow: 0 0 8px #ffd35c;
+}
+.evo-meters .tm.lock {
+  color: #7ff3ff;
 }
 .evo-meters .flux.ready .bar i {
   background: #ffd35c;

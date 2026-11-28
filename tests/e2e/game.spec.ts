@@ -665,3 +665,56 @@ test('the ready card switches between Evolve and Pure: a Pure run has no collect
   await expect(page.locator('.evo-meters')).toHaveCount(0);
   await expect(page.locator('.evo-rail')).toHaveCount(0);
 });
+
+test('Evolve (real keyboard): slashing on the run through the slashable world builds a Kinetic Chain, clears a Spindle gate and never slows the runner', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await boot(page, 'evolve');
+  await evolveTraining(page, 660);
+  const kinds = await page.evaluate(() =>
+    (window as any).__vs.sim.data.breakables.map((b: { kind: string }) => b.kind),
+  );
+  for (const k of ['prism', 'lantern', 'bloom', 'spindle', 'sentinel', 'seal']) expect(kinds).toContain(k);
+  await page.evaluate(() => {
+    const e = (window as any).__vs.sim.evo;
+    (window as any).__gates = 0;
+    e.events.on('gate', (g: { cleared: boolean }) => g.cleared && (window as any).__gates++);
+  });
+  // a runner whose blade has evolved (Edge 2: Crescent, Reach 1) holds forward and keeps slashing
+  await page.evaluate(() => {
+    const e = (window as any).__vs.sim.evo;
+    e.grant('edge');
+    e.grant('edge');
+    e.grant('reach');
+  });
+  await page.keyboard.down('KeyW');
+  let minSpeed = 99;
+  for (let i = 0; i < 60; i++) {
+    await page.keyboard.press('KeyF');
+    await page.waitForTimeout(50);
+    const s = await page.evaluate(() => {
+      const sim = (window as any).__vs.sim;
+      return { z: sim.player.pos.z, v: sim.player.speed };
+    });
+    if (s.z > 664 && s.z < 690) minSpeed = Math.min(minSpeed, s.v);
+    if (s.z > 692) break;
+  }
+  await page.keyboard.up('KeyW');
+  const r = await page.evaluate(() => {
+    const sim = (window as any).__vs.sim;
+    const bs = sim.data.breakables as { kind: string }[];
+    return {
+      spindles: bs.filter((b, i) => b.kind === 'spindle' && sim.broken[i]).length,
+      peak: sim.evo.peakStreak,
+      gates: (window as any).__gates,
+      cuts: sim.stats.cuts,
+    };
+  });
+  expect(r.spindles).toBe(3);
+  expect(r.gates).toBe(1);
+  expect(r.peak).toBeGreaterThanOrEqual(3);
+  // slashing never stopped the run
+  expect(minSpeed).toBeGreaterThan(6);
+  await expect(page.locator('.evo-meters .streak')).toBeVisible();
+});

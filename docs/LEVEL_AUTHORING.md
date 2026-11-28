@@ -158,3 +158,12 @@ lane is a wall-run, a kick-off, then a double jump (a kick-off alone gains only 
 - Evolve collectibles are not authored per course: `npm run gen:slots` records slots along the autopilot reference line into `src/evolution/slots/<level>.json`, and `placeCollectibles(slots, seed)` places them at run start. Re-run it and commit the JSON whenever geometry or the reference line changes (a test checks freshness).
 - For hand-placed items (the Training gym) use `LevelData.evoItems` with `evoItem()` from the builder.
 - Courses must still keep exactly 3 collectibles of the old kind, checkpoint spacing under 85 m and a hidden route; Pure reference times set the medals.
+
+## The slashable world
+
+- `src/gameplay/slashables.ts` places Prisms, Lanterns, Blooms, Spindle gates, Sentinels and Seals from a course's reference line (its slot file). The seed is the course seed, so the layout is fixed per course and the same in Pure and Evolve.
+- The game and the tests load courses through `withSlashables(build(), slots, seed)`. In tests, use `loadCourse` from `tests/sim/course.ts`.
+- Hand-authored courses (any course with `evoItems`, i.e. Training) are skipped. Place objects there with `b.breakable(kind, …)`, and give Spindles a shared `gate` number.
+- Floating kinds (panel, sign, lantern, prism, seal) get no floor by default.
+- `tests/sim/breakables.test.ts` holds every object, including the spawned ones, to the placement rules.
+- Slots are recorded from the raw course, so adding slashables never makes slot files stale. Adding hand-placed breakables does, so run `npm run gen:slots`.

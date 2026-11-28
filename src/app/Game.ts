@@ -22,6 +22,7 @@ import { worldUniforms } from '../render/WorldMaterial';
 import { Director } from '../multiverse/Director';
 import { Scenery } from '../multiverse/Scenery';
 import { FX, UNIVERSE_IDS, type FxLook, type UniverseId } from '../multiverse/universes';
+import { withSlashables } from '../gameplay/slashables';
 import { Simulation } from '../gameplay/Simulation';
 import type { Action, Bindings } from '../input/bindings';
 import { InputManager } from '../input/InputManager';
@@ -63,6 +64,7 @@ const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, m
 /** Flow tier colours for the energy wisps (tier 1..4). */
 const FLOW_COLORS = [0x7ff3ff, 0x7ff3ff, 0x9dff7a, 0xffb547, 0xff5cf0];
 const FLOW_COLS = FLOW_COLORS.map((c) => new THREE.Color(c));
+const LOCK_COL = new THREE.Color(0x7ff3ff);
 
 type Mode = 'idle' | 'menu' | 'loading' | 'ready' | 'playing' | 'paused' | 'results';
 
@@ -457,6 +459,10 @@ export class Game {
       aegis: Math.round(h.aegis * 20) / 20,
       chain: h.chain,
       chainLeft: Math.round(h.chainLeft * 10) / 10,
+      streak: h.streak,
+      streakFrac: Math.round(h.streakLeft * 20) / 20,
+      mult: Math.round(h.mult * 10) / 10,
+      lock: h.lock > 0,
       canSurge:
         evo.level('timeslip') > 0 &&
         (h.flux >= EVO_T.timeslipCost || (evo.level('chrono') > 0 && h.tier >= 3)),
@@ -551,15 +557,48 @@ export class Game {
         normal: UP,
       });
     });
+    // pushes from abilities: named on the screen only when they are the rarer, deliberate ones
+    const NAMED: Partial<Record<string, string>> = {
+      slingshot: 'SLINGSHOT',
+      surge: 'WALL SURGE',
+      dashjump: 'DASH JUMP',
+      skyward: 'SKYWARD CUT',
+      blink: 'BLINK',
+      skim: 'SKIM',
+      lantern: 'LIFT',
+    };
+    const BIG = new Set(['slingshot', 'surge', 'dashjump', 'skyward', 'gate', 'prism', 'streak', 'lantern']);
     evo.events.on('boost', ({ kind }) => {
-      if (kind === 'slingshot') store().call('evolve', 'SLINGSHOT');
-      else if (kind === 'surge') store().call('flow', 'WALL SURGE');
-      this.flowKick = Math.max(this.flowKick, 0.6);
+      const name = NAMED[kind];
+      if (name) store().call(kind === 'slingshot' ? 'evolve' : 'flow', name);
+      audio.evoBoost(BIG.has(kind));
+      this.flowKick = Math.max(this.flowKick, BIG.has(kind) ? 0.8 : 0.5);
     });
-    evo.events.on('overflow', () => store().call('evolve', 'OVERFLOW', 'Full Flux became an upgrade'));
+    evo.events.on('streak', ({ n, milestone, broken }) => {
+      if (broken) return;
+      audio.evoChain(n, !!milestone);
+      if (milestone) {
+        store().call(
+          'flow',
+          `${milestone.toUpperCase()}`,
+          `Chain ${n} · Flux ×${evo.streakMult().toFixed(1)}`,
+        );
+        this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.2);
+      }
+    });
+    evo.events.on('gate', ({ cleared, left }) => {
+      if (cleared) {
+        store().call('rare', 'GATE CLEARED', 'Dash charges full · speed burst');
+        this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.3);
+      } else if (left > 0) store().call('close', 'GATE MISSED', 'Cut every spindle in a gate within 4 s');
+    });
+    evo.events.on('overflow', () => {
+      this.renderer.universeFx.flash = Math.max(this.renderer.universeFx.flash, 0.2);
+    });
   }
 
   private evoTint = -1;
+  private streakT = 0;
   private slowFx = 0;
   /**
    * The runner's look follows the run: trims glow brighter with each evolution stage, take the
@@ -580,6 +619,35 @@ export class Game {
     if (tint !== this.evoTint) {
       this.evoTint = tint;
       this.body.setAccent(tint >= 0 ? tint : cosmeticFor(this.save.data, 'suit').color);
+    }
+    // Overdrive and Momentum Lock: speed streaks pour past the view while they hold your speed
+    this.streakT -= dt;
+    if (
+      (evo.overdriveOn || evo.lockLeft > 0) &&
+      pl.speed > 12 &&
+      this.streakT <= 0 &&
+      this.settings.particles > 0
+    ) {
+      this.streakT = 0.05;
+      const e = this.rig.eye;
+      const fx0 = -Math.sin(this.input.yaw),
+        fz0 = -Math.cos(this.input.yaw);
+      const a = this.time * 53.7;
+      const side = Math.sin(a) > 0 ? 1 : -1;
+      _v.set(
+        e.x + fx0 * 3 - fz0 * side * (1.1 + Math.abs(Math.cos(a)) * 0.8),
+        e.y - 0.7 + Math.abs(Math.sin(a * 1.3)) * 1.6,
+        e.z + fz0 * 3 + fx0 * side * (1.1 + Math.abs(Math.cos(a)) * 0.8),
+      );
+      _w.set(pl.vel.x * 0.9, 0, pl.vel.z * 0.9);
+      this.stickers.spawn(_v, evo.lockLeft > 0 ? LOCK_COL : WHITE, {
+        sprite: Sprite.streak,
+        size: 0.35,
+        grow: 0.4,
+        life: 0.18,
+        vel: _w,
+        drag: 0.2,
+      });
     }
     this.wispT -= dt;
     if ((tier >= 1 || stage >= 2) && pl.speed > 5 && this.wispT <= 0 && this.settings.particles > 0) {
@@ -784,14 +852,16 @@ export class Game {
       if (token !== this.loadToken) return;
       set({ loadProgress: 0.45, loadLabel: 'Building geometry' });
       await nextFrame();
-      const data = mod.build();
+      const slots = await loadSlots(id);
+      // the slashable world: seeded per course, the same in both modes
+      const data = withSlashables(mod.build(), slots, entry.meta.seed);
       this.clearLevel();
       this.meta = entry.meta;
       this.data = data;
       this.setEnv(entry.meta.env);
       const evolve =
         this.settings.gameMode === 'evolve'
-          ? { seed: this.evoSeed ?? (Math.random() * 2 ** 31) >>> 0, slots: await loadSlots(id) }
+          ? { seed: this.evoSeed ?? (Math.random() * 2 ** 31) >>> 0, slots }
           : undefined;
       if (token !== this.loadToken) return;
       this.sim = new Simulation(entry.meta, data, { evolve });
@@ -1283,7 +1353,8 @@ export class Game {
       else if (action === 'slash' && kind !== undefined) {
         const sw = sim.sword;
         audio.slash(kind, sw.attacking ? 0.5 + 0.5 * (kind === 1 ? 1 : kind === 3 ? 0.8 : 0.5) : 0.5);
-        this.slash.spawn(sw.pose, sw.serial);
+        // the arc shows the blade's real reach (Reach, Severance, the speed lead)
+        this.slash.spawn(sw.pose, sw.serial, 1 + Math.min(0.7, sw.reachAdd * 0.22));
         if (fromSheath) this.impactFx = Math.max(this.impactFx, 0.3);
       }
     });
@@ -1503,6 +1574,7 @@ export class Game {
             pickups: evo.stats.pickups,
             byKind: evo.stats.byKind,
             peakTier: evo.stats.peakTier,
+            peakStreak: evo.peakStreak,
             stage: evo.stage,
             abilities: evo.hud().abilities.map((a) => ({ name: a.name, level: a.level, max: a.max })),
             synergies: [...evo.synergies].map((id) => SYNERGIES.find((s) => s.id === id)!.name),
@@ -1698,6 +1770,7 @@ export class Game {
     this.body.update(pl, this.rig.feet, this.gait, dt, yaw, pitch, this.rig.roll);
     this.view?.update(alpha, this.time, dt);
     this.breaks?.update(dt);
+    this.breaks?.cull(this.rig.eye);
     this.evoView?.update(this.time);
     this.evoVisuals(dt);
     const sw = sim.sword;

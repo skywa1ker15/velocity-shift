@@ -393,6 +393,18 @@ export class AudioEngine {
     this.tone('sfx', 'sawtooth', 90, 40, 0.4, 0.2);
     this.burst('sfx', 'lowpass', 800, 150, 0.4, 0.3, 0.4);
   }
+  /** A movement push from an ability: a rising whoosh, bigger for the big ones. */
+  evoBoost(big: boolean) {
+    this.burst('sfx', 'bandpass', big ? 500 : 900, big ? 3200 : 2600, big ? 0.32 : 0.18, big ? 0.22 : 0.12);
+    if (big) this.tone('sfx', 'triangle', 220, 660, 0.22, 0.1);
+  }
+  /** Kinetic Chain link: a short blip that climbs with the chain. */
+  evoChain(n: number, milestone: boolean) {
+    const f = 520 * Math.pow(2, Math.min(n, 20) / 14);
+    this.tone('sfx', 'square', f, f * 1.02, 0.05, 0.05);
+    if (milestone)
+      [1, 1.5, 2].forEach((k, i) => this.tone('sfx', 'triangle', f * k, f * k, 0.16, 0.12, i * 0.05));
+  }
   finish(medal: number) {
     const base = [523, 659, 784, 1047];
     base.forEach((f, i) => this.tone('ui', 'triangle', f, f, 0.5, 0.2, i * 0.1));

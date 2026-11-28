@@ -10,11 +10,12 @@ import { initPhysics } from '../../src/physics/PhysicsWorld';
 import { BREAKABLE_SPECS } from '../../src/gameplay/breakables';
 import type { LevelData, LevelMeta, SolidDef } from '../../src/levels/types';
 import { quatFromEuler } from '../../src/core/math';
+import { loadCourse } from './course';
 
 const loaded: { meta: LevelMeta; data: LevelData }[] = [];
 beforeAll(async () => {
   await initPhysics();
-  for (const l of levels) loaded.push({ meta: l.meta, data: (await l.load()).build() });
+  for (const l of levels) loaded.push({ meta: l.meta, data: await loadCourse(l) });
 });
 
 /** Is world point p inside solid s (oriented box)? */

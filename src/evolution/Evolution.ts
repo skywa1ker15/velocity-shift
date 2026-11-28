@@ -30,6 +30,7 @@ import {
   type SynergyId,
 } from './abilities';
 import { KINDS, placeCollectibles, rng, type CollectibleKind, type Placed } from './collectibles';
+import type { BreakableKind } from '../levels/types';
 import type { Slot } from './slots';
 
 export interface EvoEvents {
@@ -44,8 +45,33 @@ export interface EvoEvents {
   phased: { index: number };
   chain: { node: number; failed: boolean };
   shockwave: { x: number; y: number; z: number; r: number; kind: 'land' | 'finisher' | 'crescent' | 'slam' };
-  boost: { kind: 'slingshot' | 'surge' | 'dashcut' | 'overdrive' | 'steady' | 'updraft' };
+  boost: {
+    kind:
+      | 'slingshot'
+      | 'surge'
+      | 'dashcut'
+      | 'overdrive'
+      | 'steady'
+      | 'updraft'
+      | 'dashjump'
+      | 'airburst'
+      | 'conserve'
+      | 'skim'
+      | 'skyward'
+      | 'tempest'
+      | 'prism'
+      | 'lantern'
+      | 'gate'
+      | 'streak'
+      | 'slipstream'
+      | 'blink';
+  };
+  /** A full Flux meter turned into an upgrade. */
   overflow: Record<string, never>;
+  /** Kinetic Chain: consecutive cuts and pickups. `milestone` names a reward at 5 / 10 / 15... */
+  streak: { n: number; milestone?: string; broken?: boolean };
+  /** A Chain Spindle gate was cleared (or ran out of time). */
+  gate: { gate: number; cleared: boolean; left: number };
 }
 
 export interface CollectibleState extends Placed {
@@ -55,12 +81,15 @@ export interface CollectibleState extends Placed {
 }
 
 const FLUX_MAX = 100;
-const OVERFLOW_STEP = 60;
+const STREAK_WINDOW = 2.5;
+const GATE_WINDOW = 4;
 const ECHO_WINDOW = 4; // seconds to reach the next node
 const _u = v3(),
   _c = v3();
 const UP = v3(0, 1, 0);
 const KILL_ABSORB = new Set(['hazard', 'lethal']);
+const breakAt = (d: { p: [number, number, number] }) => ({ x: d.p[0], y: d.p[1] + 1, z: d.p[2], r: 0.5 });
+type Family = 'ground' | 'air' | 'dash' | 'wall' | 'combat';
 
 export class Evolution {
   readonly events = new Emitter<EvoEvents>();
@@ -85,8 +114,32 @@ export class Evolution {
   /** Totals for the results screen and tests. */
   stats = { pickups: 0, byKind: {} as Partial<Record<CollectibleKind, number>>, fluxGained: 0, peakTier: 0 };
   hoverLeft = 0;
+  /** Kinetic Chain length and the time left before it breaks. */
+  streak = 0;
+  streakLeft = 0;
+  peakStreak = 0;
+  /** Momentum Lock time left (Stride 3). */
+  lockLeft = 0;
 
   private cfg: MovementConfig;
+  /** What the runner has been doing lately, per family: a full Flux meter evolves that. */
+  private usage: Record<Family, number> = {
+    ground: 0,
+    air: 0,
+    dash: 0,
+    wall: 0,
+    combat: 0,
+  };
+  private lastInp: InputFrame | null = null;
+  private skimming = false;
+  private skywardUsed = false;
+  private blinkUsed = -1;
+  private tempestAt = -9;
+  private finisherDash = -1;
+  private areaDepth = 0;
+  private inCrescent = false;
+  private gates = new Map<number, { left: number; total: number; deadline: number }>();
+  private fluxGrants = 0;
   private lastActionAt = -99;
   private recent: string[] = [];
   private now = 0;
@@ -125,6 +178,9 @@ export class Evolution {
     this.aegisReady = this.voidReady = false;
     this.aegisCd = 0;
     this.stats = { pickups: 0, byKind: {}, fluxGained: 0, peakTier: 0 };
+    this.peakStreak = 0;
+    this.fluxGrants = 0;
+    for (const k of Object.keys(this.usage) as Family[]) this.usage[k] = 0;
     const fixed = this.sim.data.evoItems;
     const placed: Placed[] = fixed
       ? fixed.map((f) => ({
@@ -135,9 +191,8 @@ export class Evolution {
           group: f.group,
           order: f.order,
         }))
-      : placeCollectibles(this.slots, (this.seed + this.run * 7919) >>> 0);
+      : placeCollectibles(this.slots, (this.seed + this.run * 7919) >>> 0, undefined, this.occupied());
     this.place(placed);
-    this.overflow = 0;
     this.run++;
     this.respawn();
     this.apply();
@@ -158,6 +213,11 @@ export class Evolution {
     this.sim.resetGlyphTargets(this.glyphTargets());
   }
 
+  /** Where the slashable world already stands (collectibles keep clear of it). */
+  private occupied(): [number, number, number][] {
+    return this.sim.data.breakables.map((b) => b.p);
+  }
+
   /** Back to a checkpoint: abilities and Flux are kept; Flow and timers are not. */
   respawn() {
     this.flow = 0;
@@ -170,6 +230,10 @@ export class Evolution {
     this.slamming = false;
     this.hoverLeft = T.hoverTime;
     this.safe.length = 0;
+    this.streak = this.streakLeft = 0;
+    this.lockLeft = 0;
+    this.skimming = false;
+    this.gates.clear();
     // an Echo Chain in progress starts over
     if (this.echoNext > 0 && this.echoNext < 4) this.resetChain(false);
   }
@@ -183,6 +247,11 @@ export class Evolution {
   }
 
   // ----- abilities --------------------------------------------------------------------------
+  /** Overdrive is running (Stride 2+, sprinting long enough): the view shows it. */
+  get overdriveOn() {
+    return this.levels.stride >= 2 && this.sprintFor >= T.overdriveAfter;
+  }
+
   level(id: AbilityId) {
     return this.levels[id];
   }
@@ -221,10 +290,12 @@ export class Evolution {
   private grantFrom(family: AbilityDef['family'], r: number) {
     const pool = FAMILY_POOL[family].filter((id) => this.levels[id] < ABILITIES[id].max);
     if (!pool.length) {
-      this.addFlux(15);
+      this.addFlux(25);
       return null;
     }
-    const w = pool.map((id) => ABILITIES[id].max - this.levels[id] + (this.levels[id] === 0 ? 1 : 0));
+    // stacking matters: an ability you already have is three times as likely as a new one, so
+    // runs reach evolutions instead of spreading thin
+    const w = pool.map((id) => (this.levels[id] > 0 ? 3 : 1));
     let x = r * w.reduce((a, b) => a + b, 0);
     for (let i = 0; i < pool.length; i++) if ((x -= w[i]) <= 0) return this.grant(pool[i]) ? pool[i] : null;
     return this.grant(pool[pool.length - 1]) ? pool[pool.length - 1] : null;
@@ -238,31 +309,48 @@ export class Evolution {
   private apply() {
     const c = this.cfg,
       base = movementConfig,
-      L = this.levels;
+      L = this.levels,
+      pl = this.sim.player;
     const oc = L.overclock > 0 ? T.overclockCap : 1;
-    const overdrive = L.stride >= 3 && this.sprintFor >= T.overdriveAfter ? T.overdriveBonus : 0;
-    c.sprintSpeed = base.sprintSpeed + at(T.strideSprint, L.stride) + overdrive + this.flowTier * 0.3;
+    const overdrive = L.stride >= 2 && this.sprintFor >= T.overdriveAfter ? T.overdriveBonus : 0;
+    c.sprintSpeed = (base.sprintSpeed + at(T.strideSprint, L.stride) + overdrive + this.flowTier * 0.3) * oc;
+    c.runSpeed = base.runSpeed * oc;
     c.sprintAccel = base.sprintAccel * at(T.strideAccel, L.stride);
+    // slides: friction, then Kinetic Slide turns friction into thrust up to a ceiling
     let fr = base.slideFriction * at(T.glideFriction, L.glide);
-    if (this.has('railgun') && this.sim.player.speed > 15) fr = 0.6;
+    if (L.glide >= 3 && pl.state === MoveState.Slide && this.slideFor < T.kineticTime) {
+      const ceiling = c.sprintSpeed + c.slideBoost + T.kineticOver;
+      fr = pl.speed < ceiling ? -T.kineticAccel : 0;
+    }
+    if (this.has('railgun') && pl.speed > 15) fr = Math.min(fr, 0);
     c.slideFriction = fr;
     c.slideBoost = base.slideBoost + at(T.glideBoost, L.glide);
     c.jumpVelocity = base.jumpVelocity + at(T.springJump, L.spring);
     c.doubleJumpVelocity = base.doubleJumpVelocity + at(T.springDouble, L.spring);
-    this.sim.player.extraAirJumps = L.spring >= 2 ? 1 : 0;
+    pl.extraAirJumps = L.spring >= 2 ? 1 : 0;
     c.dashSpeed = base.dashSpeed + at(T.phaseSpeed, L.phase);
+    c.dashDuration = base.dashDuration + at(T.phaseDuration, L.phase);
     c.dashRecharge = base.dashRecharge * at(T.phaseRecharge, L.phase);
     c.dashCharges = base.dashCharges + (L.phase >= 2 ? 1 : 0);
     c.dashMaxPitchDeg = this.has('skybreaker') ? 60 : base.dashMaxPitchDeg;
+    c.dashExitSpeed = L.flywheel >= 3 ? c.dashSpeed * 0.7 : base.dashExitSpeed;
     c.wallDurationBase = base.wallDurationBase + at(T.wallDuration, L.wallrunner);
     c.wallDurationMax = base.wallDurationMax + at(T.wallDuration, L.wallrunner);
-    c.wallJumpOut = base.wallJumpOut + at(T.wallJumpOut, L.wallrunner);
     c.wallJumpUp = base.wallJumpUp + at(T.wallJumpUp, L.wallrunner);
-    c.overspeedDecay = base.overspeedDecay * at(T.flyDecay, L.flywheel) * (this.landBoostLeft > 0 ? 0.3 : 1);
+    c.wallGravityScale = L.wallrunner >= 3 ? T.wallGrip : base.wallGravityScale;
+    c.wallRunGain = L.wallrunner >= 4 ? T.wallSprint : base.wallRunGain;
+    // momentum: Flywheel slows the bleed-off; Momentum Lock and a fast landing stop it for a while
+    let decay = base.overspeedDecay * at(T.flyDecay, L.flywheel);
+    if (this.landBoostLeft > 0) decay *= 0.3;
+    if (this.lockLeft > 0) decay = 0;
+    c.overspeedDecay = decay;
     c.softSpeedCap = (base.softSpeedCap + at(T.flyCap, L.flywheel)) * oc;
     const sw = this.sim.sword;
-    sw.attackSpeed = at(T.edgeSpeed, L.edge);
+    // and swings quicken with speed, so a cut at 30 m/s lands where you aimed it
+    sw.attackSpeed = at(T.edgeSpeed, L.edge) * Math.min(1.8, 1 + Math.max(0, pl.speed - 12) * 0.03);
+    // at speed the cut leads: the blade reaches further the faster you go
     sw.reachAdd =
+      Math.max(0, pl.speed - 12) * 0.06 +
       at(T.reachAdd, L.reach) +
       (sw.combo >= 2 ? at(T.severanceAdd, L.severance) : 0) +
       (L.mirror > 0 ? T.mirrorReach : 0);
@@ -270,27 +358,48 @@ export class Evolution {
 
   // ----- Flux and Flow --------------------------------------------------------------------------
   addFlux(n: number) {
-    const gain = n * (1 + this.flowTier * 0.15);
+    const gain = n * (1 + this.flowTier * 0.15) * this.streakMult();
     const before = this.flux;
-    this.flux = Math.min(FLUX_MAX, this.flux + gain);
+    this.flux += gain;
     this.stats.fluxGained += gain;
-    if (this.flux !== before) this.events.emit('flux', { amount: this.flux - before, total: this.flux });
-    // a full meter overflows: every OVERFLOW_STEP more Flux becomes a movement upgrade
-    const spill = before + gain - this.flux;
-    if (spill > 0) {
-      this.overflow += spill;
-      while (this.overflow >= OVERFLOW_STEP) {
-        this.overflow -= OVERFLOW_STEP;
-        const fams = ['ground', 'air', 'dash', 'wall'] as const;
-        const r = rng((this.seed ^ 0x9e3779b9) + this.stats.pickups * 31 + this.run);
-        const pick = fams[Math.floor(r() * fams.length)];
-        this.events.emit('overflow', {});
-        if (!this.grantFrom(pick, r())) break;
+    // a full meter evolves whatever you have been doing lately, then starts again
+    while (this.flux >= FLUX_MAX) {
+      this.flux -= FLUX_MAX;
+      this.fluxGrants++;
+      this.events.emit('overflow', {});
+      if (!this.evolveFromUsage()) {
+        this.flux = FLUX_MAX - 0.001;
+        break;
       }
     }
+    if (this.flux !== before) this.events.emit('flux', { amount: this.flux - before, total: this.flux });
   }
-  /** Flux gathered past a full meter, toward the next overflow upgrade. */
-  overflow = 0;
+
+  /** Flux multiplier from the Kinetic Chain: x1 rising to x3 at a chain of 10. */
+  streakMult() {
+    return 1 + 0.2 * Math.min(this.streak, 10);
+  }
+
+  /** Pick a family weighted by recent use, then an ability in it (owned ones first). */
+  private evolveFromUsage(): boolean {
+    const fams = ['ground', 'air', 'dash', 'wall', 'combat'] as const;
+    const r = rng((this.seed ^ 0x9e3779b9) + this.fluxGrants * 977 + this.run * 31);
+    const open = fams.filter((f) => FAMILY_POOL[f].some((id) => this.levels[id] < ABILITIES[id].max));
+    if (!open.length) return false;
+    const w = open.map((f) => this.usage[f] + 2);
+    let x = r() * w.reduce((a, b) => a + b, 0);
+    let pick = open[open.length - 1];
+    for (let i = 0; i < open.length; i++)
+      if ((x -= w[i]) <= 0) {
+        pick = open[i];
+        break;
+      }
+    return this.grantFrom(pick, r()) !== null;
+  }
+
+  private use(f: Family, n = 1) {
+    this.usage[f] += n;
+  }
 
   /** A movement action: builds Flow, more for variety than for repetition. */
   action(kind: string, points: number) {
@@ -316,72 +425,295 @@ export class Evolution {
 
   private wire() {
     const ev = this.sim.player.events;
+    const L = this.levels;
+    const lock = () => {
+      if (L.stride >= 3) this.lockLeft = T.lockTime;
+    };
     ev.on('jump', ({ fromSlide }) => {
       this.action('jump', 6);
+      this.use('air');
+      lock();
       const pl = this.sim.player;
-      if (fromSlide) {
+      if (fromSlide && (this.committed() || (L.glide >= 2 && this.slideFor >= T.slingshotCharge))) {
         // jumping out of a slide launches harder; a charged slide becomes the Slingshot
-        const charged = this.levels.glide >= 3 && this.slideFor >= T.slingshotCharge;
-        this.forward(charged ? T.slingshotForward : 1);
+        const charged = L.glide >= 2 && this.slideFor >= T.slingshotCharge;
+        const k = this.has('comet') ? T.cometScale : 1;
+        this.forward((charged ? T.slingshotForward : 1) * k);
         if (charged) {
-          this.lift(T.slingshotUp);
+          this.lift(T.slingshotUp * k);
           this.events.emit('boost', { kind: 'slingshot' });
         }
       }
-      if (this.has('updraft') && pl.speed > 14) {
-        this.lift(Math.min((pl.speed - 14) * 0.18, 1.6));
+      // Dash Jump: a jump straight out of a dash keeps (and adds to) its speed
+      if (L.phase >= 2 && pl.sinceDash < T.dashJumpWindow) {
+        this.forward(T.dashJumpBoost);
+        this.lockLeft = Math.max(this.lockLeft, 1);
+        this.events.emit('boost', { kind: 'dashjump' });
+      }
+      if (this.has('updraft') && pl.speed > 14 && this.committed()) {
+        this.lift(Math.min((pl.speed - 14) * 0.22, 2.2));
         this.events.emit('boost', { kind: 'updraft' });
       }
     });
-    ev.on('doubleJump', () => this.action('double', 8));
-    ev.on('dash', () => this.action('dash', 9));
-    ev.on('dashEnd', () => (this.lastDashEnd = this.now));
+    ev.on('doubleJump', () => {
+      this.action('double', 8);
+      this.use('air');
+      // Air Burst: air jumps throw you toward the direction you hold
+      if (L.spring >= 3 && this.towardWish(T.airBurst)) this.events.emit('boost', { kind: 'airburst' });
+    });
+    ev.on('dash', () => {
+      this.action('dash', 9);
+      this.use('dash');
+    });
+    ev.on('dashEnd', () => {
+      this.lastDashEnd = this.now;
+      lock();
+    });
     ev.on('slideStart', () => {
       this.action('slide', 7);
+      this.use('ground');
       this.slideFor = 0;
+      if (this.skimming) {
+        this.skimming = false;
+        this.forward(T.skimBoost);
+        this.events.emit('boost', { kind: 'skim' });
+      }
+      lock();
     });
-    ev.on('wallRunStart', () => this.action('wall', 10));
+    ev.on('wallRunStart', () => {
+      this.action('wall', 10);
+      this.use('wall');
+    });
+    ev.on('wallRunEnd', lock);
     ev.on('wallJump', () => {
       this.action('walljump', 10);
-      if (this.levels.wallrunner >= 3) {
+      this.use('wall');
+      lock();
+      if (L.wallrunner >= 2 && this.committed()) {
         this.forward(T.wallSurge);
         this.events.emit('boost', { kind: 'surge' });
-      } else if (this.flowTier >= 2) this.forward(0.6);
+      } else if (this.flowTier >= 2 && this.committed()) this.forward(0.6);
+      if (this.has('ricochet')) {
+        const pl = this.sim.player;
+        pl.dashEnergy = Math.min(this.cfg.dashCharges, pl.dashEnergy + 1);
+      }
     });
-    ev.on('vault', () => this.action('vault', 8));
-    ev.on('land', ({ speed }) => {
+    ev.on('vault', () => {
+      this.action('vault', 8);
+      this.use('ground');
+      lock();
+    });
+    ev.on('land', ({ speed, slide }) => {
       const pl = this.sim.player;
       const fell = this.airPeak;
       this.airPeak = 0;
+      this.skywardUsed = false;
       if (pl.speed > movementConfig.sprintSpeed + 1) this.landBoostLeft = 0.5;
-      if (this.levels.steady > 0 && fell > 0.4 && pl.state !== MoveState.Slide) {
-        this.forward(at(T.steadyGive, this.levels.steady));
+      if (L.steady > 0 && fell > 0.4 && pl.state !== MoveState.Slide && this.committed()) {
+        this.forward(at(T.steadyGive, L.steady));
         this.events.emit('boost', { kind: 'steady' });
       }
-      if (this.slamming || (this.levels.steady >= 2 && speed >= T.shockLandSpeed)) {
+      // Conservation: the drop becomes forward speed
+      if (L.flywheel >= 2 && speed > 8 && this.committed()) {
+        this.forward(Math.min(speed * T.conserveScale, T.conserveMax));
+        this.events.emit('boost', { kind: 'conserve' });
+      }
+      if (this.slamming || (L.steady >= 2 && speed >= T.shockLandSpeed)) {
         this.shockwave(T.shockLandRadius, this.slamming ? 'slam' : 'land');
         this.addFlux(6);
       }
       this.slamming = false;
+      // Skim: touching down into a slide (slide held) gives it a kick
+      if (L.glide >= 4 && slide) this.skimming = true;
     });
     const se = this.sim.events;
-    se.on('break', ({ by }) => {
-      if (by !== 'sword') return;
-      this.action('cut', 7);
-      const n = at(T.siphonFlux, this.levels.siphon) + (this.levels.mirror > 0 ? T.mirrorFlux : 0);
-      if (n) this.addFlux(n);
-    });
+    se.on('break', ({ index, by }) => this.onBreak(index, by));
     se.on('sword', ({ action, combo }) => {
       if (action !== 'slash') return;
+      this.use('combat', 0.5);
       // a slash straight out of a dash extends it
       if (this.now - this.lastDashEnd < 0.2 && this.dashCutUsed !== this.sim.stats.dashes) {
         this.dashCutUsed = this.sim.stats.dashes;
         this.forward(2);
         this.events.emit('boost', { kind: 'dashcut' });
       }
-      if (this.levels.edge >= 3) this.crescent();
-      if (this.levels.severance >= 3 && (combo ?? 0) >= 2) this.shockwave(T.shockwaveRadius, 'finisher');
+      if (L.edge >= 2) this.crescent();
+      const finisher = (combo ?? 0) >= 2;
+      if (L.severance >= 2 && finisher && this.finisherDash !== this.sim.sword.serial) {
+        this.finisherDash = this.sim.sword.serial;
+        const pl = this.sim.player;
+        pl.dashEnergy = Math.min(this.cfg.dashCharges, pl.dashEnergy + 1);
+      }
+      if (L.severance >= 3 && finisher) this.shockwave(T.shockwaveRadius, 'finisher');
     });
+  }
+
+  /** Anything broke: rewards by kind, the Kinetic Chain, and the cut-linked abilities. */
+  private onBreak(i: number, by: 'sword' | 'body') {
+    const pl = this.sim.player,
+      L = this.levels;
+    const def = this.sim.data.breakables[i];
+    const kind: BreakableKind = def.kind;
+    const dashing = pl.state === MoveState.Dash || pl.sinceDash < 0.12;
+    // Blink Chain: a dash that breaks something gives its charge back (once per dash)
+    if (L.phase >= 4 && dashing && this.blinkUsed !== this.sim.stats.dashes) {
+      this.blinkUsed = this.sim.stats.dashes;
+      pl.dashEnergy = Math.min(this.cfg.dashCharges, pl.dashEnergy + 1);
+      this.events.emit('boost', { kind: 'blink' });
+    }
+    if (by === 'body') {
+      // Slipstream: at speed, smashing through is as good as a cut
+      if (L.stride >= 4 && pl.speed >= T.slipstreamSpeed && this.committed()) {
+        this.forward(T.slipstreamPush);
+        this.events.emit('boost', { kind: 'slipstream' });
+      } else if (!dashing) return;
+    }
+    this.action('cut', 7);
+    this.use('combat');
+    const siphon = at(T.siphonFlux, L.siphon) + (L.mirror > 0 ? T.mirrorFlux : 0);
+    let flux = 5 + siphon;
+    switch (kind) {
+      case 'prism':
+        // Kinetic Prism: the crystal's stored motion is yours
+        this.forward(pl.speed > 15 ? 4.5 : 3);
+        this.events.emit('boost', { kind: 'prism' });
+        flux += 3;
+        break;
+      case 'lantern':
+        if (!pl.grounded) {
+          // Drift Lantern: a lift in the air and an air jump back
+          const up = quatRotate(pl.frame, UP, _u);
+          pl.impulse(up.x, up.y, up.z, 0, 8.5);
+          pl.refundAirJump();
+          this.events.emit('boost', { kind: 'lantern' });
+        }
+        flux += 3;
+        break;
+      case 'bloom':
+        flux += 15;
+        break;
+      case 'sentinel':
+        flux += 1;
+        this.bumpStreak(); // satisfying: counts twice
+        break;
+      case 'seal':
+        flux += 4;
+        if (this.areaDepth === 0) this.wave(def.p[0], def.p[1] + 1.2, def.p[2], 7);
+        break;
+      case 'spindle':
+        if (def.gate !== undefined) this.spindle(def.gate);
+        break;
+    }
+    this.addFlux(flux);
+    this.bumpStreak();
+    // cut-linked abilities: blade cuts and the Crescent's wave count, other area cuts do not
+    if (this.areaDepth > 0 && !this.inCrescent) return;
+    if (by === 'sword') {
+      if (L.edge >= 3 && !pl.grounded && !this.skywardUsed) {
+        this.skywardUsed = true;
+        const up = quatRotate(pl.frame, UP, _u);
+        pl.impulse(up.x, up.y, up.z, 0, T.skywardLift);
+        pl.refundAirJump();
+        this.events.emit('boost', { kind: 'skyward' });
+      }
+      if (this.has('tempest') && pl.speed > T.tempestSpeed && this.now - this.tempestAt > 0.25) {
+        this.tempestAt = this.now;
+        this.forward(T.tempestPush);
+        this.events.emit('boost', { kind: 'tempest' });
+      }
+      if (this.areaDepth > 0) return; // no Reach chains off the Crescent's wave
+      const t = this.sim.targetOf(i) ?? breakAt(def);
+      this.areaDepth++;
+      if (L.reach >= 2) this.cutNear(t.x, t.y, t.z, T.wideArc);
+      if (L.reach >= 3) this.arcChain(t.x, t.y, t.z, 2);
+      this.areaDepth--;
+    }
+  }
+
+  /** Kinetic Chain: +1, with rewards at every fifth link. */
+  private bumpStreak() {
+    this.streak++;
+    this.streakLeft = STREAK_WINDOW + (this.levels.siphon >= 3 ? 1 : 0);
+    if (this.streak > this.peakStreak) this.peakStreak = this.streak;
+    let milestone: string | undefined;
+    if (this.streak % 5 === 0) {
+      const pl = this.sim.player;
+      const step = (this.streak / 5) % 3;
+      if (step === 1) {
+        milestone = 'Kinetic Burst';
+        this.forward(2.5);
+        this.lockLeft = Math.max(this.lockLeft, 1);
+      } else if (step === 2) {
+        milestone = 'Recharge';
+        pl.dashEnergy = this.cfg.dashCharges;
+        pl.refundAirJump();
+      } else {
+        milestone = 'Overcharge';
+        this.addFlux(20);
+      }
+      this.events.emit('boost', { kind: 'streak' });
+    }
+    this.events.emit('streak', { n: this.streak, milestone });
+  }
+
+  private spindle(gate: number) {
+    let g = this.gates.get(gate);
+    if (!g) {
+      const total = this.sim.data.breakables.filter((b) => b.kind === 'spindle' && b.gate === gate).length;
+      g = { left: total, total, deadline: this.now + GATE_WINDOW };
+      this.gates.set(gate, g);
+    }
+    if (g.left <= 0) return;
+    g.left--;
+    const cleared = g.left === 0 && this.now <= g.deadline;
+    this.events.emit('gate', { gate, cleared, left: g.left });
+    if (cleared) {
+      const pl = this.sim.player;
+      this.forward(2.5);
+      pl.dashEnergy = this.cfg.dashCharges;
+      this.lockLeft = Math.max(this.lockLeft, 1.2);
+      this.addFlux(20);
+      this.events.emit('boost', { kind: 'gate' });
+    }
+  }
+
+  /** Air Burst: a push toward the held direction (the look direction when nothing is held). */
+  private towardWish(add: number): boolean {
+    const pl = this.sim.player;
+    const inp = this.lastInp;
+    // nothing held: a plain air jump (the burst is yours to aim, or to leave out)
+    if (!inp || (Math.abs(inp.moveX) < 0.1 && Math.abs(inp.moveZ) < 0.1)) return false;
+    if (pl.framed) {
+      this.forward(add);
+      return true;
+    }
+    const fx = -Math.sin(pl.yaw),
+      fz = -Math.cos(pl.yaw),
+      rx = Math.cos(pl.yaw),
+      rz = -Math.sin(pl.yaw);
+    let dx = fx * inp.moveZ + rx * inp.moveX,
+      dz = fz * inp.moveZ + rz * inp.moveX;
+    const l = Math.hypot(dx, dz);
+    if (l < 0.1) {
+      dx = fx;
+      dz = fz;
+    } else {
+      dx /= l;
+      dz /= l;
+    }
+    pl.boost(dx, dz, add, 0);
+    return true;
+  }
+
+  /**
+   * Is the runner committing to speed (sprint held, moving forward)? The automatic pushes
+   * (Wall Surge, Steady, Conservation, Updraft, Slipstream, slide-jump kicks) only fire then: let
+   * go of sprint and every move is the plain one again, so no upgrade can carry you past a
+   * landing you meant to make.
+   */
+  private committed() {
+    const i = this.lastInp;
+    return !!i && i.sprint && i.moveZ > 0;
   }
 
   /** Speed along the current travel (or look) direction. */
@@ -457,7 +789,64 @@ export class Evolution {
   private shockwave(r: number, kind: EvoEvents['shockwave']['kind']) {
     const c = this.centre();
     this.events.emit('shockwave', { x: c.x, y: c.y, z: c.z, r, kind });
+    this.areaDepth++;
     this.cutWhere((_x, _y, _z, d) => d < r);
+    this.areaDepth--;
+  }
+
+  /** Everything breakable within `r` of a point (Wide Arc, Rift Seal waves). */
+  private cutNear(x: number, y: number, z: number, r: number) {
+    const sim = this.sim;
+    const bs = sim.data.breakables;
+    for (let i = 0; i < bs.length; i++) {
+      if (sim.broken[i]) continue;
+      const t = sim.targetOf(i);
+      if (t && Math.hypot(t.x - x, t.y - y, t.z - z) - t.r < r) sim.cutObject(i, 'sword');
+    }
+  }
+
+  /** Rift Seal: an energy wave that cuts everything around it. */
+  private wave(x: number, y: number, z: number, r: number) {
+    this.events.emit('shockwave', { x, y, z, r, kind: 'finisher' });
+    this.areaDepth++;
+    this.cutNear(x, y, z, r);
+    this.areaDepth--;
+  }
+
+  /** Arc Chain: from a cut, leap to the nearest intact object ahead, `hops` times. */
+  private arcChain(x: number, y: number, z: number, hops: number) {
+    const sim = this.sim,
+      pl = sim.player;
+    const v = pl.vel;
+    const vl = Math.hypot(v.x, v.y, v.z);
+    const fx = vl > 1 ? v.x / vl : -Math.sin(pl.yaw),
+      fy = vl > 1 ? v.y / vl : 0,
+      fz = vl > 1 ? v.z / vl : -Math.cos(pl.yaw);
+    for (let h = 0; h < hops; h++) {
+      let best = -1,
+        bd: number = T.arcLeap;
+      const bs = sim.data.breakables;
+      for (let i = 0; i < bs.length; i++) {
+        if (sim.broken[i]) continue;
+        const t = sim.targetOf(i);
+        if (!t) continue;
+        const dx = t.x - x,
+          dy = t.y - y,
+          dz = t.z - z;
+        const d = Math.hypot(dx, dy, dz);
+        if (d < bd && dx * fx + dy * fy + dz * fz > -0.25 * d) {
+          bd = d;
+          best = i;
+        }
+      }
+      if (best < 0) return;
+      const t = sim.targetOf(best)!;
+      this.events.emit('shockwave', { x: t.x, y: t.y, z: t.z, r: 1.2, kind: 'crescent' });
+      sim.cutObject(best, 'sword');
+      x = t.x;
+      y = t.y;
+      z = t.z;
+    }
   }
 
   private crescent() {
@@ -474,11 +863,15 @@ export class Evolution {
       r: T.crescentReach,
       kind: 'crescent',
     });
+    this.areaDepth++;
+    this.inCrescent = true;
     this.cutWhere((dx, dy, dz, d) => {
       if (d > T.crescentReach) return false;
       const l = Math.hypot(dx, dy, dz) || 1;
       return (dx * fx + dy * fy + dz * fz) / l > 0.72;
     });
+    this.inCrescent = false;
+    this.areaDepth--;
   }
 
   // ----- collectibles -----------------------------------------------------------------------
@@ -500,7 +893,7 @@ export class Evolution {
     const r = rng((this.seed ^ (i * 2654435761)) + this.run)();
     switch (it.kind) {
       case 'glint':
-        this.addFlux(4);
+        this.addFlux(8);
         break;
       case 'undertow':
         this.grantFrom('ground', r);
@@ -535,7 +928,10 @@ export class Evolution {
         this.addFlux(30);
         break;
     }
-    if (it.kind !== 'glint') this.action('pickup:' + it.kind, 5);
+    if (it.kind !== 'glint') {
+      this.action('pickup:' + it.kind, 5);
+      this.bumpStreak();
+    } else if (this.streak > 0) this.streakLeft = Math.max(this.streakLeft, 1.2); // glints keep a chain alive
   }
 
   private resetChain(failed: boolean) {
@@ -554,7 +950,7 @@ export class Evolution {
     const pl = this.sim.player;
     if (KILL_ABSORB.has(reason)) {
       if (this.invuln > 0) return true;
-      if (this.levels.phase >= 4 && pl.state === MoveState.Dash) return true;
+      if (this.levels.phase >= 3 && pl.state === MoveState.Dash) return true;
       if (this.aegisReady) {
         this.aegisReady = false;
         this.aegisCd = at(T.aegisRecharge, this.levels.aegis) * (this.has('guardian') ? 0.7 : 1);
@@ -615,6 +1011,7 @@ export class Evolution {
   /** Before the runner moves: Surge, hover, slam, temporary tuning. */
   preTick(inp: InputFrame, dt: number) {
     this.now += dt;
+    this.lastInp = inp;
     const pl = this.sim.player,
       L = this.levels;
     // Surge (Timeslip)
@@ -637,9 +1034,10 @@ export class Evolution {
       const up = quatRotate(pl.frame, UP, _u);
       pl.impulse(-up.x, -up.y, -up.z, 0, 30);
       this.slamming = true;
+      this.use('air');
     }
-    // Hover (Spring 5): hold jump while falling
-    if (L.spring >= 5 && pl.state === MoveState.Air && inp.jumpHeld && pl.upSpeed < 0 && this.hoverLeft > 0) {
+    // Hover (Spring 4): hold jump while falling
+    if (L.spring >= 4 && pl.state === MoveState.Air && inp.jumpHeld && pl.upSpeed < 0 && this.hoverLeft > 0) {
       pl.gravityScale *= T.hoverScale;
       this.hoverLeft -= dt;
     }
@@ -657,7 +1055,25 @@ export class Evolution {
     if (st === MoveState.Slide) this.slideFor += dt;
     if (!pl.grounded) this.airPeak += dt;
     this.landBoostLeft = Math.max(0, this.landBoostLeft - dt);
+    this.lockLeft = Math.max(0, this.lockLeft - dt);
     this.invuln = Math.max(0, this.invuln - dt);
+    if (this.streak > 0) {
+      this.streakLeft -= dt;
+      if (this.streakLeft <= 0) {
+        this.events.emit('streak', { n: this.streak, broken: true });
+        this.streak = 0;
+        this.streakLeft = 0;
+      }
+    }
+    for (const [gate, g] of this.gates)
+      if (g.left > 0 && this.now > g.deadline) {
+        this.events.emit('gate', { gate, cleared: false, left: g.left });
+        g.left = 0;
+      }
+    // usage fades over ~20 s so a full meter evolves what you do now
+    const fade = Math.exp(-dt / 20);
+    for (const k of Object.keys(this.usage) as Family[]) this.usage[k] *= fade;
+    if (st === MoveState.Sprint) this.use('ground', dt * 0.4);
     if (L.aegis > 0 && !this.aegisReady) {
       this.aegisCd -= dt;
       if (this.aegisCd <= 0) {
@@ -694,7 +1110,7 @@ export class Evolution {
       this.updateTier();
     }
     // fast slides and Dynamo feed Flux
-    if (st === MoveState.Slide && pl.speed > 13) this.addFlux(3 * dt);
+    if (st === MoveState.Slide && (pl.speed > 13 || L.glide >= 3)) this.addFlux((L.glide >= 3 ? 6 : 3) * dt);
     if (this.has('dynamo') && st === MoveState.WallRun) {
       this.addFlux(6 * dt);
       pl.dashEnergy = Math.min(this.cfg.dashCharges, pl.dashEnergy + dt * 0.8);
@@ -790,6 +1206,10 @@ export class Evolution {
             : 1 - this.aegisCd / at(T.aegisRecharge, this.levels.aegis)
           : -1,
       chain: this.echoNext,
+      streak: this.streak,
+      streakLeft: this.streak > 0 ? this.streakLeft / (STREAK_WINDOW + (this.levels.siphon >= 3 ? 1 : 0)) : 0,
+      mult: this.streakMult(),
+      lock: this.lockLeft,
       chainLeft: this.echoNext > 0 && this.echoNext < 4 ? Math.max(0, this.echoDeadline - this.now) : 0,
       abilities: ABILITY_IDS.filter((id) => this.levels[id] > 0).map((id) => ({
         id,
@@ -798,6 +1218,12 @@ export class Evolution {
         level: this.levels[id],
         max: ABILITIES[id].max,
         category: ABILITIES[id].category,
+        evoAt: Object.keys(ABILITIES[id].evolutions).map(Number),
+        stageName:
+          Object.entries(ABILITIES[id].evolutions)
+            .filter(([lv]) => Number(lv) <= this.levels[id])
+            .map(([, n]) => n)
+            .pop() ?? '',
       })),
       synergies: [...this.synergies],
     };

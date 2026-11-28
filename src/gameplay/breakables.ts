@@ -28,6 +28,13 @@ export const BREAKABLE_SPECS: Record<BreakableKind, BreakableSpec> = {
   sign: { hx: 0.75, hy: 0.32, hz: 0.07, cy: 0, mat: 'metal' },
   energy: { hx: 1.2, hy: 1.1, hz: 0.05, cy: 1.15, mat: 'energy' },
   pylon: { hx: 0.32, hy: 0.85, hz: 0.32, cy: 0.95, mat: 'glass' },
+  // the slashable world (gameplay/slashables.ts)
+  prism: { hx: 0.34, hy: 0.55, hz: 0.34, cy: 1.35, mat: 'glass' },
+  lantern: { hx: 0.4, hy: 0.45, hz: 0.4, cy: 0, mat: 'energy' },
+  bloom: { hx: 0.42, hy: 0.4, hz: 0.42, cy: 0.62, mat: 'energy' },
+  spindle: { hx: 0.16, hy: 1.0, hz: 0.16, cy: 1.15, mat: 'metal' },
+  sentinel: { hx: 0.42, hy: 1.05, hz: 0.3, cy: 1.1, mat: 'stone' },
+  seal: { hx: 0.75, hy: 0.75, hz: 0.12, cy: 1.45, mat: 'energy' },
 };
 
 /** World-space hit-box centre and a bounding radius for the sword sweep. */
